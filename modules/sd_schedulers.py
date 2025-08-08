@@ -7,14 +7,6 @@ from scipy import stats
 from modules import shared
 
 
-def to_d(x, sigma, denoised):
-    """Converts a denoiser output to a Karras ODE derivative."""
-    return (x - denoised) / sigma
-
-
-k_diffusion.sampling.to_d = to_d
-
-
 @dataclasses.dataclass
 class Scheduler:
     name: str
