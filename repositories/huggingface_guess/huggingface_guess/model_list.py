@@ -755,4 +755,85 @@ class CosmosT2IPredict2(BASE):
         return result
 
 
-models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, CosmosT2IPredict2]
+class WAN21_T2V(BASE):
+    huggingface_repo = "Wan-AI/Wan2.1-T2V-14B"
+
+    unet_config = {
+        "image_model": "wan2.1",
+        "model_type": "t2v",
+    }
+
+    sampling_settings = {
+        "shift": 8.0,
+    }
+
+    unet_extra_config = {
+        "in_channels": 16,
+    }
+    latent_format = latent.Wan21
+
+    memory_usage_factor = 1.0
+
+    supported_inference_dtypes = [torch.float16, torch.bfloat16, torch.float32]
+
+    vae_key_prefix = ["vae."]
+    text_encoder_key_prefix = ["text_encoders."]
+
+    unet_target = "transformer"
+
+    def __init__(self, unet_config):
+        super().__init__(unet_config)
+        self.memory_usage_factor = self.unet_config.get("dim", 2000) / 2000
+
+    def clip_target(self, state_dict={}):
+        return {"umt5xxl": "text_encoder"}
+
+
+# class WAN21_I2V(WAN21_T2V):
+    # huggingface_repo = "Wan-AI/Wan2.1-I2V-14B-720P"
+
+    # unet_config = {
+        # "image_model": "wan2.1",
+        # "model_type": "i2v",
+        # "in_dim": 36,
+    # }
+
+
+class WAN22_T2V(BASE):
+    huggingface_repo = "Wan-AI/Wan2.2-TI2V-5B"
+
+    unet_config = {
+        "image_model": "wan2.1",
+        "model_type": "t2v",
+        "out_dim": 48,
+    }
+
+    latent_format = latent.Wan22
+
+    sampling_settings = {
+        "shift": 8.0,
+    }
+
+    unet_extra_config = {
+        "in_channels": 48,
+    }
+
+    memory_usage_factor = 1.0
+
+    supported_inference_dtypes = [torch.float16, torch.bfloat16, torch.float32]
+
+    vae_key_prefix = ["vae."]
+    text_encoder_key_prefix = ["text_encoders."]
+
+    unet_target = "transformer"
+
+    def __init__(self, unet_config):
+        super().__init__(unet_config)
+        self.memory_usage_factor = self.unet_config.get("dim", 2000) / 2000
+
+    def clip_target(self, state_dict={}):
+        return {"umt5xxl": "text_encoder"}
+
+
+
+models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V]#, WAN21_I2V]
