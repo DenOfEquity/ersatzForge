@@ -524,24 +524,31 @@ class AutoencoderKLWan(nn.Module, ConfigMixin):
         self.clear_cache()
 
         x = x.unsqueeze(2)
-        t = x.shape[2]
+        
+        out = self.encoder(
+            x,
+            feat_cache=None,
+            feat_idx=0)
 
-        iter_ = 1 + (t - 1) // 4
-        for i in range(iter_):
-            self._enc_conv_idx = [0]
-            if i == 0:
-                out = self.encoder(
-                    x[:, :, :1, :, :],
-                    feat_cache=self._enc_feat_map,
-                    feat_idx=self._enc_conv_idx)
-            else:
-                out_ = self.encoder(
-                    x[:, :, 1 + 4 * (i - 1):1 + 4 * i, :, :],
-                    feat_cache=self._enc_feat_map,
-                    feat_idx=self._enc_conv_idx)
-                out = torch.cat([out, out_], 2)
+        # t = x.shape[2]
+        # iter_ = 1 + (t - 1) // 4
+        # for i in range(iter_):
+            # self._enc_conv_idx = [0]
+            # if i == 0:
+                # out = self.encoder(
+                    # x[:, :, :1, :, :],
+                    # feat_cache=self._enc_feat_map,
+                    # feat_idx=self._enc_conv_idx)
+            # else:
+                # out_ = self.encoder(
+                    # x[:, :, 1 + 4 * (i - 1):1 + 4 * i, :, :],
+                    # feat_cache=self._enc_feat_map,
+                    # feat_idx=self._enc_conv_idx)
+                # out = torch.cat([out, out_], 2)
+
         mu, log_var = self.conv1(out).chunk(2, dim=1)
         self.clear_cache()
+
         return mu.squeeze(2)
 
     def decode(self, z):
