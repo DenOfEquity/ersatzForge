@@ -67,6 +67,8 @@ class VAE:
 
         if hasattr(model.config, "downscale_ratio"):
             self.downscale_ratio = int(model.config.downscale_ratio)
+        elif hasattr(model.config, "scale_factor_spatial"):
+            self.downscale_ratio = int(model.config.scale_factor_spatial)
         elif hasattr(model.config, "down_block_types"):
             self.downscale_ratio = int(2 ** (len(model.config.down_block_types) - 1))
         else:
