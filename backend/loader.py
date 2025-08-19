@@ -15,6 +15,7 @@ from backend.state_dict import try_filter_state_dict, load_state_dict
 from backend.operations import using_forge_operations
 from backend.nn.vae import IntegratedAutoencoderKL
 from backend.nn.vae_wan import AutoencoderKLWan
+from backend.nn.vae_wan22 import WanVAE
 from backend.nn.clip import IntegratedCLIP
 from backend.nn.unet import IntegratedUNet2DConditionModel
 
@@ -25,9 +26,10 @@ from backend.diffusion_engine.sd35 import StableDiffusion3
 from backend.diffusion_engine.flux import Flux
 from backend.diffusion_engine.chroma import Chroma
 from backend.diffusion_engine.cosmos import Cosmos
+from backend.diffusion_engine.wan import Wan
 
 
-possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, Chroma, Flux, Cosmos]
+possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, Chroma, Flux, Cosmos, Wan]
 
 
 logging.getLogger("diffusers").setLevel(logging.ERROR)
@@ -75,6 +77,16 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 # state_dict = huggingface_guess.diffusers_convert.convert_vae_state_dict(state_dict)
             load_state_dict(model, state_dict)#, ignore_start='loss.')
             return model
+        if cls_name in ['AutoencoderKLWan22']:
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have VAE state dict!'
+
+            config = WanVAE.load_config(config_path)
+
+            with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                model = WanVAE.from_config(config)
+
+            load_state_dict(model, state_dict)#, ignore_start='loss.')
+            return model
 
 
         if component_name.startswith('text_encoder') and cls_name in ['CLIPTextModel', 'CLIPTextModelWithProjection']:
@@ -98,7 +110,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             ], log_name=cls_name)
 
             return model
-        if cls_name == 'T5EncoderModel':
+        if cls_name in ["T5EncoderModel", "UMT5EncoderModel"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have T5 state dict!'
 
             from backend.nn.t5 import IntegratedT5
@@ -171,7 +183,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             return model
 
-        if cls_name in ['UNet2DConditionModel', 'FluxTransformer2DModel', 'SD3Transformer2DModel', 'ChromaTransformer2DModel', 'CosmosTransformer3DModel']:
+        if cls_name in ['UNet2DConditionModel', 'FluxTransformer2DModel', 'SD3Transformer2DModel', 'ChromaTransformer2DModel', 'CosmosTransformer3DModel', "WanTransformer3DModel"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have model state dict!'
 
             model_loader = None
@@ -189,6 +201,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             elif cls_name == 'CosmosTransformer3DModel':
                 from backend.nn.cosmos_predict2 import MiniTrainDIT
                 model_loader = lambda c: MiniTrainDIT(**c)
+            elif cls_name == 'WanTransformer3DModel':
+                from backend.nn.wan import WanModel
+                model_loader = lambda c: WanModel(**c)
 
             unet_config = guess.unet_config.copy()
             state_dict_parameters = memory_management.state_dict_parameters(state_dict)
@@ -275,19 +290,13 @@ def replace_state_dict(sd, asd, guess):
         asd.clear()
         asd = asd_new
 
-    if "decoder.conv_in.weight" in asd: #flux vae, sd3 vae
-        keys_to_delete = [k for k in sd if k.startswith(vae_key_prefix)]
-        for k in keys_to_delete:
-            del sd[k]
-        for k, v in asd.items():
-            sd[vae_key_prefix + k] = v
-
 
     ##  identify model type
     flux_test_key = "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale"
     sd3_test_key = "model.diffusion_model.final_layer.adaLN_modulation.1.bias"
     legacy_test_key = "model.diffusion_model.input_blocks.4.1.transformer_blocks.0.attn2.to_k.weight"
     cosmos_test_key = "model.diffusion_model.net.blocks.0.adaln_modulation_cross_attn.1.weight"
+    wan_test_key = "model.diffusion_model.head.modulation"
 
     model_type = "-"
     if legacy_test_key in sd:
@@ -306,6 +315,8 @@ def replace_state_dict(sd, asd, guess):
         model_type = "sd3"
     elif cosmos_test_key in sd:
         model_type = "csms"
+    elif wan_test_key in sd:
+        model_type = "wan"
 
     ##  prefixes used by various model types for CLIP-L
     prefix_L = {
@@ -317,6 +328,7 @@ def replace_state_dict(sd, asd, guess):
         "flux": "text_encoders.clip_l.transformer.",
         "sd3" : "text_encoders.clip_l.transformer.",
         "csms": None,
+        "wan":  None,
     }
     ##  prefixes used by various model types for CLIP-G
     prefix_G = {
@@ -328,6 +340,7 @@ def replace_state_dict(sd, asd, guess):
         "flux": None,
         "sd3" : "text_encoders.clip_g.transformer.",
         "csms": None,
+        "wan":  None,
     }
     ##  prefixes used by various model types for CLIP-H
     prefix_H = {
@@ -339,6 +352,7 @@ def replace_state_dict(sd, asd, guess):
         "flux": None,
         "sd3" : None,
         "csms": None,
+        "wan":  None,
     }
 
 
@@ -503,23 +517,42 @@ def replace_state_dict(sd, asd, guess):
                         sd[new_k] = v
 
     # T5
-    if model_type == 'csms' or model_type == 'flux' or model_type == 'sd3':
+    if model_type in ['flux', 'sd3', 'csms', 'wan']:
         if 'encoder.block.0.layer.0.SelfAttention.k.weight' in asd:
-            keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}t5xxl.")]
+            t5key = "umt5xxl" if asd['shared.weight'].shape[0] == 256384 else "t5xxl"
+            keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}{t5key}.")]
             for k in keys_to_delete:
                 del sd[k]
             for k, v in asd.items():
-                sd[f"{text_encoder_key_prefix}t5xxl.transformer.{k}"] = v
+                if k == "spiece_model":
+                    continue
+                sd[f"{text_encoder_key_prefix}{t5key}.transformer.{k}"] = v
 
         if 'encoder.encoder.block.0.layer.0.SelfAttention.k.weight' in asd:
-            keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}t5xxl.")]
+            t5key = "umt5xxl" if asd['shared.weight'].shape[0] == 256384 else "t5xxl"
+            keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}{t5key}.")]
             for k in keys_to_delete:
                 del sd[k]
             for k, v in asd.items():
-                sd[f"{text_encoder_key_prefix}t5xxl.transformer.{k.replace('encoder.', '', 1)}"] = v
+                if k == "spiece_model":
+                    continue
+                sd[f"{text_encoder_key_prefix}{t5key}.transformer.{k.replace('encoder.', '', 1)}"] = v
 
 
-    if "decoder.conv1.bias" in asd and model_type == 'csms':    # Wan VAE, used by Cosmos predict2
+    if "decoder.conv_in.weight" in asd:
+        keys_to_delete = [k for k in sd if k.startswith(vae_key_prefix)]
+        for k in keys_to_delete:
+            del sd[k]
+        for k, v in asd.items():
+            sd[vae_key_prefix + k] = v
+    if "decoder.middle.0.residual.0.gamma" in asd: #flux vae, sd3, wan vae - TODO: add model check?
+        keys_to_delete = [k for k in sd if k.startswith(vae_key_prefix)]
+        for k in keys_to_delete:
+            del sd[k]
+        for k, v in asd.items():
+            sd[vae_key_prefix + k] = v
+
+    if "decoder.conv1.bias" in asd and model_type in ['csms', 'wan']:    # Wan VAE, used by Cosmos predict2
         keys_to_delete = [k for k in sd if k.startswith(vae_key_prefix)]
         for k in keys_to_delete:
             del sd[k]

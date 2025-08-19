@@ -10,6 +10,9 @@ from backend.patcher.lora import merge_lora_to_weight
 
 stash = {}
 
+# if torch.cuda.is_available() and torch.backends.cudnn.is_available():
+    # print ("CUDNN benchmark: Enabled")
+    # torch.backends.cudnn.benchmark = True
 
 def get_weight_and_bias(layer, weight_args=None, bias_args=None, weight_fn=None, bias_fn=None):
     scale_weight = getattr(layer, 'scale_weight', None)
@@ -193,7 +196,7 @@ class ForgeOperations:
                     return self._conv_forward(x, weight, bias)
             else:
                 weight, bias = get_weight_and_bias(self)
-                return super()._conv_forward(input, weight, bias)
+                return super()._conv_forward(x, weight, bias)
 
     class Conv1d(torch.nn.Conv1d):
 
@@ -213,7 +216,7 @@ class ForgeOperations:
                     return self._conv_forward(x, weight, bias)
             else:
                 weight, bias = get_weight_and_bias(self)
-                return super()._conv_forward(input, weight, bias)
+                return super()._conv_forward(x, weight, bias)
 
     class ConvTranspose2d(torch.nn.ConvTranspose2d):
 
@@ -325,6 +328,26 @@ class ForgeOperations:
                 weight, bias, signal = weights_manual_cast(self, x)
                 with main_stream_worker(weight, bias, signal):
                     return torch.nn.functional.layer_norm(x, self.normalized_shape, weight, bias, self.eps)
+            else:
+                return super().forward(x)
+
+    class RMSNorm(torch.nn.RMSNorm):
+
+        def __init__(self, *args, **kwargs):
+            kwargs["device"] = current_device
+            kwargs["dtype"] = current_dtype
+            super().__init__(*args, **kwargs)
+            self.parameters_manual_cast = current_manual_cast_enabled
+            self.bias = None
+
+        def reset_parameters(self):
+            return None
+
+        def forward(self, x):
+            if self.parameters_manual_cast:
+                weight, bias, signal = weights_manual_cast(self, x)
+                with main_stream_worker(weight, bias, signal):
+                    return torch.nn.functional.rms_norm(x, self.normalized_shape, weight, self.eps)
             else:
                 return super().forward(x)
 
@@ -488,7 +511,7 @@ def using_forge_operations(operations=None, device=None, dtype=None, manual_cast
         else:
             operations = ForgeOperations
 
-    op_names = ['Linear', 'Conv1d', 'Conv2d', 'Conv3d', 'ConvTranspose1d', 'ConvTranspose2d', 'ConvTranspose3d', 'GroupNorm', 'LayerNorm', 'Embedding']
+    op_names = ['Linear', 'Conv1d', 'Conv2d', 'Conv3d', 'ConvTranspose1d', 'ConvTranspose2d', 'ConvTranspose3d', 'GroupNorm', 'LayerNorm', 'RMSNorm', 'Embedding']
     backups = {op_name: getattr(torch.nn, op_name) for op_name in op_names}
 
     try:
