@@ -53,8 +53,8 @@ class ForgeDiffusionEngine:
     def get_prompt_lengths_on_ui(self, prompt):
         return 0, 75
 
-    def is_webui_legacy_model(self):    # this is effectively is_flux_or_chroma)
-        return self.is_sd1 or self.is_sd2 or self.is_sdxl or self.is_sd3 or self.is_cosmos_predict2
+    def is_webui_legacy_model(self):    # this is effectively is_flux_or_chroma
+        return self.is_sd1 or self.is_sd2 or self.is_sdxl or self.is_sd3 or self.is_cosmos_predict2 or self.is_wan
 
     def fix_for_webui_backward_compatibility(self):
         self.tiling_enabled = "None"
@@ -66,6 +66,7 @@ class ForgeDiffusionEngine:
         self.is_sdxl = False
         self.is_sd3 = False
         self.is_cosmos_predict2 = False
+        self.is_wan = False
 
         return
 
