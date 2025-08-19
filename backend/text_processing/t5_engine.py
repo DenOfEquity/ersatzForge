@@ -14,7 +14,7 @@ class PromptChunk:
 
 
 class T5TextProcessingEngine:
-    def __init__(self, text_encoder, tokenizer, emphasis_name="Original", min_length=256, end_with_pad=False):
+    def __init__(self, text_encoder, tokenizer, emphasis_name="Original", min_length=256, end_with_pad=False, add_special_tokens=False):
         super().__init__()
 
         self.text_encoder = text_encoder.transformer
@@ -23,6 +23,7 @@ class T5TextProcessingEngine:
         self.emphasis = emphasis.get_current_option(opts.emphasis)()
         self.min_length = min_length
         self.end_with_pad = end_with_pad
+        self.add_special_tokens = add_special_tokens
         self.id_end = 1
         self.id_pad = 0
 
@@ -49,7 +50,7 @@ class T5TextProcessingEngine:
                 self.token_mults[ident] = mult
 
     def tokenize(self, texts):
-        tokenized = self.tokenizer(texts, truncation=False, add_special_tokens=False)["input_ids"]
+        tokenized = self.tokenizer(texts, truncation=False, add_special_tokens=self.add_special_tokens)["input_ids"]
         return tokenized
 
     def encode_with_transformers(self, tokens):
