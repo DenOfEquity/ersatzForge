@@ -22,17 +22,15 @@ def prepare_free_memory(aggressive=False):
     print('Cleanup minimal inference memory.')
     return
 
+
 original_conv2dForward = torch.nn.Conv2d._conv_forward
 
 def apply_circular_forge(model, tiling_enabled="None"):
     if not (model.is_sd1 or model.is_sd2 or model.is_sdxl):
-        return
-    
-    if model.tiling_enabled == tiling_enabled:
-        return
+        tiling_enabled = "None"
 
     model.tiling_enabled = tiling_enabled
-    
+
     def __replacementConv2DForward(self, input: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor]):
         modeX = 'circular' if 'X' in model.tiling_enabled else 'constant'
         modeY = 'circular' if 'Y' in model.tiling_enabled else 'constant'
@@ -43,7 +41,7 @@ def apply_circular_forge(model, tiling_enabled="None"):
         working = torch.nn.functional.pad(working, paddingY, mode=modeY)
         
         return torch.nn.functional.conv2d(working, weight, bias, self.stride, torch.nn.modules.utils._pair(0), self.dilation, self.groups)
-        
+
     if tiling_enabled == "None":
         torch.nn.Conv2d._conv_forward = original_conv2dForward
     else:
