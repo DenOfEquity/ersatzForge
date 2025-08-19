@@ -57,7 +57,7 @@ class ForgeDiffusionEngine:
         return self.is_sd1 or self.is_sd2 or self.is_sdxl or self.is_sd3 or self.is_cosmos_predict2
 
     def fix_for_webui_backward_compatibility(self):
-        self.tiling_enabled = False
+        self.tiling_enabled = "None"
         self.first_stage_model = None
         self.cond_stage_model = None
         self.use_distilled_cfg_scale = False
