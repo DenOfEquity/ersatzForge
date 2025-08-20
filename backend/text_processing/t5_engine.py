@@ -53,14 +53,32 @@ class T5TextProcessingEngine:
         tokenized = self.tokenizer(texts, truncation=False, add_special_tokens=self.add_special_tokens)["input_ids"]
         return tokenized
 
-    def encode_with_transformers(self, tokens):
+    def _process_tokens(self, tokens):
+        attention_masks = []
+
+        for x in tokens:
+            attention_mask = []
+            eos = False
+
+            for y in x:
+                if isinstance(y, int):
+                    attention_mask.append(0 if eos else 1)
+                    if not eos and int(y) == self.id_end:
+                        eos = True
+
+            attention_masks.append(attention_mask)
+
+        return torch.tensor(attention_masks, dtype=torch.long)
+
+    def encode_with_transformers(self, tokens, attention_mask=None):
         device = memory_management.text_encoder_device()
         tokens = tokens.to(device)
         self.text_encoder.shared.to(device=device, dtype=torch.float32)
 
-        z = self.text_encoder(
-            input_ids=tokens,
-        )
+        if attention_mask is not None:
+            z = self.text_encoder(input_ids=tokens, attention_mask=attention_mask)
+        else:
+            z = self.text_encoder(input_ids=tokens,)
 
         return z
 
@@ -151,14 +169,21 @@ class T5TextProcessingEngine:
         return torch.stack(zs)
 
     def process_tokens(self, batch_tokens, batch_multipliers):
-        tokens = torch.asarray(batch_tokens)
-
-        z = self.encode_with_transformers(tokens)
+        if self.text_encoder.config["model_type"] == "umt5":
+            attention_mask = self._process_tokens(batch_tokens)
+            tokens = torch.asarray(batch_tokens)
+            z = self.encode_with_transformers(tokens, attention_mask)
+        else:
+            tokens = torch.asarray(batch_tokens)
+            z = self.encode_with_transformers(tokens)
 
         self.emphasis.tokens = batch_tokens
         self.emphasis.multipliers = torch.asarray(batch_multipliers).to(z)
         self.emphasis.z = z
         self.emphasis.after_transformers()
         z = self.emphasis.z
+
+        if self.text_encoder.config["model_type"] == "umt5":
+            z *= attention_mask.unsqueeze(-1).to(z)
 
         return z
