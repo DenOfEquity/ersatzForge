@@ -33,7 +33,7 @@ class Wan(ForgeDiffusionEngine):
             text_encoder=clip.cond_stage_model.umt5xxl,
             tokenizer=clip.tokenizer.umt5xxl,
             emphasis_name=dynamic_args["emphasis_name"],
-            min_length=226,
+            min_length=512,
             add_special_tokens=True,
         )
 
@@ -57,7 +57,7 @@ class Wan(ForgeDiffusionEngine):
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt):
         token_count = len(self.text_processing_engine_t5.tokenize([prompt])[0])
-        return token_count, max(226, token_count)
+        return token_count, max(512, token_count)
 
     @torch.inference_mode()
     def encode_first_stage(self, x):
@@ -70,3 +70,4 @@ class Wan(ForgeDiffusionEngine):
         sample = self.forge_objects.vae.first_stage_model.process_out(x)
         sample = self.forge_objects.vae.decode(sample).movedim(-1, 1) * 2.0 - 1.0
         return sample.to(x)
+
