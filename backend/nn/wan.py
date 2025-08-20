@@ -384,8 +384,10 @@ class WanModel(nn.Module):
                 List of denoised video tensors with original input shapes [C_out, F, H / 8, W / 8]
         """
         # embeddings
+        b, c, f, h, w = x.shape
+
         x = self.patch_embedding(x).to(x.dtype)
-        grid_sizes = x.shape[2:]
+        # grid_sizes = x.shape[2:]
         x = x.flatten(2).transpose(1, 2)
 
         # time embeddings
@@ -401,6 +403,7 @@ class WanModel(nn.Module):
             if self.img_emb is not None:
                 context_clip = self.img_emb(clip_fea)  # bs x 257 x dim
                 context = torch.concat([context_clip, context], dim=1)
+                del context_clip
             context_img_len = clip_fea.shape[-2]
 
         patches_replace = transformer_options.get("patches_replace", {})
@@ -418,12 +421,13 @@ class WanModel(nn.Module):
             else:
                 x = block(x, e=e0, freqs=freqs, context=context, context_img_len=context_img_len)
 
+        del e0, freqs, context
         # head
         x = self.head(x, e)
+        del e
 
         # unpatchify
-        # print (x.shape)
-        x = self.unpatchify(x, grid_sizes)
+        x = rearrange(x, "b (f h w) (p r c) -> b c f (h p) (w r)", b=b, c=c, f=f, h=h//self.patch_size[1], w=w//self.patch_size[2], p=self.patch_size[1], r=self.patch_size[2])
 
         return x
 
@@ -447,36 +451,17 @@ class WanModel(nn.Module):
             time_dim_concat = torch.nn.functional.pad(time_dim_concat, (0, pad_w, 0, pad_h), mode="circular")
 
             x = torch.cat([x, time_dim_concat], dim=2)
+            del time_dim_concat
             t_len = (x.shape[2] + (patch_size[0] // 2)) // patch_size[0]
 
         img_ids = torch.zeros((t_len, h_len, w_len, 3), device=x.device, dtype=x.dtype)
-        # img_ids[:, :, :, 0] = img_ids[:, :, :, 0] + torch.linspace(0, t_len - 1, steps=t_len, device=x.device, dtype=x.dtype).reshape(-1, 1, 1)
-        img_ids[:, :, :, 1] += torch.linspace(0, h_len - 1, steps=h_len, device=x.device, dtype=x.dtype)[:, None]#.reshape(1, -1, 1)
-        img_ids[:, :, :, 2] += torch.linspace(0, w_len - 1, steps=w_len, device=x.device, dtype=x.dtype)[None, :]#.reshape(1, 1, -1)
+        img_ids[:, :, :, 1] += torch.linspace(0, h_len - 1, steps=h_len, device=x.device, dtype=x.dtype)[:, None]
+        img_ids[:, :, :, 2] += torch.linspace(0, w_len - 1, steps=w_len, device=x.device, dtype=x.dtype)[None, :]
+
         img_ids = repeat(img_ids, "t h w c -> b (t h w) c", b=bs)
 
         freqs = self.rope_embedder(img_ids).movedim(1, 2)
+        del img_ids
+
         result = self.forward_orig(x, timestep, context, clip_fea=clip_fea, freqs=freqs, transformer_options=transformer_options, **kwargs)[:, :, :t, :h, :w]
         return result.squeeze(2)
-
-    def unpatchify(self, x, grid_sizes):
-        r"""
-        Reconstruct video tensors from patch embeddings.
-        Args:
-            x (List[Tensor]):
-                List of patchified features, each with shape [L, C_out * prod(patch_size)]
-            grid_sizes (Tensor):
-                Original spatial-temporal grid dimensions before patching,
-                    shape [B, 3] (3 dimensions correspond to F_patches, H_patches, W_patches)
-        Returns:
-            List[Tensor]:
-                Reconstructed video tensors with shape [L, C_out, F, H / 8, W / 8]
-        """
-
-        c = self.out_dim
-        u = x
-        b = u.shape[0]
-        u = u[:, : math.prod(grid_sizes)].view(b, *grid_sizes, *self.patch_size, c)
-        u = torch.einsum("bfhwpqrc->bcfphqwr", u)
-        u = u.reshape(b, c, *[i * j for i, j in zip(grid_sizes, self.patch_size)])
-        return u
