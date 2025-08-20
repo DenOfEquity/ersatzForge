@@ -132,6 +132,7 @@ class T5Attention(torch.nn.Module):
 
         if past_bias is not None:
             if mask is not None:
+                mask = mask.to(x.device)
                 mask = mask + past_bias
             else:
                 mask = past_bias
