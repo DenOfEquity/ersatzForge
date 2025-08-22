@@ -1,6 +1,6 @@
 import inspect
 from collections import namedtuple
-import numpy as np
+import numpy
 import torch
 from PIL import Image
 from modules import devices, images, sd_vae_approx, sd_samplers, sd_vae_taesd, shared, sd_models
@@ -75,7 +75,7 @@ def single_sample_to_image(sample, approximation=None):
     x_sample.mul_(255.)
     x_sample.round_()
     x_sample = x_sample.to(torch.uint8)
-    x_sample = np.moveaxis(x_sample.numpy(), 0, 2)
+    x_sample = numpy.moveaxis(x_sample.numpy(), 0, 2)
 
     return Image.fromarray(x_sample)
 
@@ -360,10 +360,3 @@ class Sampler:
 
     def sample_img2img(self, p, x, noise, conditioning, unconditional_conditioning, steps=None, image_conditioning=None):
         raise NotImplementedError()
-
-    def add_infotext(self, p):
-        if self.model_wrap_cfg.padded_cond_uncond:
-            p.extra_generation_params["Pad conds"] = True
-
-        if self.model_wrap_cfg.padded_cond_uncond_v0:
-            p.extra_generation_params["Pad conds v0"] = True
