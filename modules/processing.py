@@ -39,7 +39,7 @@ from backend.modules.k_prediction import rescale_zero_terminal_snr_sigmas
 from modules import latent_upscale_nn
 
 # some of those options should not be changed at all because they would break the model, so I removed them from options.
-opt_C = 4
+# opt_C = 4
 opt_f = 8
 
 
@@ -806,6 +806,17 @@ def manage_model_and_prompt_cache(p: StableDiffusionProcessing):
     p.sd_model = None # will be re-set by loader
     p.sd_model, just_reloaded = forge_model_reload()
 
+    # set up 'opt_f', not all models use 8x8 latent downscale
+    # could be better in forge_model_reload(), but changing architecture in refiner or with latent upscale isn't supported anyway
+    if hasattr(shared.sd_model.forge_objects.vae, "downscale_ratio"):
+        opt_f = int(shared.sd_model.forge_objects.vae.downscale_ratio)
+    elif hasattr(shared.sd_model.forge_objects.vae, "scale_factor_spatial"):
+        opt_f = int(shared.sd_model.forge_objects.vae.scale_factor_spatial)
+    elif hasattr(shared.sd_model.forge_objects.vae, "down_block_types"):
+        opt_f = int(2 ** (len(shared.sd_model.forge_objects.vae.down_block_types) - 1))
+    else:
+        opt_f = 8
+
     if need_global_unload and not just_reloaded:
         memory_management.unload_all_models()
 
@@ -940,17 +951,8 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             p.subseeds = p.all_subseeds[n * p.batch_size:(n + 1) * p.batch_size]
 
             latent_channels = shared.sd_model.forge_objects.vae.latent_channels
-            if hasattr(shared.sd_model.forge_objects.vae, "downscale_ratio"):
-                downscale_ratio = int(shared.sd_model.forge_objects.vae.downscale_ratio)
-            elif hasattr(shared.sd_model.forge_objects.vae, "scale_factor_spatial"):
-                downscale_ratio = int(shared.sd_model.forge_objects.vae.scale_factor_spatial)
-            elif hasattr(shared.sd_model.forge_objects.vae, "down_block_types"):
-                downscale_ratio = int(2 ** (len(shared.sd_model.forge_objects.vae.down_block_types) - 1))
-            else:
-                downscale_ratio = opt_f
-            # TODO: opt_f is also used in other places, maybe replace with a parameter on the model object
 
-            p.rng = rng.ImageRNG((latent_channels, p.height // downscale_ratio, p.width // downscale_ratio), p.seeds, subseeds=p.subseeds, subseed_strength=p.subseed_strength, seed_resize_from_h=p.seed_resize_from_h, seed_resize_from_w=p.seed_resize_from_w)
+            p.rng = rng.ImageRNG((latent_channels, p.height // opt_f, p.width // opt_f), p.seeds, subseeds=p.subseeds, subseed_strength=p.subseed_strength, seed_resize_from_h=p.seed_resize_from_h, seed_resize_from_w=p.seed_resize_from_w)
 
             if p.scripts is not None:
                 p.scripts.before_process_batch(p, batch_number=n, prompts=p.prompts, seeds=p.seeds, subseeds=p.subseeds)
