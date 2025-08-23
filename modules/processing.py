@@ -434,6 +434,7 @@ class StableDiffusionProcessing:
             # self.width,
             # self.height,
             opts.emphasis,
+            opts.use_ELLA
         )
 
     def get_conds_with_caching(self, function, required_prompts, steps, caches, extra_network_data, hires_steps=None):
@@ -772,6 +773,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         **p.extra_generation_params,
         "Version": program_version() if opts.add_version_to_infotext else None,
         "User": p.user if opts.add_user_name_to_info else None,
+        "ELLA": opts.use_ELLA if ("ELLA" in opts.use_ELLA and shared.sd_model.is_sd1) else None,
     })
 
     if shared.opts.forge_unet_storage_dtype != 'Automatic':

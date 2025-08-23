@@ -186,7 +186,11 @@ def get_learned_conditioning(model, prompts: SdConditioning | list[str], steps, 
             continue
 
         texts = SdConditioning([x[1] for x in prompt_schedule], copy_from=prompts)
-        conds = model.get_learned_conditioning(texts)
+        if model.is_sd1:    # could also check for ELLA enabled
+            end_steps = [x[0] for x in prompt_schedule]
+            conds = model.get_learned_conditioning(texts, end_steps)
+        else:
+            conds = model.get_learned_conditioning(texts)
 
         cond_schedule = []
         for i, (end_at_step, _) in enumerate(prompt_schedule):
