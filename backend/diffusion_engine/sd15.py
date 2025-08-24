@@ -267,34 +267,68 @@ class StableDiffusion(ForgeDiffusionEngine):
 
 #use memory_management.text_encoder_device ? and text_encoder_offload_device
 #save T5, move to cpu after use ? would be relying on garbage collection after model change
+            last_step = end_steps[-1] - 1
 
-            cond_ella = []
-            timestep = 999
-            start_step = 0
+            if "(per step)" in shared.opts.use_ELLA:
+                cond = []
+                this_step = 0
 
-            for p in range(len(prompt)):
-                text_inputs = T5tokenizer(prompt[p], return_tensors="pt", add_special_tokens=True)
-                outputs = T5model(text_inputs.input_ids, attention_mask=text_inputs.attention_mask)
-                cond_t5 = outputs.last_hidden_state
+                for p in range(len(prompt)):
+                    if "CLIP" in shared.opts.use_ELLA:
+                        cond_clip = self.text_processing_engine(prompt[p:p+1])
+                    else:
+                        cond_clip = None
 
-                # prompt scheduling
-                timestep = 999 * (1.0 - (start_step / end_steps[-1]) ** 2) # squared timesteps schedule
-                # timestepL = 999 - (999 * start_step / end_steps[-1]) # linear timesteps schedule
-                # timestepS = 999 * (1.0 - (start_step / end_steps[-1]) ** 0.5) # sqrt timesteps schedule
+                    text_inputs = T5tokenizer(prompt[p], return_tensors="pt", add_special_tokens=True)
+                    outputs = T5model(text_inputs.input_ids, attention_mask=text_inputs.attention_mask)
+                    cond_t5 = outputs.last_hidden_state
 
-                cond_ella.append(self.ella(cond_t5, torch.Tensor([timestep]))) # seems best at 999 for normal use, but with prompt scheduling?
+                    while this_step <= end_steps[p] - 1:
+                        timestep = 999 * (1.0 - (this_step / last_step) ** 2) # squared timesteps schedule
 
-                start_step = end_steps[p]
+                        cond_ella = self.ella(cond_t5, torch.Tensor([timestep]))
+                        if cond_clip is not None:
+                            cond.append(torch.cat([cond_clip, cond_ella.to(cond_clip)], dim=1))
+                        else:
+                            cond.append(cond_ella)
 
-            del T5model, T5tokenizer, cond_t5, text_inputs, outputs
+                        this_step += 1
 
-            if "CLIP" in shared.opts.use_ELLA:
-                cond_clip = self.text_processing_engine(prompt)
-                cond = torch.cat([cond_clip, torch.cat(cond_ella, dim=0).to(cond_clip)], dim=1)
+                    del cond_t5, text_inputs, outputs
+
+                return cond, True   # True means ELLA was used per step, returning a cond for each step
             else:
-                cond = cond_ella
+                if "CLIP" in shared.opts.use_ELLA:
+                    cond_clip = self.text_processing_engine(prompt)
+                else:
+                    cond_clip = None
+
+                cond_ella = []
+                start_step = 0
+
+                for p in range(len(prompt)):
+                    text_inputs = T5tokenizer(prompt[p], return_tensors="pt", add_special_tokens=True)
+                    outputs = T5model(text_inputs.input_ids, attention_mask=text_inputs.attention_mask)
+                    cond_t5 = outputs.last_hidden_state
+
+                    timestep = 999 * (1.0 - (start_step / last_step) ** 2) # squared timesteps schedule
+
+                    cond_ella.append(self.ella(cond_t5, torch.Tensor([timestep])))
+
+                    start_step = end_steps[p]
+                    del cond_t5, text_inputs, outputs
+
+                del T5model, T5tokenizer
+
+                if cond_clip is not None:
+                    cond = torch.cat([cond_clip, torch.cat(cond_ella, dim=0).to(cond_clip)], dim=1)
+                else:
+                    cond = cond_ella
+
+                return cond, False
         else:
             cond = self.text_processing_engine(prompt)
+            return cond, False
 
         return cond
 
