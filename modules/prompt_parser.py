@@ -186,20 +186,27 @@ def get_learned_conditioning(model, prompts: SdConditioning | list[str], steps, 
             continue
 
         texts = SdConditioning([x[1] for x in prompt_schedule], copy_from=prompts)
+        used_ELLA_per_step = False
         if model.is_sd1:    # could also check for ELLA enabled
             end_steps = [x[0] for x in prompt_schedule]
-            conds = model.get_learned_conditioning(texts, end_steps)
+            conds, used_ELLA_per_step = model.get_learned_conditioning(texts, end_steps)
         else:
             conds = model.get_learned_conditioning(texts)
 
         cond_schedule = []
-        for i, (end_at_step, _) in enumerate(prompt_schedule):
-            if isinstance(conds, dict):
-                cond = {k: v[i] for k, v in conds.items()}
-            else:
+        if used_ELLA_per_step:   # we have a cond for each step
+            assert len(conds) == prompt_schedule[-1][0]
+            for i in range(len(conds)):
                 cond = conds[i]
+                cond_schedule.append(ScheduledPromptConditioning(i, cond))
+        else:
+            for i, (end_at_step, _) in enumerate(prompt_schedule):
+                if isinstance(conds, dict):
+                    cond = {k: v[i] for k, v in conds.items()}
+                else:
+                    cond = conds[i]
 
-            cond_schedule.append(ScheduledPromptConditioning(end_at_step, cond))
+                cond_schedule.append(ScheduledPromptConditioning(end_at_step, cond))
 
         cache[prompt] = cond_schedule
         res.append(cond_schedule)
