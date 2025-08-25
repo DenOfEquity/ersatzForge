@@ -6,13 +6,14 @@ a backup of my local (experimental, opinionated) changes to Forge2 webUI
 * Hypernetworks
 * various other minor tweaks: UI, embedding filtering, code consolidation, dead code removal, performance improvements for me
 * tiling (sd1, 2, xl) (based on https://github.com/spinagon/ComfyUI-seamless-tiling)
-* all embeddings everywhere all at once: SD1.5 embeddings (CLIP-L only) can be used with SDXL, SD3, maybe Flux (haven't tested); SDXL embeddings can be used with SD1 (applies CLIP-L only, CLIP-G ignored), SD3
+* all embeddings everywhere all at once: SD1.5 embeddings (CLIP-L only) can be used with SDXL, SD3; SDXL embeddings can be used with SD1 (applies CLIP-L only, CLIP-G ignored), SD3
 * new preprocessors for IPAdapter, including tiling, noising (for uncond) and sharpening of inputs. And multi-input.
-* Latent NeuralNet upscaler by city96 (based on https://github.com/city96/SD-Latent-Upscaler)
+* Latent NeuralNet upscaler by city96 (based on https://github.com/city96/SD-Latent-Upscaler) (1.25x, 1.5x and 2.0x)
 * ResAdapter support: download models to `models/other_modules`, load via 'Additional modules' selector (as VAE, text encoder), LoRA as usual (https://huggingface.co/jiaxiangc/res-adapter)
 * long CLIP
 * distilled T5 models for Flux by LifuWang (see https://huggingface.co/LifuWang/DistillT5)
 * lama and MAT inpainting models usable in img2img, both as processing options and as infill options
 * PuLID (sdxl) (based on https://github.com/cubiq/PuLID_ComfyUI/)
 * nVidia Cosmos predict2 t2i (only tested 2B model)
-
+* Wan 2.2 14B T2V and 5B, 1 frame generation only
+* ELLA (https://github.com/TencentQQGYLab/ELLA), models downloaded automatically, enable in Settings
