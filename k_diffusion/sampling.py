@@ -74,8 +74,15 @@ def get_ancestral_step_flow(sigma_from, sigma_to, eta=1.):
     return sigma_down, sigma_up, (alpha_ip1 / alpha_down)
 
 
-def default_noise_sampler(x):
-    return lambda sigma, sigma_next: torch.randn_like(x)
+def default_noise_sampler(x, seed=None):
+    if seed is not None:
+        generator = torch.Generator(device=x.device)
+        generator.manual_seed(seed)
+    else:
+        generator = None
+
+    return lambda sigma, sigma_next: torch.randn(x.size(), dtype=x.dtype, layout=x.layout, device=x.device, generator=generator)
+    # return lambda sigma, sigma_next: torch.randn_like(x)
 
 
 class BatchedBrownianTree:

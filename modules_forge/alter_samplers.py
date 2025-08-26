@@ -19,4 +19,8 @@ def build_constructor(sampler_name):
 
 samplers_data_alter = [
     sd_samplers_common.SamplerData('DDPM', build_constructor(sampler_name='ddpm'), ['ddpm'], {}),
+    sd_samplers_common.SamplerData('SA-Solver', build_constructor(sampler_name='sa_solver'), ['sa_solver'], {}),
+    sd_samplers_common.SamplerData('Extended Reverse-Time SDE', build_constructor(sampler_name='er_sde'), ['er_sde'], {}),
+    sd_samplers_common.SamplerData('Adaptive-ODE', build_constructor(sampler_name='adaptive_ode'), ['adaptive_ode'], {}),
 ]
+

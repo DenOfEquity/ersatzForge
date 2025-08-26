@@ -341,6 +341,18 @@ options_templates.update(options_section(('sampler-params', "Sampler parameters"
     'always_discard_next_to_last_sigma': OptionInfo(False, "Always discard next-to-last sigma", infotext='Discard penultimate sigma').link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/6044"),
     'sgm_noise_multiplier': OptionInfo(False, "SGM noise multiplier", infotext='SGM noise multiplier').link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/12818").info("Match initial noise to official SDXL implementation - only useful for reproducing images"),
 
+    "adaptive_ode_explanation": OptionHTML("""
+<h3>Adaptive-ODE relative and absolute tolerances need tuning to the solver</h3>
+<ul>
+<li><i>adaptive_heun</i> recommended: -6.0, -4.0</li>
+<li><i>bosh3</i> recommended: -2.5, -3.5</li>
+<li><i>fehlberg2</i> recommended: -2.5, -3.5</li>
+</ul>
+"""),
+    'adaptive_ode_solver': OptionInfo("bosh3", "Adaptive-ODE solver", gr.Radio, {"choices": ["adaptive_heun", "bosh3", "fehlberg2"]}, infotext='Adaptive-ODE solver'),
+    'adaptive_ode_rtol': OptionInfo(-2.5, "Adaptive-ODE log relative tolerance", gr.Slider, {"minimum": -7, "maximum": -1, "step": 0.01}, infotext='Adaptive-ODE rtol'),
+    'adaptive_ode_atol': OptionInfo(-3.5, "Adaptive-ODE log absolute tolerance", gr.Slider, {"minimum": -7, "maximum": -1, "step": 0.01}, infotext='Adaptive-ODE atol'),
+
     'deis_mode': OptionInfo("tab", "DEIS variant", gr.Radio, {"choices": ["tab", "rhoab"]}, infotext='DEIS variant'),
     'deis_order': OptionInfo(3, "DEIS order", gr.Slider, {"minimum": 2, "maximum": 4, "step": 1}, infotext='DEIS order').info("must be < sampling steps"),
 

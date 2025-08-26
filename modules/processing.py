@@ -743,6 +743,10 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         generation_params['UniPC order'] = shared.opts.uni_pc_order
         generation_params['UniPC skip type'] = shared.opts.uni_pc_skip_type
         generation_params['UniPC lower order final'] = shared.opts.uni_pc_lower_order_final
+    elif p.sampler_name == 'Adaptive-ODE':
+        generation_params['Adaptive-ODE solver'] = shared.opts.adaptive_ode_solver
+        generation_params['Adaptive-ODE rtol'] = shared.opts.adaptive_ode_rtol
+        generation_params['Adaptive-ODE atol'] = shared.opts.adaptive_ode_atol
 
     # if hires fix was used, p.firstpass_use_distilled_cfg_scale is appropriately set, otherwise it doesn't exist
     firstpass_use_distilled_cfg_scale = getattr(p,'firstpass_use_distilled_cfg_scale', p.sd_model.use_distilled_cfg_scale)
