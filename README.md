@@ -15,5 +15,6 @@ a backup of my local (experimental, opinionated) changes to Forge2 webUI
 * lama and MAT inpainting models usable in img2img, both as processing options and as infill options
 * PuLID (sdxl) (based on https://github.com/cubiq/PuLID_ComfyUI/)
 * nVidia Cosmos predict2 t2i (only tested 2B model)
-* Wan 2.2 14B T2V and 5B, 1 frame generation only
+* Wan 2.2 14B T2V and 5B, 1 frame generation only (extract .zip files in backend/huggingface/Wan-AI)
 * ELLA (https://github.com/TencentQQGYLab/ELLA), models downloaded automatically, enable in Settings
+* extra samplers: SA-Solver, ER-SDE, Adaptive-ODE (params in Settings)
