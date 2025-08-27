@@ -408,18 +408,17 @@ ADAPTIVE_SOLVERS = {"dopri8", "dopri5", "bosh3", "fehlberg2", "adaptive_heun"}
 FIXED_SOLVERS = {"euler", "midpoint", "rk4", "heun3", "explicit_adams", "implicit_adams"}
 
 @torch.no_grad()
-def sample_adaptive_ode(model, x: torch.Tensor, sigmas: torch.Tensor, extra_args=None, callback=None, disable=None):
-    t_max = sigmas.max()
-    t_min = sigmas.min()
-    n_steps = len(sigmas)
+def sample_ode(model, x: torch.Tensor, sigmas: torch.Tensor, extra_args=None, callback=None, disable=None, solver="bosh3"):
+    t_max = sigmas[0]
+    t_min = sigmas[-2]  # sigmas end with 0.0
+    n_steps = len(sigmas) - 1
     
-    solver = shared.opts.adaptive_ode_solver
     rtol = 10**shared.opts.adaptive_ode_rtol
     atol = 10**shared.opts.adaptive_ode_atol
     max_steps = 250
 
     if solver in FIXED_SOLVERS:
-        t = sigmas
+        t = sigmas[0:-1]
         is_adaptive = False
     else:
         t = torch.stack([t_max, t_min])
@@ -441,7 +440,7 @@ def sample_adaptive_ode(model, x: torch.Tensor, sigmas: torch.Tensor, extra_args
             options={
                 "min_step": 1e-5,
                 "max_num_steps": max_steps,
-                "dtype": torch.float32# if torch.backends.mps.is_available() else torch.float64
+                "dtype": torch.float32
             }
         )[-1]
 
@@ -451,8 +450,17 @@ def sample_adaptive_ode(model, x: torch.Tensor, sigmas: torch.Tensor, extra_args
             "i": n_steps - 1,
             "sigma": t_min,
             "sigma_hat": t_min,
-            "denoised": samples, # only accurate if t_min = 0, for now
+            "denoised": samples,
         })
 
     return samples
+
+def sample_adaptive_ode(model, x: torch.Tensor, sigmas: torch.Tensor, extra_args=None, callback=None, disable=None):
+    solver = shared.opts.adaptive_ode_solver
+    return sample_ode(model, x, sigmas, extra_args, callback, disable, solver=solver)
+
+def sample_fixed_ode(model, x: torch.Tensor, sigmas: torch.Tensor, extra_args=None, callback=None, disable=None):
+    solver = shared.opts.fixed_ode_solver
+    return sample_ode(model, x, sigmas, extra_args, callback, disable, solver=solver)
+
 #### end ODE
