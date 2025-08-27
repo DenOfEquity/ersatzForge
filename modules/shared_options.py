@@ -344,9 +344,9 @@ options_templates.update(options_section(('sampler-params', "Sampler parameters"
     "adaptive_ode_explanation": OptionHTML("""
 <h3>Adaptive-ODE relative and absolute tolerances need tuning to the solver</h3>
 <ul>
-<li><i>adaptive_heun</i> recommended: -4.0, -6.0</li>
+<li><i>adaptive_heun</i> recommended: -2.5, -3.5</li>
 <li><i>bosh3</i> recommended: -2.5, -3.5</li>
-<li><i>fehlberg2</i> recommended: -2.5, -3.5</li>
+<li><i>fehlberg2</i> recommended: -4.0, -6.0</li>
 </ul>
 """),
     'adaptive_ode_solver': OptionInfo("bosh3", "Adaptive-ODE solver", gr.Radio, {"choices": ["adaptive_heun", "bosh3", "fehlberg2"]}, infotext='Adaptive-ODE solver'),
@@ -388,3 +388,4 @@ options_templates.update(options_section((None, "Hidden options"), {
 }))
 
 forge_shared_options.register(options_templates, options_section, OptionInfo)
+
