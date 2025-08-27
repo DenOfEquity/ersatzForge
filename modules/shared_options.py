@@ -145,7 +145,7 @@ options_templates.update(options_section(('sd', "Stable Diffusion", "sd"), {
     "randn_source": OptionInfo("GPU", "Random number generator source.", gr.Radio, {"choices": ["GPU", "CPU", "NV"]}, infotext="RNG").info("changes seeds drastically; use CPU to produce the same picture across different videocard vendors; use NV to produce same picture as on NVidia videocards"),
     "tiling": OptionInfo("None", "Tiling", gr.Radio, {"choices": ["None", "X", "Y", "X and Y"]}, infotext='Tiling').info("produce a tileable picture"),
     "hires_fix_refiner_pass": OptionInfo("second pass", "Hires fix: which pass to enable refiner for", gr.Radio, {"choices": ["first pass", "second pass", "both passes"]}, infotext="Hires refiner"),
-    "use_ELLA": OptionInfo("CLIP (normal)", "Use ELLA for SD1.5", gr.Radio, {"choices": ["CLIP (normal)", "ELLA only", "ELLA (per step) only", "CLIP + ELLA", "CLIP + ELLA (per step)"]}, infotext="ELLA text encoder and ELLA model will be automatically downloaded.").info("https://github.com/TencentQQGYLab/ELLA"),
+    "use_ELLA": OptionInfo("CLIP (normal)", "Use ELLA for SD1.5", gr.Radio, {"choices": ["CLIP (normal)", "ELLA only", "ELLA (per step) only", "CLIP + ELLA", "CLIP + ELLA (per step)"]}, infotext="ELLA").info("ELLA text encoder and ELLA model will be automatically downloaded. Info: https://github.com/TencentQQGYLab/ELLA"),
 }))
 
 options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), {
@@ -388,4 +388,5 @@ options_templates.update(options_section((None, "Hidden options"), {
 }))
 
 forge_shared_options.register(options_templates, options_section, OptionInfo)
+
 
