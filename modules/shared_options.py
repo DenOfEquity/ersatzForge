@@ -300,7 +300,6 @@ It is displayed in UI below the image. To use infotext, paste it into the prompt
     "add_vae_name_to_info": OptionInfo(True, "Add VAE name to infotext"),
     "add_vae_hash_to_info": OptionInfo(True, "Add VAE hash to infotext"),
     "add_user_name_to_info": OptionInfo(False, "Add user name to infotext when authenticated"),
-    "add_version_to_infotext": OptionInfo(True, "Add program version to infotext"),
     "disable_weights_auto_swap": OptionInfo(True, "Disregard checkpoint information from pasted infotext").info("when reading generation parameters from text into UI"),
     "infotext_skip_pasting": OptionInfo([], "Disregard fields from pasted infotext", ui_components.DropdownMulti, lambda: {"choices": shared_items.get_infotext_names()}),
     "infotext_styles": OptionInfo("Apply if any", "Infer styles from prompts of pasted infotext", gr.Radio, {"choices": ["Ignore", "Apply", "Discard", "Apply if any"]}).info("when reading generation parameters from text into UI)").html("""<ul style='margin-left: 1.5em'>

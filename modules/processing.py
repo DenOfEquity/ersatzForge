@@ -566,7 +566,6 @@ class Processed:
         self.all_seeds = all_seeds or p.all_seeds or [self.seed]
         self.all_subseeds = all_subseeds or p.all_subseeds or [self.subseed]
         self.infotexts = infotexts or [info] * len(images_list)
-        self.version = program_version()
 
     def js(self):
         obj = {
@@ -600,7 +599,6 @@ class Processed:
             "job_timestamp": self.job_timestamp,
             "clip_skip": self.clip_skip,
             "is_using_inpainting_conditioning": self.is_using_inpainting_conditioning,
-            "version": self.version,
         }
 
         return json.dumps(obj, default=lambda o: None)
@@ -649,16 +647,6 @@ def get_fixed_seed(seed):
 def fix_seed(p):
     p.seed = get_fixed_seed(p.seed)
     p.subseed = get_fixed_seed(p.subseed)
-
-
-def program_version():
-    import launch
-
-    res = launch.git_tag()
-    if res == "<none>":
-        res = None
-
-    return res
 
 
 def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iteration=0, position_in_batch=0, use_main_prompt=False, index=None, all_negative_prompts=None):
@@ -777,7 +765,6 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
         "Tiling": p.tiling if p.tiling != "None" and (shared.sd_model.is_sd1 or shared.sd_model.is_sd2 or shared.sd_model.is_sdxl) else None,
         **p.extra_generation_params,
-        "Version": program_version() if opts.add_version_to_infotext else None,
         "User": p.user if opts.add_user_name_to_info else None,
         "ELLA": opts.use_ELLA if ("ELLA" in opts.use_ELLA and shared.sd_model.is_sd1) else None,
     })

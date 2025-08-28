@@ -63,34 +63,6 @@ Use --skip-python-version-check to suppress this warning.
 """)
 
 
-@lru_cache()
-def commit_hash():
-    try:
-        return subprocess.check_output([git, "-C", script_path, "rev-parse", "HEAD"], shell=False, encoding='utf8').strip()
-    except Exception:
-        return "<none>"
-
-
-@lru_cache()
-def git_tag_a1111():
-    try:
-        return subprocess.check_output([git, "-C", script_path, "describe", "--tags"], shell=False, encoding='utf8').strip()
-    except Exception:
-        try:
-
-            changelog_md = os.path.join(script_path, "CHANGELOG.md")
-            with open(changelog_md, "r", encoding="utf-8") as file:
-                line = next((line.strip() for line in file if line.strip()), "<none>")
-                line = line.replace("## ", "")
-                return line
-        except Exception:
-            return "<none>"
-
-
-def git_tag():
-    return 'f' + forge_version.version + '-' + git_tag_a1111()
-
-
 def run(command, desc=None, errdesc=None, custom_env=None, live: bool = default_command_live) -> str:
     if desc is not None:
         print(desc)
@@ -386,16 +358,6 @@ def prepare_environment():
     clip_package = os.environ.get('CLIP_PACKAGE', "https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip")
     openclip_package = os.environ.get('OPENCLIP_PACKAGE', "https://github.com/mlfoundations/open_clip/archive/bb6e834e9c70d9c27d0dc3ecedeebeaeb1ffad6b.zip")
 
-    # assets_repo = os.environ.get('ASSETS_REPO', "https://github.com/AUTOMATIC1111/stable-diffusion-webui-assets.git")
-    # huggingface_guess_repo = os.environ.get('HUGGINGFACE_GUESS_REPO', 'https://github.com/lllyasviel/huggingface_guess.git')
-    # google_blockly_repo = os.environ.get('GOOGLE_BLOCKLY_REPO', 'https://github.com/lllyasviel/google_blockly_prototypes')
-    # blip_repo = os.environ.get('BLIP_REPO', 'https://github.com/salesforce/BLIP.git')
-
-    # assets_commit_hash = os.environ.get('ASSETS_COMMIT_HASH', "6f7db241d2f8ba7457bac5ca9753331f0c266917")
-    # huggingface_guess_commit_hash = os.environ.get('HUGGINGFACE_GUESS_HASH', "84826248b49bb7ca754c73293299c4d4e23a548d")
-    # google_blockly_commit_hash = os.environ.get('GOOGLE_BLOCKLY_COMMIT_HASH', "1e98997c7fedaf5106af9849b6f50ebe5c4408f1")
-    # blip_commit_hash = os.environ.get('BLIP_COMMIT_HASH', "48211a1594f1321b00f14c9f7a5b4813144b2fb9")
-
     try:
         # the existence of this file is a signal to webui.sh/bat that webui needs to be restarted when it stops execution
         os.remove(os.path.join(script_path, "tmp", "restart"))
@@ -408,13 +370,7 @@ def prepare_environment():
 
     startup_timer.record("checks")
 
-    commit = commit_hash()
-    tag = git_tag()
-    startup_timer.record("git version info")
-
     print(f"Python {sys.version}")
-    print(f"Version: {tag}")
-    print(f"Commit hash: {commit}")
 
     if args.reinstall_torch or not is_installed("torch") or not is_installed("torchvision"):
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
@@ -448,11 +404,6 @@ def prepare_environment():
         startup_timer.record("install ngrok")
 
     os.makedirs(os.path.join(script_path, dir_repos), exist_ok=True)
-
-    # git_clone(assets_repo, repo_dir('stable-diffusion-webui-assets'), "assets", assets_commit_hash)
-    # git_clone(huggingface_guess_repo, repo_dir('huggingface_guess'), "huggingface_guess", huggingface_guess_commit_hash)
-    # git_clone(google_blockly_repo, repo_dir('google_blockly_prototypes'), "google_blockly", google_blockly_commit_hash)
-    # git_clone(blip_repo, repo_dir('BLIP'), "BLIP", blip_commit_hash)
 
     startup_timer.record("clone repositores")
 
