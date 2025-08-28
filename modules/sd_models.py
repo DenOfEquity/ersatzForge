@@ -454,10 +454,6 @@ def forge_model_reload():
     model_data.sd_model.sd_model_hash = checkpoint_info.calculate_shorthash()
     timer.record("calculate hash")
 
-    shared.opts.data["sd_checkpoint_hash"] = checkpoint_info.sha256
-
-    # model_data.set_sd_model(sd_model)
-
     script_callbacks.model_loaded_callback(model_data.sd_model)
 
     timer.record("scripts callbacks")

@@ -89,10 +89,6 @@ def initialize_rest(*, reload_script_modules=False):
     extensions.list_extensions()
     startup_timer.record("list extensions")
 
-    from modules import initialize_util
-    initialize_util.restore_config_state_file()
-    startup_timer.record("restore config state file")
-
     from modules import shared, upscaler, scripts
     if cmd_opts.ui_debug_mode:
         shared.sd_upscalers = upscaler.UpscalerLanczos().scalers

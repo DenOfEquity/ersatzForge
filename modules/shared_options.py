@@ -107,7 +107,6 @@ options_templates.update(options_section(('system', "System", "system"), {
     "memmon_poll_rate": OptionInfo(8, "VRAM usage polls per second during generation.", gr.Slider, {"minimum": 0, "maximum": 40, "step": 1}).info("0 = disable"),
     "samples_log_stdout": OptionInfo(False, "Always print all generation info to standard output"),
     "multiple_tqdm": OptionInfo(True, "Add a second progress bar to the console that shows progress for an entire job."),
-    "enable_upscale_progressbar": OptionInfo(True, "Show a progress bar in the console for tiled upscaling."),
     "print_hypernet_extra": OptionInfo(False, "Print extra hypernetwork information to console."),
     "list_hidden_files": OptionInfo(True, "Load models/files in hidden directories").info("directory is hidden if its name starts with \".\""),
     "dump_stacks_on_signal": OptionInfo(False, "Print stack traces before exiting the program with ctrl+c."),
@@ -382,8 +381,6 @@ options_templates.update(options_section(('postprocessing', "Postprocessing", "p
 options_templates.update(options_section((None, "Hidden options"), {
     "disabled_extensions": OptionInfo([], "Disable these extensions"),
     "disable_all_extensions": OptionInfo("none", "Disable all extensions (preserves the list of disabled extensions)", gr.Radio, {"choices": ["none", "extra", "all"]}),
-    "restore_config_state_file": OptionInfo("", "Config state file to restore from, under 'config-states/' folder"),
-    "sd_checkpoint_hash": OptionInfo("", "SHA256 hash of the current checkpoint"),
 }))
 
 forge_shared_options.register(options_templates, options_section, OptionInfo)

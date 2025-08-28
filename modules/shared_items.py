@@ -24,11 +24,6 @@ def refresh_vae_list():
     modules.sd_vae.vae_dict = forge_modules.main_entry.module_vae_list
 
 
-# def list_checkpoint_tiles(use_short=False):
-    # import modules.sd_models
-    # return modules.sd_models.checkpoint_tiles(use_short)
-
-
 def refresh_checkpoints():
     import modules.sd_models
     return modules.sd_models.list_models()
@@ -143,8 +138,6 @@ class Shared(sys.modules[__name__].__class__):
     this class is here to provide sd_model field as a property, so that it can be created and loaded on demand rather than
     at program startup.
     """
-
-    sd_model_val = None
 
     @property
     def sd_model(self):

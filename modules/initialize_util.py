@@ -67,26 +67,6 @@ def fix_asyncio_event_loop_policy():
     asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
 
 
-def restore_config_state_file():
-    from modules import shared, config_states
-
-    config_state_file = shared.opts.restore_config_state_file
-    if config_state_file == "":
-        return
-
-    shared.opts.restore_config_state_file = ""
-    shared.opts.save(shared.config_filename)
-
-    if os.path.isfile(config_state_file):
-        print(f"*** About to restore extension state from file: {config_state_file}")
-        with open(config_state_file, "r", encoding="utf-8") as f:
-            config_state = json.load(f)
-            config_states.restore_extension_config(config_state)
-        startup_timer.record("restore extension config")
-    elif config_state_file:
-        print(f"!!! Config state backup not found: {config_state_file}")
-
-
 def validate_tls_options():
     from modules.shared_cmd_options import cmd_opts
 
