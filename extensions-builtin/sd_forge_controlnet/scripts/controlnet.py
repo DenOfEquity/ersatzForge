@@ -31,11 +31,6 @@ from PIL import Image
 from modules_forge.shared import try_load_supported_control_model
 from modules_forge.supported_controlnet import ControlModelPatcher
 
-# Gradio 3.32 bug fix
-import tempfile
-
-gradio_tempfile_path = os.path.join(tempfile.gettempdir(), 'gradio')
-os.makedirs(gradio_tempfile_path, exist_ok=True)
 
 global_state.update_controlnet_filenames()
 
