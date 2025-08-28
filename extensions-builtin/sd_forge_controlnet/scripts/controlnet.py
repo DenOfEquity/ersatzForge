@@ -100,7 +100,7 @@ class ControlNetForForgeOfficial(scripts.Script):
         if is_img2img:
             ControlNetUiGroup.try_register_all_callbacks()
 
-    return tuple(controls)
+        return tuple(controls)
 
     def get_enabled_units(self, units):
         # Parse dict from API calls.
