@@ -110,7 +110,7 @@ def adaptive_resize(samples, width, height, upscale_method, crop):
     elif upscale_method == "lanczos":
         return lanczos(s, width, height)
     elif upscale_method == "adaptive_avgpool":
-        return torch.nn.functional.adaptive_avg_pool2d(samples, (height, width))
+        return torch.nn.functional.adaptive_avg_pool2d(s, (height, width))
     else:
         return torch.nn.functional.interpolate(s, size=(height, width), mode=upscale_method)
 
