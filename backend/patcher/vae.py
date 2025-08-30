@@ -255,10 +255,10 @@ class VAE:
         return output
 
     def encode_tiled(self, pixel_samples, tile_x=512, tile_y=512, overlap=64):
-        if hasattr(self, "tile_size") and self.tile_size is not None:
-            tile_x  = self.tile_size[0]
-            tile_y  = self.tile_size[1]
-            overlap = self.tile_size[2]
+        if hasattr(self, "tile_info") and self.tile_info is not None:
+            tile_x  = self.tile_info[0]
+            tile_y  = self.tile_info[1]
+            overlap = self.tile_info[2]
 
         encode_fn = lambda a: self.first_stage_model.encode((2. * a - 1.).to(self.vae_dtype).to(self.device)).to(torch.float32)
         samples  = tiled_scale(pixel_samples, encode_fn, (tile_x, tile_y),          overlap, upscale_amount=(1 / self.downscale_ratio), out_channels=self.latent_channels, output_device=self.output_device)
