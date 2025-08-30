@@ -22,22 +22,25 @@ class NeverOOMForForge(scripts.Script):
             unet_enabled = gr.Checkbox(label='Enabled for UNet (always maximize offload)', value=False)
             vae_enabled = gr.Checkbox(label='Enabled for VAE (always tiled)', value=False)
             with gr.Row():
-                tile_size_x  = gr.Slider(label="Tile width (pixels)",   value=512, minimum=128, maximum=1536, step=64)
-                tile_size_y  = gr.Slider(label="Tile height (pixels)",  value=512, minimum=128, maximum=1536, step=64)
+                tile_size_x  = gr.Slider(label="Tile width (pixels)",   value=512, minimum=128, maximum=1536, step=16)
+                tile_size_y  = gr.Slider(label="Tile height (pixels)",  value=512, minimum=128, maximum=1536, step=16)
+            with gr.Row():
                 tile_overlap = gr.Slider(label="Tile overlap (pixels)", value=64,  minimum=16,  maximum=256,  step=16)
-        return unet_enabled, vae_enabled, tile_size_x, tile_size_y, tile_overlap
+                tile_method = gr.Radio(label="Tile decode method", choices=["original", "diffusers", "DoE"], value="original")
+
+        return unet_enabled, vae_enabled, tile_size_x, tile_size_y, tile_overlap, tile_method
 
     def process(self, p, *script_args, **kwargs):
-        unet_enabled, vae_enabled, tile_size_x, tile_size_y, tile_overlap = script_args
+        unet_enabled, vae_enabled, tile_size_x, tile_size_y, tile_overlap, tile_method = script_args
 
         if unet_enabled:
             print('NeverOOM Enabled for UNet (always maximize offload)')
 
         if vae_enabled:
             print('NeverOOM Enabled for VAE (always tiled)')
-            p.sd_model.forge_objects.vae.tile_size = (tile_size_x, tile_size_y, tile_overlap)
+            p.sd_model.forge_objects.vae.tile_info = (tile_size_x, tile_size_y, tile_overlap, tile_method)
         else:
-            p.sd_model.forge_objects.vae.tile_size = None
+            p.sd_model.forge_objects.vae.tile_info = None
 
         memory_management.VAE_ALWAYS_TILED = vae_enabled
 
