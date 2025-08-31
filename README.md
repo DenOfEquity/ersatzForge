@@ -4,11 +4,12 @@ a backup of my local (experimental, opinionated) changes to Forge2 webUI
 * Chroma (based on https://github.com/croquelois/forgeChroma)
 * extended Checkpoint Merger, including UI for nArn0's embedding convertor (based on https://github.com/nArn0/sdxl-embedding-converter)
 * Hypernetworks
-* various other minor tweaks: UI, embedding filtering, code consolidation, dead code removal, performance improvements for me
+* various other tweaks: UI, embedding filtering, code consolidation and tidying, dead code removal, performance improvements (for me)
 * tiling (sd1, 2, xl) (based on https://github.com/spinagon/ComfyUI-seamless-tiling)
 * all embeddings everywhere all at once: SD1.5 embeddings (CLIP-L only) can be used with SDXL, SD3; SDXL embeddings can be used with SD1 (applies CLIP-L only, CLIP-G ignored), SD3
 * new preprocessors for IPAdapter, including tiling, noising (for uncond) and sharpening of inputs. And multi-input.
 * Latent NeuralNet upscaler by city96 (based on https://github.com/city96/SD-Latent-Upscaler) (1.25x, 1.5x and 2.0x)
+* support more upscaler models via updated Spandrel - place models in `models/upscaler`.
 * ResAdapter support: download models to `models/other_modules`, load via 'Additional modules' selector (as VAE, text encoder), LoRA as usual (https://huggingface.co/jiaxiangc/res-adapter)
 * long CLIP
 * distilled T5 models for Flux by LifuWang (see https://huggingface.co/LifuWang/DistillT5)
@@ -17,4 +18,5 @@ a backup of my local (experimental, opinionated) changes to Forge2 webUI
 * nVidia Cosmos predict2 t2i (only tested 2B model)
 * Wan 2.2 14B T2V and 5B, 1 frame generation only (extract .zip files in backend/huggingface/Wan-AI)
 * ELLA (https://github.com/TencentQQGYLab/ELLA), models downloaded automatically, enable in Settings
-* extra samplers: SA-Solver, ER-SDE, Adaptive-ODE (params in Settings)
+* extra samplers: SA-Solver, ER-SDE, Adaptive-ODE (params in Settings), Fixed-ODE
+* assorted extra functionality in built-in extensions, controlnet preprocessors
