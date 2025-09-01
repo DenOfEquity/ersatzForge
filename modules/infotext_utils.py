@@ -341,12 +341,6 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
         res["Hires resize-1"] = 0
         res["Hires resize-2"] = 0
 
-    if "Hires sampler" not in res:
-        res["Hires sampler"] = "Use same sampler"
-
-    if "Hires schedule type" not in res:
-        res["Hires schedule type"] = "Use same scheduler"
-
     if "Hires checkpoint" not in res:
         res["Hires checkpoint"] = "Use same checkpoint"
 
@@ -370,12 +364,21 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
 
     restore_old_hires_fix_params(res)
 
+    # old form sampler/scheduler combined name
+    # autocorrection will catch later anyway, and accounts for old form with custom sampler/scheduler combos
+    if "Sampler" in res and "Schedule type" not in res:
+        if res["Sampler"].endswith(" Karras"):
+            res["Sampler"] = res["Sampler"][0:-7]
+            res["Schedule type"] = "Karras"
+        elif res["Sampler"].endswith(" Exponential"):
+            res["Sampler"] = res["Sampler"][0:-12]
+            res["Schedule type"] = "Exponential"
+        else:
+            res["Schedule type"] = "Automatic"
+
     # Missing RNG means the default was set, which is GPU RNG
     if "RNG" not in res:
         res["RNG"] = "GPU"
-
-    if "Schedule type" not in res:
-        res["Schedule type"] = "Automatic"
 
     if "Sigma max" not in res:
         res["Sigma max"] = 0

@@ -243,5 +243,4 @@ schedulers_map = {**{x.name: x for x in schedulers}, **{x.label: x for x in sche
 
 def visible_scheduler_names():
     global schedulers
-    schedulers_hidden = set(shared.opts.hide_schedulers)
-    return [x.label for x in schedulers if x.label not in schedulers_hidden]
+    return [x.label for x in schedulers if x.label not in shared.opts.hide_schedulers]

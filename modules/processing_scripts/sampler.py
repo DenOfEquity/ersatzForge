@@ -27,8 +27,8 @@ class ScriptSampler(scripts.ScriptBuiltinUI):
 
         self.infotext_fields = [
             PasteField(self.steps, "Steps", api="steps"),
-            PasteField(self.sampler_name, sd_samplers.get_sampler_from_infotext, api="sampler_name"),
-            PasteField(self.scheduler, sd_samplers.get_scheduler_from_infotext, api="scheduler"),
+            PasteField(self.sampler_name, lambda d: d["Sampler"] if d.get("Sampler", None) else gr.update(), api="sampler_name"),
+            PasteField(self.scheduler, lambda d: d["Schedule type"] if d.get("Schedule type", None) else gr.update(), api="scheduler"),
         ]
 
         shared.options_templates.update(shared.options_section(('ui_sd', "UI defaults 'sd'", "ui"), {
@@ -44,10 +44,10 @@ class ScriptSampler(scripts.ScriptBuiltinUI):
             "xl_i2i_scheduler":   shared.OptionInfo('Karras',       "img2img scheduler",    gr.Dropdown, {"choices": scheduler_names}),
         }))
         shared.options_templates.update(shared.options_section(('ui_sd3', "UI defaults 'sd3'", "ui"), {
-            "sd3_t2i_sampler":   shared.OptionInfo('Euler',        "txt2img sampler",      gr.Dropdown, {"choices": sampler_names}),
-            "sd3_t2i_scheduler": shared.OptionInfo('Simple',       "txt2img scheduler",    gr.Dropdown, {"choices": scheduler_names}),
-            "sd3_i2i_sampler":   shared.OptionInfo('Euler',        "img2img sampler",      gr.Dropdown, {"choices": sampler_names}),
-            "sd3_i2i_scheduler": shared.OptionInfo('Simple',       "img2img scheduler",    gr.Dropdown, {"choices": scheduler_names}),
+            "sd3_t2i_sampler":    shared.OptionInfo('Euler',        "txt2img sampler",      gr.Dropdown, {"choices": sampler_names}),
+            "sd3_t2i_scheduler":  shared.OptionInfo('Simple',       "txt2img scheduler",    gr.Dropdown, {"choices": scheduler_names}),
+            "sd3_i2i_sampler":    shared.OptionInfo('Euler',        "img2img sampler",      gr.Dropdown, {"choices": sampler_names}),
+            "sd3_i2i_scheduler":  shared.OptionInfo('Simple',       "img2img scheduler",    gr.Dropdown, {"choices": scheduler_names}),
         }))
         shared.options_templates.update(shared.options_section(('ui_flux', "UI defaults 'flux'", "ui"), {
             "flux_t2i_sampler":   shared.OptionInfo('Euler',        "txt2img sampler",      gr.Dropdown, {"choices": sampler_names}),
