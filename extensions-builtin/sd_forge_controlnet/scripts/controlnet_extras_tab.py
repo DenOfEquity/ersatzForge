@@ -1,18 +1,13 @@
 # cut down from 'cn_in_extras_tab' extension by light-and-ray
 
 import copy
-import numpy as np
+import numpy
 import gradio as gr
 from PIL import Image
-from modules import scripts_postprocessing
-from modules import shared, errors
-
+from modules import scripts, scripts_postprocessing, shared
 from modules.ui_components import InputAccordion
-
 from modules_forge.utils import HWC3
 from lib_controlnet import global_state, external_code
-
-NAME = 'ControlNet Preprocessor'
 
 forbidden_prefixes = ['inpaint', 'tile', 't2ia_style', 'revision', 'reference',
     'ip-adapter', 'instant_id_face_embedding', 'CLIP', 'InsightFace', 'facexlib', 'PuLID']
@@ -40,13 +35,17 @@ def get_default_ui_unit():
         model="None"
     )
 
+
 class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
-    name = NAME
-    order = 18000
+    name = 'ControlNet Preprocessor'
+    order = 20001
+
+    cn_pp_cache = None
+    cn_pp_hash = None
 
     def ui(self):
         self.default_unit = get_default_ui_unit()
-        with InputAccordion(False, label=NAME) as self.enable:
+        with InputAccordion(False, label='ControlNet Preprocessor') as self.enable:
             with gr.Row():
                 modulesList = getPreprocessorNames()
                 self.module = gr.Dropdown(modulesList, label="Module", value=modulesList[0])
@@ -55,34 +54,34 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
                     value=True,
                     elem_id=f"extras_controlnet_pixel_perfect_checkbox",
                 )
-                with gr.Column(visible=False) as self.advanced:
-                    self.processor_res = gr.Slider(
-                        label="Preprocessor resolution",
-                        value=self.default_unit.processor_res,
-                        minimum=64,
-                        maximum=2048,
-                        visible=False,
-                        interactive=True,
-                        elem_id=f"extras_controlnet_preprocessor_resolution_slider",
-                    )
-                    self.threshold_a = gr.Slider(
-                        label="Threshold A",
-                        value=self.default_unit.threshold_a,
-                        minimum=64,
-                        maximum=1024,
-                        visible=False,
-                        interactive=True,
-                        elem_id=f"extras_controlnet_threshold_A_slider",
-                    )
-                    self.threshold_b = gr.Slider(
-                        label="Threshold B",
-                        value=self.default_unit.threshold_b,
-                        minimum=64,
-                        maximum=1024,
-                        visible=False,
-                        interactive=True,
-                        elem_id=f"extras_controlnet_threshold_B_slider",
-                    )
+            with gr.Row(visible=False) as self.advanced:
+                self.processor_res = gr.Slider(
+                    label="Preprocessor resolution",
+                    value=self.default_unit.processor_res,
+                    minimum=64,
+                    maximum=2048,
+                    visible=False,
+                    interactive=True,
+                    elem_id=f"extras_controlnet_preprocessor_resolution_slider",
+                )
+                self.threshold_a = gr.Slider(
+                    label="Threshold A",
+                    value=self.default_unit.threshold_a,
+                    minimum=64,
+                    maximum=1024,
+                    visible=False,
+                    interactive=True,
+                    elem_id=f"extras_controlnet_threshold_A_slider",
+                )
+                self.threshold_b = gr.Slider(
+                    label="Threshold B",
+                    value=self.default_unit.threshold_b,
+                    minimum=64,
+                    maximum=1024,
+                    visible=False,
+                    interactive=True,
+                    elem_id=f"extras_controlnet_threshold_B_slider",
+                )
 
         self.register_build_sliders()
         args = {
@@ -131,8 +130,11 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
         if args == {} or args['enable'] == False:
             return
 
+        if "Stereogram" in [x.name for x in scripts.scripts_postproc.scripts]: # this checks if Stereogram script exists, not if enabled
+            pp.original_image = pp.image.copy()
+
         w, h = pp.image.size
-        image = HWC3(np.asarray(pp.image).astype(np.uint8))
+        image = HWC3(numpy.asarray(pp.image).astype(numpy.uint8))
 
         if args['pixel_perfect']:
             processor_res = external_code.pixel_perfect_resolution(
@@ -144,19 +146,27 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
         else:
             processor_res = args['processor_res']
 
-        module = global_state.get_preprocessor(args['module'])
+        cache_key = hash(image.tobytes()), args['module'], str(processor_res), str(args['threshold_a']), str(args['threshold_b'])
+        if cache_key == self.cn_pp_hash:
+            pp.image = self.cn_pp_cache
+        else:
+            module = global_state.get_preprocessor(args['module'])
 
-        detected_map = module(
-            input_image=image,
-            resolution=processor_res,
-            slider_1=args['threshold_a'],
-            slider_2=args['threshold_b'],
-        )
+            detected_map = module(
+                input_image=image,
+                resolution=processor_res,
+                slider_1=args['threshold_a'],
+                slider_2=args['threshold_b'],
+            )
 
-        pp.image = Image.fromarray(np.ascontiguousarray(detected_map.clip(0, 255).astype(np.uint8)).copy())
+            pp.image = Image.fromarray(numpy.ascontiguousarray(detected_map.clip(0, 255).astype(numpy.uint8)).copy())
+
+            if not (shared.state.interrupted or shared.state.skipped):
+                self.cn_pp_cache = pp.image
+                self.cn_pp_hash = cache_key
 
         info = copy.copy(args)
         del info['enable']
         if info['pixel_perfect']:
             del info['processor_res']
-        pp.info[NAME] = str(info)
+        pp.info['ControlNet Preprocessor'] = str(info)
