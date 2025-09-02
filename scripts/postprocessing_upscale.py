@@ -121,7 +121,6 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
         if not upscale_enabled or upscaler_1_name == "None":
             return
 
-        # print (upscaler_1_name, upscaler_2_name, [x.name for x in shared.sd_upscalers])
         for x in shared.sd_upscalers:
             if upscaler_1_name == x.name:
                 upscaler_1 = x
@@ -142,13 +141,13 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
 
             info += f' {upscaler_2.name} ({str(upscaler_2_visibility)})'
 
-        if upscale_cc and "cc" in upscale_cache:  # postprocess during txt2img
+        if upscale_cc and "cc" in upscale_cache:
             pp.image = apply_color_correction(upscale_cache["cc"], upscaled_image)
             info += ' [cc]'
         else:
             pp.image = upscaled_image
 
-        pp.info['PostProcess'] = info
+        pp.info['PostProcess Upscale'] = info
 
     def image_changed(self):
         upscale_cache.clear()

@@ -42,20 +42,21 @@ from modules.ui_components import InputAccordion
 
 class ScriptPostprocessingRotate(scripts_postprocessing.ScriptPostprocessing):
     name = "Stereogram"
-    order = 3500
+    order = 20002   # should be towards end of list, so upscaling/ reActor/ controlnet preprocessor can run first
 
     def ui(self):
         with InputAccordion(False, label="Stereogram") as stereo_enabled:
-            depth = gr.Image(label="Depth image matching Source image", height=360, type="pil")  #depth map image corresponding to input image
             with gr.Row():
-                mode = gr.Dropdown(label="Stereo mode", choices=["Left-Right", "Right-Left", "Top-Bottom", "Bottom-Top", "Anaglyph", "Anaglyph-reverse"], value="Right-Left", filterable=False)
-                fill = gr.Dropdown(label="Fill technique", choices=["none", "naive", "naive_interpolating", "polylines_soft", "polylines_sharp"], value="polylines_sharp", filterable=False)
-            with gr.Row():
-                balance = gr.Slider(label="Balance: left-eye to right-eye ", minimum=-1.0, maximum=1.0, value=0.0, step=0.01)
-                divergence = gr.Slider(label="Divergence: 3D effect", minimum=0.01, maximum=2, value=0.5, step=0.01)
-            with gr.Row():
-                offset = gr.Slider(label="Offset: pushes objects to distance", minimum=1.0, maximum=2.0, value=1.0, step=0.01)
-                separation = gr.Slider(label="Separation: pushes images apart / closer", minimum=-5.0, maximum=5.0, value=0.0, step=0.01)
+                with gr.Column():
+                    gr.Markdown("Depth image for *Source* image. Leave blank if generating depth-map with *ControlNet Preprocessor*.")
+                    depth = gr.Image(show_label=False, height=360, type="pil", sources=["upload", "clipboard"])
+                with gr.Column():
+                    mode = gr.Dropdown(label="Stereo mode", choices=["Left-Right", "Right-Left", "Top-Bottom", "Bottom-Top", "Anaglyph", "Anaglyph-reverse"], value="Right-Left", filterable=False)
+                    fill = gr.Dropdown(label="Fill technique", choices=["none", "naive", "naive_interpolating", "polylines_soft", "polylines_sharp"], value="polylines_sharp", filterable=False)
+                    balance    = gr.Slider(label="Balance: left-eye to right-eye ",          minimum=-1.0, maximum=1.0, value=0.5, step=0.01)
+                    divergence = gr.Slider(label="Divergence: 3D effect",                    minimum=0.01, maximum=15,  value=1.8, step=0.01)
+                    offset     = gr.Slider(label="Offset: pushes objects to distance",       minimum=1.0,  maximum=2.0, value=1.0, step=0.01)
+                    separation = gr.Slider(label="Separation: pushes images apart / closer", minimum=-5.0, maximum=5.0, value=0.0, step=0.01)
         return {
             "stereo_enabled": stereo_enabled,
             "depth": depth,
@@ -69,13 +70,20 @@ class ScriptPostprocessingRotate(scripts_postprocessing.ScriptPostprocessing):
 
 
     def process(self, pp: scripts_postprocessing.PostprocessedImage, stereo_enabled, depth, divergence, separation, mode, balance, offset, fill):
-        if stereo_enabled and pp.image is not None and depth is not None:
+        if stereo_enabled and pp.image is not None:
+            if hasattr(pp, "original_image"):
+                depth = pp.image.copy()
+                pp.image = pp.original_image
+                del pp.original_image
+
+            if depth is None:
+                raise Exception('Stereogram: no depth image')
+
             if pp.image.size[0] != depth.size[0] or pp.image.size[1] != depth.size[1]:
                 depth = depth.resize(pp.image.size)
 
             pp.image = create_stereoimages(pp.image, depth.convert("L"), divergence, separation, mode, balance, offset, fill)
             pp.info['Stereo'] = f"divergence: {divergence}, separation: {separation}, balance: {balance}, offset: {offset}, mode: {mode}, fill: {fill}"
-
 
 
 def create_stereoimages(original_image, depthmap, divergence, separation=0.0, mode="Right-Left",
