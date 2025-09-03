@@ -234,8 +234,6 @@ class Api:
         self.add_api_route("/sdapi/v1/refresh-embeddings", self.refresh_embeddings, methods=["POST"])
         self.add_api_route("/sdapi/v1/refresh-checkpoints", self.refresh_checkpoints, methods=["POST"])
         self.add_api_route("/sdapi/v1/refresh-vae", self.refresh_vae, methods=["POST"])
-        self.add_api_route("/sdapi/v1/create/embedding", self.create_embedding, methods=["POST"], response_model=models.CreateResponse)
-        self.add_api_route("/sdapi/v1/create/hypernetwork", self.create_hypernetwork, methods=["POST"], response_model=models.CreateResponse)
         self.add_api_route("/sdapi/v1/memory", self.get_memory, methods=["GET"], response_model=models.MemoryResponse)
         self.add_api_route("/sdapi/v1/unload-checkpoint", self.unloadapi, methods=["POST"])
         self.add_api_route("/sdapi/v1/reload-checkpoint", self.reloadapi, methods=["POST"])
@@ -450,7 +448,6 @@ class Api:
         self.apply_infotext(txt2imgreq, "txt2img", script_runner=script_runner, mentioned_script_args=infotext_script_args)
 
         selectable_scripts, selectable_script_idx = self.get_selectable_script(txt2imgreq.script_name, script_runner)
-        # sampler, scheduler = sd_samplers.get_sampler_and_scheduler(txt2imgreq.sampler_name or txt2imgreq.sampler_index, txt2imgreq.scheduler)
         sampler, scheduler = txt2imgreq.sampler_name, txt2imgreq.scheduler
 
         populate = txt2imgreq.copy(update={  # Override __init__ params
@@ -520,7 +517,6 @@ class Api:
         self.apply_infotext(img2imgreq, "img2img", script_runner=script_runner, mentioned_script_args=infotext_script_args)
 
         selectable_scripts, selectable_script_idx = self.get_selectable_script(img2imgreq.script_name, script_runner)
-        # sampler, scheduler = sd_samplers.get_sampler_and_scheduler(img2imgreq.sampler_name or img2imgreq.sampler_index, img2imgreq.scheduler)
         sampler, scheduler = img2imgreq.sampler_name, img2imgreq.scheduler
 
         populate = img2imgreq.copy(update={  # Override __init__ params
@@ -779,19 +775,6 @@ class Api:
     def refresh_vae(self):
         with self.queue_lock:
             shared_items.refresh_vae_list()
-
-    def create_embedding(self, args: dict):
-        pass
-
-    def create_hypernetwork(self, args: dict):
-        try:
-            shared.state.begin(job="create_hypernetwork")
-            filename = create_hypernetwork(**args) # create empty embedding
-            return models.CreateResponse(info=f"create hypernetwork filename: {filename}")
-        except AssertionError as e:
-            return models.TrainResponse(info=f"create hypernetwork error: {e}")
-        finally:
-            shared.state.end()
 
     def get_memory(self):
         try:
