@@ -52,12 +52,9 @@ def create_ui():
 
             script_inputs = scripts.scripts_postproc.setup_ui()
 
-        with gr.Column():
-            toprow = ui_toprow.Toprow(id_part="extras")
-            toprow.create_inline_toprow_image()
-            submit = toprow.submit
-
-            output_panel = ui_common.create_output_panel("extras", shared.opts.outdir_extras_samples)
+        toprow = ui_toprow.Toprow(id_part="extras")
+        output_panel = ui_common.create_output_panel("extras", shared.opts.outdir_extras_samples, toprow)
+        submit = toprow.submit
 
     tab_single.select(fn=lambda: 0, inputs=None, outputs=[tab_index])
     tab_batch.select(fn=lambda: 1, inputs=None, outputs=[tab_index])

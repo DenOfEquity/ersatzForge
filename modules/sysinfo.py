@@ -223,7 +223,6 @@ def set_config(req: dict[str, Any], is_api=False, run_callbacks=True, save_confi
     should_refresh_model_loading_params = False
 
     memory_changes = {}
-    memory_keys = ['forge_inference_memory', 'forge_async_loading', 'forge_pin_shared_memory']
 
     for k, v in req.items():
         # ignore unchanged options
@@ -242,9 +241,11 @@ def set_config(req: dict[str, Any], is_api=False, run_callbacks=True, save_confi
             modules_changed = main_entry.modules_change(v, save=False, refresh=False)
             if modules_changed:
                 should_refresh_model_loading_params = True
-        elif k in memory_keys:
-            mem_key = k[len('forge_'):] # remove 'forge_' prefix
-            memory_changes[mem_key] = v
+        elif k == 'forge_inference_memory':
+            memory_changes['inference_memory'] = v
+        elif k == 'forge_swap':
+            memory_changes['async_loading'] = "Async" if "Async" in v else "Queue"
+            memory_changes['pin_shared_memory'] = "CPU" if "CPU" in v else "Shared"
 
         # set all other options
         else:

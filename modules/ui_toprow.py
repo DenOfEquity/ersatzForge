@@ -49,9 +49,6 @@ class Toprow:
             with gr.Column():
                 self.create_styles_ui()
 
-    def create_inline_toprow_image(self):
-        self.submit_box.render()
-
     def create_prompts(self):
         with gr.Column(elem_id=f"{self.id_part}_prompt_container", elem_classes=["prompt-container-compact"], scale=6):
             with gr.Row(elem_id=f"{self.id_part}_prompt_row", elem_classes=["prompt-row"]):

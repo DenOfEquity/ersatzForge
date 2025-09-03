@@ -19,11 +19,11 @@ def update_generation_info(generation_info, html_info, img_index):
         generation_info = json.loads(generation_info)
         if img_index < 0 or img_index >= len(generation_info["infotexts"]):
             return html_info, gr.update()
-        return plaintext_to_html(generation_info["infotexts"][img_index]), gr.update()
+        return plaintext_to_html(generation_info["infotexts"][img_index])
     except Exception:
         pass
     # if the json parse or anything else fails, just return the old html_info
-    return html_info, gr.update()
+    return html_info
 
 
 def plaintext_to_html(text, classname=None):
@@ -47,7 +47,7 @@ def select_gallery_0(index):
     return gr.update(selected_index=index)
 
 
-def create_output_panel(tabname, outdir, toprow=None):
+def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2img, extras
     res = OutputPanel()
 
     def open_folder(f, images=None, index=None):
@@ -67,70 +67,60 @@ def create_output_panel(tabname, outdir, toprow=None):
 
     with gr.Column(elem_id=f"{tabname}_results"):
         if toprow:
-            toprow.create_inline_toprow_image()
+            toprow.submit_box.render()
 
-        with gr.Column(variant='panel', elem_id=f"{tabname}_results_panel"):
-            with gr.Group(elem_id=f"{tabname}_gallery_container"):
-                dummy = gr.Number(value=0, visible=False)
+        with gr.Group(elem_id=f"{tabname}_gallery_container"):
+            dummy = gr.Number(value=0, visible=False)
 
-                res.gallery = gr.Gallery(label='Output', show_label=False, elem_id=f"{tabname}_gallery", columns=4, preview=True, height=shared.opts.gallery_height or None, interactive=False, type="pil", object_fit="contain")
+            res.gallery = gr.Gallery(label='Output', show_label=False, elem_id=f"{tabname}_gallery", columns=4, preview=True, height=shared.opts.gallery_height or None, interactive=False, type="pil", object_fit="contain")
 
-                if tabname != 'txt2img':    # txt2img is handled in ui.py, to avoid double process after hires quickbutton
-                    res.gallery.change(fn=select_gallery_0, js="selected_gallery_index", inputs=[dummy], outputs=[res.gallery]).success(fn=lambda: None, js='setup_gallery_lightbox')
+            if tabname != 'txt2img':    # txt2img is handled in ui.py, to avoid double process after hires quickbutton
+                res.gallery.change(fn=select_gallery_0, js="selected_gallery_index", inputs=[dummy], outputs=[res.gallery]).success(fn=lambda: None, js='setup_gallery_lightbox')
 
-            with gr.Row(elem_id=f"image_buttons_{tabname}", elem_classes="image-buttons"):
-                open_folder_button = ToolButton(folder_symbol, elem_id=f'{tabname}_open_folder', visible=not shared.cmd_opts.hide_ui_dir_config, tooltip="Open images output directory.")
+        with gr.Row(elem_id=f"image_buttons_{tabname}", elem_classes="image-buttons"):
+            open_folder_button = ToolButton(folder_symbol, elem_id=f'{tabname}_open_folder', visible=not shared.cmd_opts.hide_ui_dir_config, tooltip="Open images output directory.")
 
-                buttons = {
-                    'img2img': ToolButton('🖼️', elem_id=f'{tabname}_send_to_img2img', tooltip="Send image and generation parameters to img2img tab."),
-                    'extras': ToolButton('📐', elem_id=f'{tabname}_send_to_extras', tooltip="Send image and generation parameters to extras tab.")
-                }
+            buttons = {
+                'img2img': ToolButton('🖼️', elem_id=f'{tabname}_send_to_img2img', tooltip="Send image and generation parameters to img2img tab."),
+                'extras': ToolButton('📐', elem_id=f'{tabname}_send_to_extras', tooltip="Send image and generation parameters to extras tab.")
+            }
 
-                if tabname == 'txt2img':
-                    res.button_upscale = ToolButton('✨', elem_id=f'{tabname}_upscale', tooltip="Create an upscaled version of the current image using hires fix settings.")
+            if tabname == 'txt2img':
+                res.button_upscale = ToolButton('✨', elem_id=f'{tabname}_upscale', tooltip="Create an upscaled version of the current image using hires fix settings.")
 
-            open_folder_button.click(
-                fn=lambda images, index: open_folder(shared.opts.outdir_samples or outdir, images, index),
-                _js="(y, w) => [y, selected_gallery_index()]",
-                inputs=[
-                    res.gallery,
-                    open_folder_button,  # placeholder for index
-                ],
-                outputs=None,
-            )
+        open_folder_button.click(
+            fn=lambda images, index: open_folder(shared.opts.outdir_samples or outdir, images, index),
+            _js="(y, w) => [y, selected_gallery_index()]",
+            inputs=[
+                res.gallery,
+                open_folder_button,  # placeholder for index
+            ],
+            outputs=None,
+        )
 
-            if tabname != "extras":
-                with gr.Group():
-                    res.infotext = gr.HTML(elem_id=f'html_info_{tabname}', elem_classes="infotext")
-                    res.html_log = gr.HTML(elem_id=f'html_log_{tabname}', elem_classes="html-log")
-
-                    res.generation_info = gr.Textbox(visible=False, elem_id=f'generation_info_{tabname}')
-                    if tabname == 'txt2img' or tabname == 'img2img':
-                        generation_info_button = gr.Button(visible=False, elem_id=f"{tabname}_generation_info_button")
-                        generation_info_button.click(
-                            fn=update_generation_info,
-                            _js="function(x, y, z){ return [x, y, selected_gallery_index()] }",
-                            inputs=[res.generation_info, res.infotext, res.infotext],
-                            outputs=[res.infotext, res.infotext],
-                            show_progress=False,
-                        )
-
-            else:
-                res.generation_info = gr.HTML(elem_id=f'html_info_x_{tabname}')
+        if tabname != "extras":
+            with gr.Group():
                 res.infotext = gr.HTML(elem_id=f'html_info_{tabname}', elem_classes="infotext")
-                res.html_log = gr.HTML(elem_id=f'html_log_{tabname}')
+                res.html_log = gr.HTML(elem_id=f'html_log_{tabname}', elem_classes="html-log")
 
-            paste_field_names = []
-            if tabname == "txt2img":
-                paste_field_names = modules.scripts.scripts_txt2img.paste_field_names
-            elif tabname == "img2img":
-                paste_field_names = modules.scripts.scripts_img2img.paste_field_names
+                res.generation_info = gr.Textbox(visible=False, elem_id=f'generation_info_{tabname}')
+                (res.gallery).select(fn=update_generation_info, _js="function(x, y, z){ return [x, y, selected_gallery_index()] }", inputs=[res.generation_info, res.infotext, res.infotext], outputs=[res.infotext], show_progress=False)
+        else:
+            res.generation_info = gr.HTML(elem_id=f'html_info_x_{tabname}')
+            res.infotext = gr.HTML(elem_id=f'html_info_{tabname}', elem_classes="infotext")
+            res.html_log = gr.HTML(elem_id=f'html_log_{tabname}', elem_classes="html-log")
 
-            for paste_tabname, paste_button in buttons.items():
-                parameters_copypaste.register_paste_params_button(parameters_copypaste.ParamBinding(
-                    paste_button=paste_button, tabname=paste_tabname, source_tabname="txt2img" if tabname == "txt2img" else None, source_image_component=res.gallery,
-                    paste_field_names=paste_field_names
-                ))
+        paste_field_names = []
+        if tabname == "txt2img":
+            paste_field_names = modules.scripts.scripts_txt2img.paste_field_names
+        elif tabname == "img2img":
+            paste_field_names = modules.scripts.scripts_img2img.paste_field_names
+
+        for paste_tabname, paste_button in buttons.items():
+            parameters_copypaste.register_paste_params_button(parameters_copypaste.ParamBinding(
+                paste_button=paste_button, tabname=paste_tabname, source_tabname="txt2img" if tabname == "txt2img" else None, source_image_component=res.gallery,
+                paste_field_names=paste_field_names
+            ))
 
     return res
 
