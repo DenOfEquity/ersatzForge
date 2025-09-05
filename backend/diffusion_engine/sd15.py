@@ -245,7 +245,7 @@ class StableDiffusion(ForgeDiffusionEngine):
         self.text_processing_engine.clip_skip = clip_skip
 
     @torch.inference_mode()
-    def get_learned_conditioning(self, prompt: list[str], end_steps):
+    def get_learned_conditioning(self, prompt: list[str], end_steps=0):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
 
         if "ELLA" in shared.opts.use_ELLA:
