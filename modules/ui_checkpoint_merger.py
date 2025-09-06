@@ -65,7 +65,7 @@ def convert_embeds(one, many, output_dir):
         return "Nothing to process"
 
     if output_dir == "":
-        output_dir = ".\\embeddings"
+        output_dir = ".\\models\\embeddings"
     
     os.makedirs(output_dir, exist_ok=True)
 
@@ -286,4 +286,5 @@ class UiCheckpointMerger:
                 self.modelmerger_result,
             ]
         ).then(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te])
+
 
