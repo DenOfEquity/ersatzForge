@@ -311,20 +311,20 @@ def model_lora_keys_unet(model, key_map={}):
                     diffusers_lora_key = diffusers_lora_key[:-2]
                 key_map[diffusers_lora_key] = unet_key
 
-    # if 'stable-diffusion-3' in model.config.huggingface_repo.lower(): #Diffusers lora SD3
-        # diffusers_keys = utils.mmdit_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
-        # for k in diffusers_keys:
-            # if k.endswith(".weight"):
-                # to = diffusers_keys[k]
-                # key_lora = "transformer.{}".format(k[:-len(".weight")]) #regular diffusers sd3 lora format
-                # key_map[key_lora] = to
+    if 'stable-diffusion-3' in model.config.huggingface_repo.lower(): #Diffusers lora SD3
+        diffusers_keys = utils.mmdit_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
+        for k in diffusers_keys:
+            if k.endswith(".weight"):
+                to = diffusers_keys[k]
+                key_lora = "transformer.{}".format(k[:-len(".weight")]) #regular diffusers sd3 lora format
+                key_map[key_lora] = to
     
-                # key_lora = "base_model.model.{}".format(k[:-len(".weight")]) #format for flash-sd3 lora and others?
-                # key_map[key_lora] = to
+                key_lora = "base_model.model.{}".format(k[:-len(".weight")]) #format for flash-sd3 lora and others?
+                key_map[key_lora] = to
     
-                # key_lora = "lora_transformer_{}".format(k[:-len(".weight")].replace(".", "_")) #OneTrainer lora
-                # key_map[key_lora] = to
-    #
+                key_lora = "lora_transformer_{}".format(k[:-len(".weight")].replace(".", "_")) #OneTrainer lora
+                key_map[key_lora] = to
+
     # if isinstance(model, comfy.model_base.AuraFlow): #Diffusers lora AuraFlow
     #     diffusers_keys = utils.auraflow_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
     #     for k in diffusers_keys:
@@ -339,7 +339,7 @@ def model_lora_keys_unet(model, key_map={}):
     #             key_lora = k[len("diffusion_model."):-len(".weight")]
     #             key_map["base_model.model.{}".format(key_lora)] = k #official hunyuan lora format
 
-    if 'flux' in model.config.huggingface_repo.lower(): #Diffusers lora Flux
+    if 'flux' in model.config.huggingface_repo.lower() or 'Chroma' == model.config.huggingface_repo: #Diffusers lora Flux
         diffusers_keys = utils.flux_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
         for k in diffusers_keys:
             if k.endswith(".weight"):
