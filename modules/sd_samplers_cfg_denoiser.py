@@ -1,7 +1,6 @@
 import torch
-from modules import prompt_parser, sd_samplers_common
+from modules import prompt_parser, sd_samplers_common, sd_models
 
-from modules.shared import state
 import modules.shared as shared
 from modules.script_callbacks import CFGDenoiserParams, cfg_denoiser_callback
 from modules.script_callbacks import AfterCFGCallbackParams, cfg_after_cfg_callback
@@ -95,7 +94,8 @@ class CFGDenoiser(torch.nn.Module):
         self.sampler.sampler_extra_args['uncond'] = uc
 
     def forward(self, x, sigma, uncond, cond, cond_scale, s_min_uncond, image_cond):
-        if state.interrupted or state.skipped:
+        if shared.state.interrupted or shared.state.skipped:
+            sd_models.unload_model_weights()
             raise sd_samplers_common.InterruptedException
 
         original_x_device = x.device
@@ -121,7 +121,7 @@ class CFGDenoiser(torch.nn.Module):
             noisy_initial_latent = predictor.noise_scaling(sigma[:, None, None, None], torch.randn_like(self.init_latent).to(self.init_latent), self.init_latent, max_denoise=False)
             x = x * self.nmask + noisy_initial_latent * self.mask
 
-        denoiser_params = CFGDenoiserParams(x, image_cond, sigma, state.sampling_step, state.sampling_steps, cond, uncond, self)
+        denoiser_params = CFGDenoiserParams(x, image_cond, sigma, shared.state.sampling_step, shared.state.sampling_steps, cond, uncond, self)
         cfg_denoiser_callback(denoiser_params)
 
         # NGMS
@@ -156,7 +156,7 @@ class CFGDenoiser(torch.nn.Module):
         preview = self.sampler.last_latent = denoised
         sd_samplers_common.store_latent(preview)
 
-        after_cfg_callback_params = AfterCFGCallbackParams(denoised, state.sampling_step, state.sampling_steps)
+        after_cfg_callback_params = AfterCFGCallbackParams(denoised, shared.state.sampling_step, shared.state.sampling_steps)
         cfg_after_cfg_callback(after_cfg_callback_params)
         denoised = after_cfg_callback_params.x
 
