@@ -388,7 +388,7 @@ def create_ui():
                 inputs=txt2img_upscale_inputs,
                 outputs=txt2img_outputs,
                 show_progress='hidden',
-            ).success(fn=select_gallery_image, js="selected_gallery_index", inputs=[dummy_component_number], outputs=[output_panel.gallery])
+            ).success(fn=select_gallery_image, js="selected_gallery_index", inputs=[dummy_component_number], outputs=[output_panel.gallery]).success(fn=lambda: None, js='setup_gallery_lightbox')
 
             txt2img_paste_fields = [
                 PasteField(toprow.prompt, "Prompt", api="prompt"),
