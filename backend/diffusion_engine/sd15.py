@@ -178,14 +178,14 @@ class ELLA(torch.nn.Module):
         device = text_encode_features.device
         dtype = text_encode_features.dtype
 
-        ori_time_feature = self.position(timesteps.view(-1)).to(device, dtype=dtype)
+        ori_time_feature = self.position(timesteps.view(-1))
         ori_time_feature = (
             ori_time_feature.unsqueeze(dim=1)
             if ori_time_feature.ndim == 2
             else ori_time_feature
         )
         ori_time_feature = ori_time_feature.expand(len(text_encode_features), -1, -1)
-        time_embedding = self.time_embedding(ori_time_feature)
+        time_embedding = self.time_embedding(ori_time_feature.to(device, dtype=dtype))
 
         encoder_hidden_states = self.connector(
             text_encode_features, timestep_embedding=time_embedding
@@ -247,6 +247,8 @@ class StableDiffusion(ForgeDiffusionEngine):
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str], end_steps=0):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
+        te_device = memory_management.text_encoder_device()
+        off_device = memory_management.text_encoder_offload_device()
 
         if "ELLA" in shared.opts.use_ELLA:
             if self.ella is None:
@@ -269,6 +271,8 @@ class StableDiffusion(ForgeDiffusionEngine):
 #save T5, move to cpu after use ? would be relying on garbage collection after model change
             last_step = end_steps[-1] - 1
 
+            self.ella.to(te_device)
+
             if "(per step)" in shared.opts.use_ELLA:
                 cond = []
                 this_step = 0
@@ -281,14 +285,14 @@ class StableDiffusion(ForgeDiffusionEngine):
 
                     text_inputs = T5tokenizer(prompt[p], return_tensors="pt", add_special_tokens=True)
                     outputs = T5model(text_inputs.input_ids, attention_mask=text_inputs.attention_mask)
-                    cond_t5 = outputs.last_hidden_state
+                    cond_t5 = outputs.last_hidden_state.to(te_device)
 
                     while this_step <= end_steps[p] - 1:
                         timestep = 999 * (1.0 - (this_step / last_step) ** 2) # squared timesteps schedule
 
                         cond_ella = self.ella(cond_t5, torch.Tensor([timestep]))
                         if cond_clip is not None:
-                            cond.append(torch.cat([cond_clip, cond_ella.to(cond_clip)], dim=1))
+                            cond.append(torch.cat([cond_clip, cond_ella], dim=1))
                         else:
                             cond.append(cond_ella)
 
@@ -296,6 +300,8 @@ class StableDiffusion(ForgeDiffusionEngine):
 
                     del cond_t5, text_inputs, outputs
 
+                del T5model, T5tokenizer
+                self.ella.to(off_device)
                 return cond, True   # True means ELLA was used per step, returning a cond for each step
             else:
                 if "CLIP" in shared.opts.use_ELLA:
@@ -309,7 +315,7 @@ class StableDiffusion(ForgeDiffusionEngine):
                 for p in range(len(prompt)):
                     text_inputs = T5tokenizer(prompt[p], return_tensors="pt", add_special_tokens=True)
                     outputs = T5model(text_inputs.input_ids, attention_mask=text_inputs.attention_mask)
-                    cond_t5 = outputs.last_hidden_state
+                    cond_t5 = outputs.last_hidden_state.to(te_device)
 
                     timestep = 999 * (1.0 - (start_step / last_step) ** 2) # squared timesteps schedule
 
@@ -321,10 +327,11 @@ class StableDiffusion(ForgeDiffusionEngine):
                 del T5model, T5tokenizer
 
                 if cond_clip is not None:
-                    cond = torch.cat([cond_clip, torch.cat(cond_ella, dim=0).to(cond_clip)], dim=1)
+                    cond = torch.cat([cond_clip, torch.cat(cond_ella, dim=0)], dim=1)
                 else:
                     cond = cond_ella
 
+                self.ella.to(off_device)
                 return cond, False
         else:
             cond = self.text_processing_engine(prompt)
