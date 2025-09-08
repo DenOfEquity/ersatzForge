@@ -1295,11 +1295,11 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 self.extra_generation_params["HiRes sampler"] = self.hr_sampler_name
 
             def get_hr_prompt(p, index, prompt_text, **kwargs):
-                hr_prompt = p.all_hr_prompts[index]
+                hr_prompt = p.hr_prompts[index]
                 return hr_prompt if hr_prompt != prompt_text else None
 
             def get_hr_negative_prompt(p, index, negative_prompt, **kwargs):
-                hr_negative_prompt = p.all_hr_negative_prompts[index]
+                hr_negative_prompt = p.hr_negative_prompts[index] # alternative: p.all_hr_negative_prompts[index + self.batch_size*self.iteration]
                 return hr_negative_prompt if hr_negative_prompt != negative_prompt else None
 
             self.extra_generation_params["HiRes prompt"] = get_hr_prompt
