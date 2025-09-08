@@ -236,8 +236,8 @@ def restore_old_hires_fix_params(res):
 
     res['Size-1'] = firstpass_width
     res['Size-2'] = firstpass_height
-    res['Hires resize-1'] = width
-    res['Hires resize-2'] = height
+    res['HiRes resize-1'] = width
+    res['HiRes resize-2'] = height
 
 
 def parse_generation_parameters(x: str, skip_fields: list[str] | None = None):
@@ -291,9 +291,12 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
         lastline = lastline.replace('Sampler: Undefined, ', 'Sampler: Euler, Schedule type: Simple, ')  # <- by lllyasviel, seem to give similar results to Civitai "Undefined" Sampler
 
         # Civitai also confuse CFG scale and Distilled CFG Scale
-        lastline = lastline.replace('CFG scale: ', 'CFG scale: 1, Distilled CFG Scale: ')
+        lastline = lastline.replace('CFG scale: ', 'CFG scale: 1, Distilled CFG scale: ')
 
         print('Applied Forge Fix to broken Civitai Flux Meta.')
+
+    lastline = lastline.replace("Hires",      "HiRes")
+    lastline = lastline.replace("CFG Scale",  "CFG scale")
 
     for k, v in re_param.findall(lastline):
         try:
@@ -314,12 +317,13 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
         found_styles, prompt_no_styles, negative_prompt_no_styles = shared.prompt_styles.extract_styles_from_prompt(prompt, negative_prompt)
 
         same_hr_styles = True
-        if ("Hires prompt" in res or "Hires negative prompt" in res) and (infotext_ver > infotext_versions.v180_hr_styles if (infotext_ver := infotext_versions.parse_version(res.get("Version"))) else True):
-            hr_prompt, hr_negative_prompt = res.get("Hires prompt", prompt), res.get("Hires negative prompt", negative_prompt)
+        if ("HiRes prompt" in res or "HiRes negative prompt" in res) and (infotext_ver > infotext_versions.v180_hr_styles if (infotext_ver := infotext_versions.parse_version(res.get("Version"))) else True):
+            hr_prompt, hr_negative_prompt = res.get("HiRes prompt", prompt), res.get("HiRes negative prompt", negative_prompt)
             hr_found_styles, hr_prompt_no_styles, hr_negative_prompt_no_styles = shared.prompt_styles.extract_styles_from_prompt(hr_prompt, hr_negative_prompt)
+
             if same_hr_styles := found_styles == hr_found_styles:
-                res["Hires prompt"] = '' if hr_prompt_no_styles == prompt_no_styles else hr_prompt_no_styles
-                res['Hires negative prompt'] = '' if hr_negative_prompt_no_styles == negative_prompt_no_styles else hr_negative_prompt_no_styles
+                res["HiRes prompt"] = '' if hr_prompt_no_styles == prompt_no_styles else hr_prompt_no_styles
+                res['HiRes negative prompt'] = '' if hr_negative_prompt_no_styles == negative_prompt_no_styles else hr_negative_prompt_no_styles
 
         if same_hr_styles:
             prompt, negative_prompt = prompt_no_styles, negative_prompt_no_styles
@@ -337,18 +341,21 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
     if hypernet is not None:
         res["Prompt"] += f"""<hypernet:{hypernet}:{res.get("Hypernet strength", "1.0")}>"""
 
-    if "Hires resize-1" not in res:
-        res["Hires resize-1"] = 0
-        res["Hires resize-2"] = 0
+    if "HiRes resize-1" not in res:
+        res["HiRes resize-1"] = 0
+        res["HiRes resize-2"] = 0
 
-    if "Hires checkpoint" not in res:
-        res["Hires checkpoint"] = "Use same checkpoint"
+    if "HiRes steps" not in res:
+        res["HiRes steps"] = 0
 
-    if "Hires prompt" not in res:
-        res["Hires prompt"] = ""
+    if "HiRes checkpoint" not in res:
+        res["HiRes checkpoint"] = "Use same checkpoint"
 
-    if "Hires negative prompt" not in res:
-        res["Hires negative prompt"] = ""
+    if "HiRes prompt" not in res:
+        res["HiRes prompt"] = ""
+
+    if "HiRes negative prompt" not in res:
+        res["HiRes negative prompt"] = ""
 
     if "Mask mode" not in res:
         res["Mask mode"] = "Inpaint masked"
@@ -434,7 +441,7 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
                         break
                 if not added:
                     modules.append(res[key])   # so it shows in the override section (consistent with checkpoint and old vae)
-            elif key.startswith('Hires Module '):
+            elif key.startswith('HiRes Module '):
                 for knownmodule in main_entry.module_list.keys():
                     filename, _ = os.path.splitext(knownmodule)
                     if res[key] == filename:
@@ -450,18 +457,18 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
         if sorted(modules) != sorted(basename_modules):
             res['VAE/TE'] = modules
 
-    # if 'Use same choices' was the selection for Hires VAE / Text Encoder, it will be the only Hires Module
+    # if 'Use same choices' was the selection for HiRes VAE / Text Encoder, it will be the only HiRes Module
     # if the selection was empty, it will be the only Hires Module, saved as 'Built-in'
-    if 'Hires Module 1' in res:
-        if res['Hires Module 1'] == 'Use same choices':
+    if 'HiRes Module 1' in res:
+        if res['HiRes Module 1'] == 'Use same choices':
             hr_modules = ['Use same choices']
-        elif res['Hires Module 1'] == 'Built-in':
+        elif res['HiRes Module 1'] == 'Built-in':
             hr_modules = []
 
-        res['Hires VAE/TE'] = hr_modules
+        res['HiRes VAE/TE'] = hr_modules
     else:
         # no Hires Module infotext, use default
-        res['Hires VAE/TE'] = ['Use same choices']
+        res['HiRes VAE/TE'] = ['Use same choices']
 
     return res
 
@@ -571,6 +578,7 @@ def connect_paste(button, paste_fields, input_comp, override_settings_component,
                 pass
 
         params = parse_generation_parameters(prompt)
+
         script_callbacks.infotext_pasted_callback(prompt, params)
         res = []
 

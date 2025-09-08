@@ -138,15 +138,18 @@ def make_checkpoint_manager_ui():
         choices=list(module_list.keys())
     )
 
-    def gr_refresh_models():
+    def gr_refresh_models():    # updates HiRes fix checkpoint/modules too
         a, b = refresh_models()
-        return gr.update(choices=a), gr.update(choices=b)
+        return gr.update(choices=a), gr.update(choices=b), gr.update(choices=["Use same checkpoint"] + a), gr.update(choices=["Use same choices"] + list(b))
+
+    ui_txt2img_hr_checkpoint = get_a1111_ui_component('txt2img', 'HiRes checkpoint')
+    ui_txt2img_hr_vae = get_a1111_ui_component('txt2img', 'HiRes additional modules')
 
     refresh_button = ui_common.ToolButton(value=ui_common.refresh_symbol, elem_id="forge_refresh_checkpoint", tooltip="Refresh")
     refresh_button.click(
         fn=gr_refresh_models,
         inputs=None,
-        outputs=[ui_checkpoint, ui_vae],
+        outputs=[ui_checkpoint, ui_vae, ui_txt2img_hr_checkpoint, ui_txt2img_hr_vae],
         show_progress=False,
         queue=False
     )

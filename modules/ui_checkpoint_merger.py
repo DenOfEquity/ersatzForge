@@ -1,7 +1,7 @@
 import os
 import gradio as gr
 
-from modules import sd_models, errors, extras, call_queue
+from modules import shared, sd_models, errors, extras, call_queue
 from modules.ui_components import FormRow
 from modules.ui_common import ToolButton, refresh_symbol
 from modules_forge.main_entry import module_list, module_vae_list, module_te_list, refresh_models
@@ -158,7 +158,6 @@ class UiCheckpointMerger:
                         from modules.paths import models_path
                         long_filename = os.path.join(models_path, 'Stable-diffusion', filename)
                         os.makedirs(os.path.dirname(long_filename), exist_ok=True)
-                        from modules import shared, sd_models
                         sd_models.forge_model_reload()
                         p = shared.sd_model.save_unet(long_filename)
                         print(f'Saved UNet at: {p}')
@@ -168,7 +167,6 @@ class UiCheckpointMerger:
                         from modules.paths import models_path
                         long_filename = os.path.join(models_path, 'Stable-diffusion', filename)
                         os.makedirs(os.path.dirname(long_filename), exist_ok=True)
-                        from modules import shared
                         sd_models.forge_model_reload()
                         p = shared.sd_model.save_checkpoint(long_filename)
                         print(f'Saved checkpoint at: {p}')
@@ -201,13 +199,7 @@ class UiCheckpointMerger:
                     with FormRow(elem_id="modelmerger_models"):
                         self.model_names = gr.Dropdown(sd_models.checkpoint_tiles(), multiselect=True, max_choices=1, elem_id="modelmerger_model_names", label="Models (select in order: A; optional B, C)", value=[])
 
-                        def refresh_checkpoints():
-                            sd_models.list_models()
-                            newlist = sd_models.checkpoint_tiles()
-                            return gr.Dropdown(choices=newlist)
-
                         self.refresh_button = ToolButton(value=refresh_symbol)
-                        self.refresh_button.click(fn=refresh_checkpoints, inputs=None, outputs=[self.model_names])
 
                     self.interp_method.change(fn=update_interp_description, inputs=[self.interp_method, self.model_names], outputs=[self.interp_method, self.model_names], show_progress=False)
 
@@ -217,8 +209,13 @@ class UiCheckpointMerger:
                         self.bake_in_vae = gr.Dropdown(choices=self.vae_list, value="", label="Bake in VAE", elem_id="modelmerger_bake_in_vae")
                         self.bake_in_te = gr.Dropdown(choices=self.te_list, value=[], label="Bake in Text encoder(s)", elem_id="modelmerger_bake_in_te", multiselect=True, max_choices=3)
 
-                        self.refresh_buttonM = ToolButton(value=refresh_symbol, elem_id="modelmerger_refresh_vaete")
-                        self.refresh_buttonM.click(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te])
+                    def refresh_checkpoints():
+                        sd_models.list_models()
+                        return gr.Dropdown(choices=sd_models.checkpoint_tiles())
+
+                    self.refresh_button\
+                    .click(fn=refresh_checkpoints, inputs=None, outputs=[self.model_names], show_progress=False)\
+                    .then(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te], show_progress=False)
 
                     with FormRow():
                         self.save_u = gr.Dropdown(label="Unet precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2"], value="float16")
@@ -227,12 +224,9 @@ class UiCheckpointMerger:
                         self.calc_fp32 = gr.Checkbox(value=False, label="Calculate merge in float32")
 # if want to save fp32, must also set calc_fp32 for non-fp32 models
 
-                    with FormRow():
-                        self.discard_weights = gr.Textbox(value="", label="Discard weights with matching name; e.g. Use 'model_ema' to discard EMA weights. 'embedding_manager|lora|control_model'", elem_id="modelmerger_discard_weights")
+                    self.discard_weights = gr.Textbox(value="", label="Discard weights with matching name; e.g. Use 'model_ema' to discard EMA weights. 'embedding_manager|lora|control_model'", elem_id="modelmerger_discard_weights")
 
-                    with FormRow():
-                        with gr.Column():
-                            self.config_source = gr.Radio(choices=["A, B or C", "B", "C", "Don't"], value="Don't", label="Copy config from", type="index", elem_id="modelmerger_config_method")
+                    self.config_source = gr.Radio(choices=["A, B or C", "B", "C", "Don't"], value="Don't", label="Copy config from", type="index", elem_id="modelmerger_config_method")
 
                     with gr.Accordion("Metadata", open=False) as metadata_editor:
                         with FormRow():
@@ -246,8 +240,7 @@ class UiCheckpointMerger:
 
                 with gr.Column(variant='compact', elem_id="modelmerger_results_container"):
                     self.modelmerger_merge = gr.Button(elem_id="modelmerger_merge", value="Merge", variant='primary')
-                    with gr.Group(elem_id="modelmerger_results_panel"):
-                        self.modelmerger_result = gr.HTML(elem_id="modelmerger_result", show_label=False)
+                    self.modelmerger_result = gr.HTML(elem_id="modelmerger_result", show_label=False)
 
         self.metadata_editor = metadata_editor
         self.blocks = modelmerger_interface
@@ -285,6 +278,5 @@ class UiCheckpointMerger:
                 sd_model_checkpoint_component,
                 self.modelmerger_result,
             ]
-        ).then(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te])
-
+        ).then(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te], show_progress=False)
 

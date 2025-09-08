@@ -287,27 +287,7 @@ def create_ui():
 
                                 with FormRow(elem_id="txt2img_hires_fix_row3", variant="compact") as hr_checkpoint_container:
                                     hr_checkpoint_name = gr.Dropdown(label='HiRes checkpoint', elem_id="hr_checkpoint", choices=["Use same checkpoint"] + modules.sd_models.checkpoint_tiles(), value="Use same checkpoint", scale=2)
-
-                                    hr_checkpoint_refresh = ToolButton(value=refresh_symbol)
-
-                                    def get_additional_modules():
-                                        modules_list = ['Use same choices']
-                                        if main_entry.module_list == {}:
-                                            modules = main_entry.refresh_vaete()
-                                            modules_list += list(modules)
-                                        else:
-                                            modules_list += list(main_entry.module_list.keys())
-                                        return modules_list
-
-                                    modules_list = get_additional_modules()
-
-                                    def refresh_model_and_modules():
-                                        modules_list = get_additional_modules()
-                                        return gr.update(choices=["Use same checkpoint"] + modules.sd_models.checkpoint_tiles()), gr.update(choices=modules_list)
-
-                                    hr_additional_modules = gr.Dropdown(label='HiRes additional modules', elem_id="hr_vae_te", choices=modules_list, value=["Use same choices"], multiselect=True, scale=3)
-
-                                    hr_checkpoint_refresh.click(fn=refresh_model_and_modules, outputs=[hr_checkpoint_name, hr_additional_modules], show_progress='hidden')
+                                    hr_additional_modules = gr.Dropdown(label='HiRes additional modules', elem_id="hr_vae_te", choices=["Use same choices"] + list(main_entry.module_list.keys()), value=["Use same choices"], multiselect=True, scale=3)
 
                                 with FormRow(elem_id="txt2img_hires_fix_row3b", variant="compact") as hr_sampler_container:
                                     sampler_names = sd_samplers.visible_sampler_names()
@@ -316,8 +296,8 @@ def create_ui():
                                     hr_scheduler = gr.Dropdown(label='HiRes schedule type', elem_id="hr_scheduler", choices=["Use same scheduler"] + scheduler_names, value="Use same scheduler")
 
                                 with FormRow(elem_id="txt2img_hires_fix_row4", variant="compact") as hr_prompts_container:
-                                    hr_prompt = gr.Textbox(label="HiRes prompt", elem_id="hires_prompt", show_label=False, lines=3, placeholder="Prompt for hires fix pass.\nLeave empty to use the same prompt as in first pass.", elem_classes=["prompt"])
-                                    hr_negative_prompt = gr.Textbox(label="HiRes negative prompt", elem_id="hires_neg_prompt", show_label=False, lines=3, placeholder="Negative prompt for hires fix pass.\nLeave empty to use the same negative prompt as in first pass.", elem_classes=["prompt"])
+                                    hr_prompt = gr.Textbox(label="HiRes prompt", elem_id="hires_prompt", show_label=False, lines=3, placeholder="HiRes prompt. Leave empty to use the same prompt as in first pass.", elem_classes=["prompt"], value='')
+                                    hr_negative_prompt = gr.Textbox(label="HiRes negative prompt", elem_id="hires_neg_prompt", show_label=False, lines=3, placeholder="HiRes negative prompt. Leave empty to use the same negative prompt as in first pass.", elem_classes=["prompt"], value='')
 
                                 hr_cfg.change(lambda x: gr.update(interactive=(x != 1)), inputs=[hr_cfg], outputs=[hr_negative_prompt], queue=False, show_progress='hidden')
 
@@ -420,16 +400,16 @@ def create_ui():
                 PasteField(batch_size, "Batch size", api="batch_size"),
                 PasteField(toprow.ui_styles.dropdown, lambda d: d["Styles array"] if isinstance(d.get("Styles array"), list) else gr.update(), api="styles"),
                 PasteField(denoising_strength, "Denoising strength", api="denoising_strength"),
-                PasteField(enable_hr, lambda d: "Denoising strength" in d and ("Hires upscale" in d or "Hires upscaler" in d or "Hires resize-1" in d), api="enable_hr"),
-                PasteField(hr_scale, "Hires upscale", api="hr_scale"),
-                PasteField(hr_upscaler, "Hires upscaler", api="hr_upscaler"),
+                PasteField(enable_hr, lambda d: "Denoising strength" in d and ("HiRes upscale" in d or "HiRes upscaler" in d or "HiRes resize-1" in d), api="enable_hr"),
+                PasteField(hr_scale, "HiRes upscale", api="hr_scale"),
+                PasteField(hr_upscaler, "HiRes upscaler", api="hr_upscaler"),
                 PasteField(hr_second_pass_steps, "HiRes steps", api="hr_second_pass_steps"),
-                PasteField(hr_resize_x, "Hires resize-1", api="hr_resize_x"),
-                PasteField(hr_resize_y, "Hires resize-2", api="hr_resize_y"),
+                PasteField(hr_resize_x, "HiRes resize-1", api="hr_resize_x"),
+                PasteField(hr_resize_y, "HiRes resize-2", api="hr_resize_y"),
                 PasteField(hr_checkpoint_name, "HiRes checkpoint", api="hr_checkpoint_name"),
                 PasteField(hr_additional_modules, "HiRes additional modules", api="hr_additional_modules"),
-                PasteField(hr_sampler_name, lambda d: d["Hires sampler"] if d.get("Hires sampler", None) else gr.update(), api="hr_sampler_name"),
-                PasteField(hr_scheduler, lambda d: d["Hires schedule type"] if d.get("Hires schedule type", None) else gr.update(), api="hr_scheduler"),
+                PasteField(hr_sampler_name, lambda d: d["HiRes sampler"] if d.get("HiRes sampler", None) else gr.update(), api="hr_sampler_name"),
+                PasteField(hr_scheduler, lambda d: d["HiRes schedule type"] if d.get("HiRes schedule type", None) else gr.update(), api="hr_scheduler"),
                 PasteField(hr_prompt, "HiRes prompt", api="hr_prompt"),
                 PasteField(hr_negative_prompt, "HiRes negative prompt", api="hr_negative_prompt"),
                 PasteField(hr_cfg, "HiRes CFG scale", api="hr_cfg"),

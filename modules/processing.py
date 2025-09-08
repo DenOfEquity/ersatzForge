@@ -651,7 +651,7 @@ def fix_seed(p):
 
 def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iteration=0, position_in_batch=0, use_main_prompt=False, index=None, all_negative_prompts=None):
     """
-    this function is used to generate the infotext that is stored in the generated images, it's contains the parameters that are required to generate the imagee
+    this function is used to generate the infotext that is stored in the generated images, it contains the parameters that are required to generate the image
     Args:
         p: StableDiffusionProcessing
         all_prompts: list[str]
@@ -681,7 +681,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
     The list should have the same length as the total number of images in the entire job.
 
     Defining as a callable function allows parameter cannot be generated earlier or when extra logic is required.
-    For example 'Hires prompt', due to reasons the hr_prompt might be changed by process in the pipeline or extensions
+    For example 'HiRes prompt', due to reasons the hr_prompt might be changed by process in the pipeline or extensions
     and may vary across different images, defining as a static string or list would not work.
 
     The function takes locals() as **kwargs, as such will have access to variables like 'p' and 'index'.
@@ -738,10 +738,10 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
     elif p.sampler_name == 'Fixed-ODE':
         generation_params['Fixed-ODE solver'] = shared.opts.fixed_ode_solver
 
-    # if hires fix was used, p.firstpass_use_distilled_cfg_scale is appropriately set, otherwise it doesn't exist
+    # if HiRes fix was used, p.firstpass_use_distilled_cfg_scale is appropriately set, otherwise it doesn't exist
     firstpass_use_distilled_cfg_scale = getattr(p,'firstpass_use_distilled_cfg_scale', p.sd_model.use_distilled_cfg_scale)
     if firstpass_use_distilled_cfg_scale:
-        generation_params['Distilled CFG Scale'] = p.distilled_cfg_scale
+        generation_params['Distilled CFG scale'] = p.distilled_cfg_scale
 
     noise_source_type = get_noise_source_type()
 
@@ -775,6 +775,16 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
     if isinstance(shared.opts.forge_additional_modules, list) and len(shared.opts.forge_additional_modules) > 0:
         for i, m in enumerate(shared.opts.forge_additional_modules):
             generation_params[f'Module {i+1}'] = os.path.splitext(os.path.basename(m))[0]
+
+    if use_main_prompt:
+        if "HiRes prompt" in generation_params and hasattr(p, "hr_main_prompt"):
+            generation_params["HiRes prompt"] = p.hr_main_prompt
+        if "HiRes negative prompt" in generation_params and hasattr(p, "hr_main_negative_prompt"):
+            generation_params["HiRes negative prompt"] = p.hr_main_negative_prompt
+        generation_params.pop("Wildcard prompt", None)
+        generation_params.pop("Wildcard negative prompt", None)
+        generation_params.pop("Wildcard hr prompt", None)
+        generation_params.pop("Wildcard hr negative prompt", None)
 
     for key, value in generation_params.items():
         try:
@@ -936,7 +946,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 sd_models.forge_model_reload()  # model can be changed for example by refiner, hiresfix
 
             p.sd_model.forge_objects = p.sd_model.forge_objects_original.shallow_copy()
-            
+
             gc.collect()
             torch.cuda.empty_cache()
 
@@ -1122,16 +1132,16 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
         unwanted_grid_because_of_img_count = len(output_images) < 2 and opts.grid_only_if_multiple
         if (opts.return_grid or opts.grid_save) and not p.do_not_save_grid and not unwanted_grid_because_of_img_count:
             grid = images.image_grid(output_images, p.batch_size)
+            text = infotext(use_main_prompt=True)
 
             if opts.return_grid:
-                text = infotext(use_main_prompt=True)
                 infotexts.insert(0, text)
                 if opts.enable_pnginfo:
                     grid.info["parameters"] = text
                 output_images.insert(0, grid)
                 index_of_first_image = 1
             if opts.grid_save:
-                images.save_image(grid, p.outpath_grids, "grid", p.all_seeds[0], p.all_prompts[0], opts.grid_format, info=infotext(use_main_prompt=True), short_filename=not opts.grid_extended_filename, p=p, grid=True)
+                images.save_image(grid, p.outpath_grids, "grid", p.all_seeds[0], p.all_prompts[0], opts.grid_format, info=text, short_filename=not opts.grid_extended_filename, p=p, grid=True)
 
     if not p.disable_extra_networks and p.extra_network_data:
         extra_networks.deactivate(p, p.extra_network_data)
@@ -1232,11 +1242,11 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
     def calculate_target_resolution(self):
         if self.hr_resize_x == 0 and self.hr_resize_y == 0:
-            self.extra_generation_params["Hires upscale"] = self.hr_scale
+            self.extra_generation_params["HiRes upscale"] = self.hr_scale
             self.hr_upscale_to_x = int(self.width * self.hr_scale)
             self.hr_upscale_to_y = int(self.height * self.hr_scale)
         else:
-            self.extra_generation_params["Hires resize"] = f"{self.hr_resize_x}x{self.hr_resize_y}"
+            self.extra_generation_params["HiRes resize"] = f"{self.hr_resize_x}x{self.hr_resize_y}"
 
             if self.hr_resize_y == 0:
                 self.hr_upscale_to_x = self.hr_resize_x
@@ -1270,19 +1280,19 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 if self.hr_checkpoint_info is None:
                     raise Exception(f'Could not find checkpoint with name {self.hr_checkpoint_name}')
 
-                self.extra_generation_params["Hires checkpoint"] = self.hr_checkpoint_info.short_title
+                self.extra_generation_params["HiRes checkpoint"] = self.hr_checkpoint_info.short_title
 
             if isinstance(self.hr_additional_modules, list):
                 if self.hr_additional_modules == []:
-                    self.extra_generation_params['Hires Module 1'] = 'Built-in'
+                    self.extra_generation_params['HiRes Module 1'] = 'Built-in'
                 elif 'Use same choices' in self.hr_additional_modules:
-                    self.extra_generation_params['Hires Module 1'] = 'Use same choices'
+                    self.extra_generation_params['HiRes Module 1'] = 'Use same choices'
                 else:
                     for i, m in enumerate(self.hr_additional_modules):
-                        self.extra_generation_params[f'Hires Module {i+1}'] = os.path.splitext(os.path.basename(m))[0]
+                        self.extra_generation_params[f'HiRes Module {i+1}'] = os.path.splitext(os.path.basename(m))[0]
 
             if self.hr_sampler_name is not None and self.hr_sampler_name != self.sampler_name:
-                self.extra_generation_params["Hires sampler"] = self.hr_sampler_name
+                self.extra_generation_params["HiRes sampler"] = self.hr_sampler_name
 
             def get_hr_prompt(p, index, prompt_text, **kwargs):
                 hr_prompt = p.all_hr_prompts[index]
@@ -1292,13 +1302,13 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 hr_negative_prompt = p.all_hr_negative_prompts[index]
                 return hr_negative_prompt if hr_negative_prompt != negative_prompt else None
 
-            self.extra_generation_params["Hires prompt"] = get_hr_prompt
-            self.extra_generation_params["Hires negative prompt"] = get_hr_negative_prompt
+            self.extra_generation_params["HiRes prompt"] = get_hr_prompt
+            self.extra_generation_params["HiRes negative prompt"] = get_hr_negative_prompt
 
-            self.extra_generation_params["Hires CFG Scale"] = self.hr_cfg
-            self.extra_generation_params["Hires Distilled CFG Scale"] = None  # set after potential hires model load
+            self.extra_generation_params["HiRes CFG scale"] = self.hr_cfg
+            self.extra_generation_params["HiRes Distilled CFG scale"] = None  # set after potential HiRes model load
 
-            self.extra_generation_params["Hires schedule type"] = None  # to be set in sd_samplers_kdiffusion.py
+            self.extra_generation_params["HiRes schedule type"] = None  # to be set in sd_samplers_kdiffusion.py
 
             if self.hr_scheduler is None:
                 self.hr_scheduler = self.scheduler
@@ -1322,16 +1332,16 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 state.processing_has_refined_job_count = True
 
             if self.hr_second_pass_steps:
-                self.extra_generation_params["Hires steps"] = self.hr_second_pass_steps
+                self.extra_generation_params["HiRes steps"] = self.hr_second_pass_steps
 
             if self.hr_upscaler is not None:
-                self.extra_generation_params["Hires upscaler"] = self.hr_upscaler
+                self.extra_generation_params["HiRes upscaler"] = self.hr_upscaler
 
     def sample(self, conditioning, unconditional_conditioning, seeds, subseeds, subseed_strength, prompts):
         self.sampler = sd_samplers.create_sampler(self.sampler_name, self.sd_model)
 
         if self.firstpass_image is not None and self.enable_hr:
-            # here we don't need to generate image, we just take self.firstpass_image and prepare it for hires fix
+            # here we don't need to generate image, we just take self.firstpass_image and prepare it for HiRes fix
 
             if self.latent_scale_mode is None:
                 image = np.array(self.firstpass_image).astype(np.float32) / 255.0 * 2.0 - 1.0
@@ -1411,7 +1421,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                     main_entry.refresh_model_loading_parameters()
 
             if self.sd_model.use_distilled_cfg_scale:
-                self.extra_generation_params['Hires Distilled CFG Scale'] = self.hr_distilled_cfg
+                self.extra_generation_params['HiRes Distilled CFG scale'] = self.hr_distilled_cfg
 
         return self.sample_hr_pass(samples, decoded_samples, seeds, subseeds, subseed_strength, prompts)
 
@@ -1424,7 +1434,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         target_height = self.hr_upscale_to_y
 
         def save_intermediate(image, index):
-            """saves image before applying hires fix, if enabled in options; takes as an argument either an image or batch with latent space images"""
+            """saves image before applying HiRes fix, if enabled in options; takes as an argument either an image or batch with latent space images"""
 
             if not self.save_samples() or not opts.save_images_before_highres_fix:
                 return
@@ -1567,6 +1577,10 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         self.all_hr_prompts = [shared.prompt_styles.apply_styles_to_prompt(x, self.styles) for x in self.all_hr_prompts]
         self.all_hr_negative_prompts = [shared.prompt_styles.apply_negative_styles_to_prompt(x, self.styles) for x in self.all_hr_negative_prompts]
+
+        self.hr_main_prompt = self.all_hr_prompts[0]
+        self.hr_main_negative_prompt = self.all_hr_negative_prompts[0]
+
 
     def calculate_hr_conds(self):
         if self.hr_c is not None:

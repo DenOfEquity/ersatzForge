@@ -1,10 +1,8 @@
 import gradio as gr
 
 from modules import ui_extra_networks_user_metadata
-from modules.ui_components import ToolButton
 from modules_forge import main_entry
 
-refresh_symbol = '\U0001f504'  # 🔄
 
 class CheckpointUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor):
     def __init__(self, ui, tabname, page):
@@ -41,30 +39,16 @@ class CheckpointUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataE
 
         return [
             *values[0:5],
-            vae,
+            gr.update(value=vae, choices=['Built in'] + list(main_entry.module_list.keys())),
             version,
         ]
 
-    def create_editor(self):    #happens before main_entry.modules_list is filled
-        modules_list = ['Built in']
-        if main_entry.module_list == {}:
-            modules = main_entry.refresh_vaete()
-            modules_list += list(modules)
-        else:
-            modules_list += list(main_entry.module_list.keys())
-
-        def refreshModules ():
-            return gr.update(choices=['Built in'] + list(main_entry.module_list.keys()))
-
+    def create_editor(self):
         self.create_default_editor_elems()
 
         self.sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Flux', 'Unknown'], value='Unknown', label='Base model', interactive=True)
 
-        with gr.Row():
-            self.select_vae = gr.Dropdown(choices=modules_list, value=None, label="Preferred additional module(s)", elem_id="checpoint_edit_user_metadata_preferred_vae", multiselect=True)
-            self.refresh = ToolButton(refresh_symbol)
-
-            self.refresh.click(fn=refreshModules, outputs=self.select_vae, show_progress='hidden')
+        self.select_vae = gr.Dropdown(choices=[], value=None, label="Preferred additional module(s)", elem_id="checpoint_edit_user_metadata_preferred_vae", multiselect=True)
 
         self.edit_notes = gr.TextArea(label='Notes', lines=4)
 
@@ -81,8 +65,8 @@ class CheckpointUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataE
         ]
 
         self.button_edit\
-            .click(fn=self.put_values_into_components, inputs=[self.edit_name_input], outputs=viewed_components)\
-            .then(fn=lambda: gr.update(visible=True), inputs=None, outputs=[self.box])
+            .click(fn=self.put_values_into_components, inputs=[self.edit_name_input], outputs=viewed_components, show_progress=False)\
+            .then(fn=lambda: gr.update(visible=True), inputs=None, outputs=[self.box], show_progress=False)
 
         edited_components = [
             self.edit_description,

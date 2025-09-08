@@ -74,7 +74,7 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
 
             res.gallery = gr.Gallery(label='Output', show_label=False, elem_id=f"{tabname}_gallery", columns=4, preview=True, height=shared.opts.gallery_height or None, interactive=False, type="pil", object_fit="contain")
 
-            if tabname != 'txt2img':    # txt2img is handled in ui.py, to avoid double process after hires quickbutton
+            if tabname != 'txt2img':    # txt2img is handled in ui.py, to avoid double process after HiRes quickbutton
                 res.gallery.change(fn=select_gallery_0, js="selected_gallery_index", inputs=[dummy], outputs=[res.gallery]).success(fn=lambda: None, js='setup_gallery_lightbox')
 
         with gr.Row(elem_id=f"image_buttons_{tabname}", elem_classes="image-buttons"):
@@ -86,7 +86,7 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
             }
 
             if tabname == 'txt2img':
-                res.button_upscale = ToolButton('✨', elem_id=f'{tabname}_upscale', tooltip="Create an upscaled version of the current image using hires fix settings.")
+                res.button_upscale = ToolButton('✨', elem_id=f'{tabname}_upscale', tooltip="Create an upscaled version of the current image using HiRes fix settings.")
 
         open_folder_button.click(
             fn=lambda images, index: open_folder(shared.opts.outdir_samples or outdir, images, index),
@@ -98,17 +98,13 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
             outputs=None,
         )
 
-        if tabname != "extras":
-            with gr.Group():
-                res.infotext = gr.HTML(elem_id=f'html_info_{tabname}', elem_classes="infotext")
-                res.html_log = gr.HTML(elem_id=f'html_log_{tabname}', elem_classes="html-log")
-
-                res.generation_info = gr.Textbox(visible=False, elem_id=f'generation_info_{tabname}')
-                (res.gallery).select(fn=update_generation_info, _js="function(x, y, z){ return [x, y, selected_gallery_index()] }", inputs=[res.generation_info, res.infotext, res.infotext], outputs=[res.infotext], show_progress=False)
+        if tabname == "extras":
+            res.generation_info = gr.HTML(elem_id=f'html_info_{tabname}')
         else:
-            res.generation_info = gr.HTML(elem_id=f'html_info_x_{tabname}')
+            res.generation_info = gr.Textbox(visible=False, elem_id=f'generation_info_{tabname}')
             res.infotext = gr.HTML(elem_id=f'html_info_{tabname}', elem_classes="infotext")
-            res.html_log = gr.HTML(elem_id=f'html_log_{tabname}', elem_classes="html-log")
+            (res.gallery).select(fn=update_generation_info, _js="function(x, y, z){ return [x, y, selected_gallery_index()] }", inputs=[res.generation_info, res.infotext, res.infotext], outputs=[res.infotext], show_progress=False)
+        res.html_log = gr.HTML(elem_id=f'html_log_{tabname}', elem_classes="html-log")
 
         paste_field_names = []
         if tabname == "txt2img":

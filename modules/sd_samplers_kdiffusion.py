@@ -109,7 +109,7 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
             if not p.is_hr_pass:
                 p.extra_generation_params["Schedule type"] = scheduler.label
             elif scheduler.label != p.extra_generation_params.get("Schedule type") and scheduler.label != "Use same scheduler":
-                p.extra_generation_params["Hires schedule type"] = scheduler.label
+                p.extra_generation_params["HiRes schedule type"] = scheduler.label
 
             if opts.sigma_min != 0 and opts.sigma_min != m_sigma_min:
                 sigmas_kwargs['sigma_min'] = opts.sigma_min
