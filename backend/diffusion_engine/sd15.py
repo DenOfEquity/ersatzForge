@@ -267,9 +267,7 @@ class StableDiffusion(ForgeDiffusionEngine):
             T5model = T5EncoderModel.from_pretrained("QQGYLab/ELLA", subfolder="models--google--flan-t5-xl--text_encoder")
             T5tokenizer = T5Tokenizer.from_pretrained("QQGYLab/ELLA", subfolder="models--google--flan-t5-xl--text_encoder", legacy=True)
 
-#use memory_management.text_encoder_device ? and text_encoder_offload_device
-#save T5, move to cpu after use ? would be relying on garbage collection after model change
-            last_step = end_steps[-1] - 1
+            last_step = max(1, end_steps[-1] - 1)
 
             self.ella.to(te_device)
 
