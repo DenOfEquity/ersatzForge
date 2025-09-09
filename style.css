@@ -1148,6 +1148,10 @@ footer {
     background: var(--body-background-fill) !important;
     padding: 2em !important;
 }
+.popup-dialog .leftpadbutton {
+    margin-left: 2em !important;
+    min-width: 6em !important;
+}
 
 div.block.input-accordion{
 

@@ -144,6 +144,14 @@ function setup_gallery_lightbox() {
 			lightBoxModal.style.setProperty('background-image', `url(${lightBoxImage.src})`);
 		}
 	}
+	
+	return selected_gallery_index();
+}
+
+function setup_gallery_lightbox_and_get_index(x, y, z) {
+	setup_gallery_lightbox()
+
+	return [x, y, setup_gallery_lightbox()];
 }
 
 let lightBoxModal = undefined;

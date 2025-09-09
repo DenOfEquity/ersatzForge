@@ -258,7 +258,6 @@ options_templates.update(options_section(('ui_gallery', "Gallery", "ui"), {
     "js_modal_lightbox_initially_zoomed": OptionInfo(True, "Full page image viewer: show images zoomed in by default"),
     "gallery_height": OptionInfo("", "Gallery height", gr.Textbox).info("can be any valid CSS value, for example 768px or 20em").needs_reload_ui(),
     "open_dir_button_choice": OptionInfo("Subdirectory", "What directory the [📂] button opens", gr.Radio, {"choices": ["Output Root", "Subdirectory", "Subdirectory (even temp dir)"]}),
-    "hires_button_gallery_insert": OptionInfo(False, "Insert [✨] hires button results into gallery").info("Default: original image will be replaced"),
 }))
 
 options_templates.update(options_section(('ui_alternatives', "UI alternatives", "ui"), {
@@ -282,6 +281,9 @@ options_templates.update(options_section(('ui', "User interface", "ui"), {
     "send_seed": OptionInfo(True, "Send seed when sending prompt or image to other interface"),
     "send_size": OptionInfo(True, "Send size when sending prompt or image to another interface"),
     "enable_reloading_ui_scripts": OptionInfo(False, "Reload UI scripts when using Reload UI option").info("useful for developing: if you make changes to UI scripts code, it is applied when the UI is reloded."),
+
+    "hires_button_gallery_insert": OptionInfo(False, "Insert [✨] hires button results into gallery").info("Default: original image will be replaced"),
+    "hires_button_iterate": OptionInfo("Disabled", "[✨] hires button iterates based on 'Batch count'", gr.Radio, {"choices": ["Disabled", "Enabled", "Enabled, Scaling"]}).info("Result is always one image. Enabled: uses same denoise and steps each iteration; Scaling reduces steps and denoise each iteration, ending at half of start values."),
 
 }))
 

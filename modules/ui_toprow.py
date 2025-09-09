@@ -22,8 +22,7 @@ class Toprow:
     submit = None
 
     paste = None
-    clear_prompt_button = None
-    apply_styles = None
+    # clear_prompt_button = None
 
     if not shared.opts.disable_token_counters:
         token_counter = None
@@ -44,10 +43,8 @@ class Toprow:
         self.create_prompts()
 
         with gr.Row(elem_classes=["toprow-compact-stylerow"]):
-            with gr.Column(elem_classes=["toprow-compact-tools"]):
-                self.create_tools_row()
-            with gr.Column():
-                self.create_styles_ui()
+            self.create_tools_row()
+            self.create_styles_ui()
 
     def create_prompts(self):
         with gr.Column(elem_id=f"{self.id_part}_prompt_container", elem_classes=["prompt-container-compact"], scale=6):
@@ -86,32 +83,37 @@ class Toprow:
             self.interrupting.click(fn=interrupt_function)
 
     def create_tools_row(self):
-        with gr.Row(elem_id=f"{self.id_part}_tools"):
-            paste_symbol = '\u2199\ufe0f'  # ↙
-            clear_prompt_symbol = '\U0001f5d1\ufe0f'  # 🗑️
+        paste_symbol = '\u2199\ufe0f'  # ↙
+        # clear_prompt_symbol = '\U0001f5d1\ufe0f'  # 🗑️
 
-            self.paste = ToolButton(value=paste_symbol, elem_id="paste", tooltip="Read generation parameters from prompt or last generation if prompt is empty into user interface.")
-            self.clear_prompt_button = ToolButton(value=clear_prompt_symbol, elem_id=f"{self.id_part}_clear_prompt", tooltip="Clear prompt")
-            self.apply_styles = ToolButton(value=ui_prompt_styles.styles_materialize_symbol, elem_id=f"{self.id_part}_style_apply", tooltip="Apply all selected styles to prompts. Strips comments, if enabled.")
+        self.paste = ToolButton(value=paste_symbol, elem_id="paste", tooltip="Read generation parameters from prompt or last generation if prompt is empty into user interface.")
+        # self.clear_prompt_button = ToolButton(value=clear_prompt_symbol, elem_id=f"{self.id_part}_clear_prompt", tooltip="Clear prompt")
 
-            if self.id_part == "img2img":
-                self.button_interrogate = ToolButton('📎', tooltip='Interrogate CLIP - use CLIP neural network to create a text describing the image, and put it into the prompt field', elem_id="interrogate")
-                self.button_deepbooru = ToolButton('📦', tooltip='Interrogate DeepBooru - use DeepBooru neural network to create a text describing the image, and put it into the prompt field', elem_id="deepbooru")
+        if self.id_part == "img2img":
+            self.button_interrogate = ToolButton('📎', tooltip='Interrogate CLIP - use CLIP neural network to create a text describing the image, and put it into the prompt field', elem_id="interrogate")
+            self.button_deepbooru = ToolButton('📦', tooltip='Interrogate DeepBooru - use DeepBooru neural network to create a text describing the image, and put it into the prompt field', elem_id="deepbooru")
 
-            if not shared.opts.disable_token_counters:
-                self.token_counter = gr.HTML(value="<span>0/75</span>", elem_id=f"{self.id_part}_token_counter", elem_classes=["token-counter"])
-                self.token_button = gr.Button(visible=False, elem_id=f"{self.id_part}_token_button")
-                self.negative_token_counter = gr.HTML(value="<span>0/75</span>", elem_id=f"{self.id_part}_negative_token_counter", elem_classes=["token-counter"])
-                self.negative_token_button = gr.Button(visible=False, elem_id=f"{self.id_part}_negative_token_button")
+        if not shared.opts.disable_token_counters:
+            self.token_counter = gr.HTML(value="<span>0/75</span>", elem_id=f"{self.id_part}_token_counter", elem_classes=["token-counter"])
+            self.token_button = gr.Button(visible=False, elem_id=f"{self.id_part}_token_button")
+            self.negative_token_counter = gr.HTML(value="<span>0/75</span>", elem_id=f"{self.id_part}_negative_token_counter", elem_classes=["token-counter"])
+            self.negative_token_button = gr.Button(visible=False, elem_id=f"{self.id_part}_negative_token_button")
 
-            self.clear_prompt_button.click(
-                fn=lambda *x: x,
-                _js="confirm_clear_prompt",
-                inputs=[self.prompt, self.negative_prompt],
-                outputs=[self.prompt, self.negative_prompt],
-                show_progress=False
-            )
+        # self.clear_prompt_button.click(
+            # fn=lambda *x: x,
+            # _js="confirm_clear_prompt",
+            # inputs=[self.prompt, self.negative_prompt],
+            # outputs=[self.prompt, self.negative_prompt],
+            # show_progress=False
+        # )
+
+        # self.clear_prompt_button.click(
+            # fn=lambda: ['',''],
+            # inputs=None,
+            # outputs=[self.prompt, self.negative_prompt],
+            # show_progress=False
+        # )
+
 
     def create_styles_ui(self):
         self.ui_styles = ui_prompt_styles.UiPromptStyles(self.id_part, self.prompt, self.negative_prompt)
-        self.ui_styles.setup_apply_button(self.apply_styles)

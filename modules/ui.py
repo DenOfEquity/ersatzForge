@@ -277,7 +277,7 @@ def create_ui():
                                     denoising_strength = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, label='Denoising strength', value=0.4, elem_id="txt2img_denoising_strength")
 
                                 with FormRow(elem_id="txt2img_hires_fix_row2", variant="compact"):
-                                    hr_scale = gr.Slider(minimum=1.0, maximum=4.0, step=0.05, label="Upscale by", value=2.0, elem_id="txt2img_hr_scale")
+                                    hr_scale = gr.Slider(minimum=1.0, maximum=4.0, step=0.05, label="Upscale by", value=1.25, elem_id="txt2img_hr_scale")
                                     hr_resize_x = gr.Slider(minimum=256, maximum=4096, step=8, label="Resize width to", value=0, elem_id="txt2img_hr_resize_x")
                                     hr_resize_y = gr.Slider(minimum=256, maximum=4096, step=8, label="Resize height to", value=0, elem_id="txt2img_hr_resize_y")
 
@@ -373,13 +373,8 @@ def create_ui():
                 show_progress='hidden',
             )
 
-            toprow.prompt.submit(**txt2img_args).success(fn=ui_common.select_gallery_0, js="selected_gallery_index", inputs=[dummy_component_number], outputs=[output_panel.gallery]).success(fn=lambda: None, js='setup_gallery_lightbox')
-            toprow.submit.click(**txt2img_args).success(fn=ui_common.select_gallery_0, js="selected_gallery_index", inputs=[dummy_component_number], outputs=[output_panel.gallery]).success(fn=lambda: None, js='setup_gallery_lightbox')
-
-            def select_gallery_image(index):
-                if getattr(shared.opts, 'hires_button_gallery_insert', False):
-                    index += 1
-                return gr.update(selected_index=index)
+            toprow.prompt.submit(**txt2img_args)
+            toprow.submit.click(**txt2img_args)
 
             txt2img_upscale_inputs = txt2img_inputs[0:1] + [output_panel.gallery, dummy_component_number, output_panel.generation_info] + txt2img_inputs[1:]
             output_panel.button_upscale.click(
@@ -388,7 +383,7 @@ def create_ui():
                 inputs=txt2img_upscale_inputs,
                 outputs=txt2img_outputs,
                 show_progress='hidden',
-            ).success(fn=select_gallery_image, js="selected_gallery_index", inputs=[dummy_component_number], outputs=[output_panel.gallery]).success(fn=lambda: None, js='setup_gallery_lightbox')
+            )
 
             txt2img_paste_fields = [
                 PasteField(toprow.prompt, "Prompt", api="prompt"),

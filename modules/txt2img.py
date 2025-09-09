@@ -72,9 +72,7 @@ def txt2img_upscale_function(id_task: str, request: gr.Request, gallery, gallery
         return gallery, generation_info, 'Unable to upscale grid or control images.', ''
 
     p = txt2img_create_processing(id_task, request, *args, force_enable_hr=True)
-    iterations = p.n_iter
     p.batch_size = 1
-    p.n_iter = 1
     # txt2img_upscale attribute that signifies this is called by txt2img_upscale
     p.txt2img_upscale = True
     p.is_hr_pass = True # needed for controlnet - needs test
@@ -96,38 +94,39 @@ def txt2img_upscale_function(id_task: str, request: gr.Request, gallery, gallery
     p.override_settings['samples_save'] = False
     p.override_settings['multiple_tqdm'] = False
 
-    # start_denoise = p.denoising_strength
-    # final_denoise = 0.5 * p.denoising_strength
-    # start_steps = p.hr_second_pass_steps
-    for iteration in range(iterations):
-        with closing(p):
-            if iteration == iterations-1:
-                del p.override_settings['samples_save']
-                
-            processed = modules.scripts.scripts_txt2img.run(p, *p.script_args)
+    iterate = getattr(shared.opts, 'hires_button_iterate', "Disabled")
+    if "Enabled" in iterate:
+        iterations = p.n_iter
+        p.n_iter = 1
 
-            if processed is None:
+        start_denoise = p.denoising_strength
+        start_steps = p.hr_second_pass_steps or p.firstpass_steps
+        for iteration in range(iterations):
+            with closing(p):
+                if iteration == iterations-1:
+                    del p.override_settings['samples_save']
+                    
+                if processed := modules.scripts.scripts_txt2img.run(p, *p.script_args) is None:
+                    processed = processing.process_images(p)
+
+            if iteration != iterations-1:
+                p.firstpass_image = processed.images[0]
+                p.width = p.firstpass_image.size[0]
+                p.height = p.firstpass_image.size[1]
+                nextIter = (iteration + 1) / (iterations - 1)
+
+                if "Scaling" in iterate:
+                    p.denoising_strength = start_denoise * (1.0 - 0.5*nextIter)
+                    p.hr_second_pass_steps = int(max(1, 0.5 + start_steps * (1.0 - 0.5*nextIter)))
+                # print ("QUICKBUTTON: ", p.width, p.height, p.denoising_strength, p.hr_second_pass_steps)
+    else:
+        p.n_iter = 1
+
+        with closing(p):
+            if processed := modules.scripts.scripts_txt2img.run(p, *p.script_args) is None:
                 processed = processing.process_images(p)
 
-        if iteration != iterations-1:
-            p.firstpass_image = processed.images[0]
-            p.width = p.firstpass_image.size[0]
-            p.height = p.firstpass_image.size[1]
-            nextIter = (iteration + 1) / (iterations - 1)
-            # p.denoising_strength = final_denoise * nextIter + start_denoise * (1.0 - nextIter)
-            # p.hr_second_pass_steps = int(0.5 + start_steps * (p.denoising_strength / start_denoise))
-            # print ("QUICKBUTTON: ", p.width, p.height, p.denoising_strength, p.hr_second_pass_steps)
-
-        shared.total_tqdm.clear()
-
-
-    # with closing(p):
-        # processed = modules.scripts.scripts_txt2img.run(p, *p.script_args)
-
-        # if processed is None:
-            # processed = processing.process_images(p)
-
-    # shared.total_tqdm.clear()
+    shared.total_tqdm.clear()
 
     insert = getattr(shared.opts, 'hires_button_gallery_insert', False)
     new_gallery = []
@@ -138,14 +137,13 @@ def txt2img_upscale_function(id_task: str, request: gr.Request, gallery, gallery
         if i == gallery_index:
             new_gallery.extend(processed.images)
 
-    new_index = gallery_index
     if insert:
-        new_index += 1
-        geninfo["infotexts"].insert(new_index, processed.info)
+        gallery_index += 1
+        geninfo["infotexts"].insert(gallery_index, processed.info)
     else:
         geninfo["infotexts"][gallery_index] = processed.info
 
-    return new_gallery, json.dumps(geninfo), plaintext_to_html(processed.info), plaintext_to_html(processed.comments, classname="comments")
+    return gr.update(value=new_gallery, selected_index=gallery_index), json.dumps(geninfo), plaintext_to_html(processed.info), plaintext_to_html(processed.comments, classname="comments")
 
 
 def txt2img_function(id_task: str, request: gr.Request, *args):
