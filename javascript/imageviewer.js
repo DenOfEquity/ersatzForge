@@ -136,22 +136,6 @@ function setup_gallery_lightbox() {
     if (fullImg_preview != null) {
         fullImg_preview.forEach(setupImageForLightbox);
     }
-	// and update lightbox to new image(s)
-    let currentButton = selected_gallery_button();
-	if (currentButton?.children?.length > 0) {
-		lightBoxImage.src = currentButton.children[0].src;
-		if (lightBoxImage.style.display === 'none') {
-			lightBoxModal.style.setProperty('background-image', `url(${lightBoxImage.src})`);
-		}
-	}
-	
-	return selected_gallery_index();
-}
-
-function setup_gallery_lightbox_and_get_index(x, y, z) {
-	setup_gallery_lightbox()
-
-	return [x, y, setup_gallery_lightbox()];
 }
 
 let lightBoxModal = undefined;
@@ -218,7 +202,5 @@ document.addEventListener("DOMContentLoaded", function() {
     modalNext.addEventListener('click', modalNextImage, true);
     lightBoxModal.appendChild(modalNext);
 
-    // document.body.appendChild(modal);
     gradioApp().appendChild(lightBoxModal);
-
 });
