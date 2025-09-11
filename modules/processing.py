@@ -1,10 +1,8 @@
 from __future__ import annotations
 import json
-import logging
 import math
 import os, gc
 import sys
-import hashlib
 from dataclasses import dataclass, field
 
 import torch
@@ -15,22 +13,17 @@ import cv2
 from skimage import exposure
 from typing import Any
 
-from modules import devices, prompt_parser, masking, sd_samplers, infotext_utils, extra_networks, sd_vae_approx, scripts, sd_samplers_common, errors, rng, profiling
-from modules.rng import slerp, get_noise_source_type  # noqa: F401
+from modules import devices, prompt_parser, masking, sd_samplers, infotext_utils, extra_networks, sd_vae_approx, scripts, sd_models, sd_samplers_common, errors, rng, profiling
 from modules.sd_samplers_common import images_tensor_to_samples, decode_first_stage, approximation_indexes
-from modules.shared import opts, cmd_opts, state
+from modules.shared import opts, state
 from modules.sysinfo import set_config
 import modules.shared as shared
 import modules.paths as paths
 import modules.face_restoration
 import modules.images as images
-import modules.styles
-import modules.sd_models as sd_models
-import modules.sd_vae as sd_vae
 
 from einops import repeat
 from blendmodes.blend import blendLayers, BlendType
-from modules.sd_models import apply_token_merging, forge_model_reload
 from modules_forge.utils import apply_circular_forge
 from modules_forge import main_entry
 from backend import memory_management
@@ -44,13 +37,11 @@ opt_f = 8
 
 
 def setup_color_correction(image):
-    logging.info("Calibrating color correction.")
     correction_target = cv2.cvtColor(np.asarray(image.copy()), cv2.COLOR_RGB2LAB)
     return correction_target
 
 
 def apply_color_correction(correction, original_image):
-    logging.info("Applying color correction.")
     image = Image.fromarray(cv2.cvtColor(exposure.match_histograms(
         cv2.cvtColor(
             np.asarray(original_image),
@@ -342,7 +333,7 @@ class StableDiffusionProcessing:
         conditioning_image = torch.lerp(
             source_image,
             source_image * (1.0 - conditioning_mask),
-            getattr(self, "inpainting_mask_weight", shared.opts.inpainting_mask_weight)
+            getattr(self, "inpainting_mask_weight", opts.inpainting_mask_weight)
         )
 
         # Encode the new masked image using first stage of network.
@@ -450,13 +441,13 @@ class StableDiffusionProcessing:
         caches is a list with items described above.
         """
 
-        if shared.opts.use_old_scheduling:
+        if opts.use_old_scheduling:
             old_schedules = prompt_parser.get_learned_conditioning_prompt_schedules(required_prompts, steps, hires_steps, False)
             new_schedules = prompt_parser.get_learned_conditioning_prompt_schedules(required_prompts, steps, hires_steps, True)
             if old_schedules != new_schedules:
                 self.extra_generation_params["Old prompt editing timelines"] = True
 
-        cached_params = self.cached_params(required_prompts, steps, extra_network_data, hires_steps, shared.opts.use_old_scheduling)
+        cached_params = self.cached_params(required_prompts, steps, extra_network_data, hires_steps, opts.use_old_scheduling)
 
         for cache in caches:
             if cache[0] is not None and cached_params == cache[0]:
@@ -469,7 +460,7 @@ class StableDiffusionProcessing:
         with devices.autocast():
             shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
 
-            cache[1] = function(shared.sd_model, required_prompts, steps, hires_steps, shared.opts.use_old_scheduling)
+            cache[1] = function(shared.sd_model, required_prompts, steps, hires_steps, opts.use_old_scheduling)
 
             import backend.text_processing.emphasis
 
@@ -722,28 +713,28 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
     }
 
     if p.sampler_name == 'DEIS':
-        generation_params['DEIS variant'] = shared.opts.deis_mode
-        generation_params['DEIS order'] = shared.opts.deis_order
+        generation_params['DEIS variant'] = opts.deis_mode
+        generation_params['DEIS order'] = opts.deis_order
     elif p.sampler_name == 'DPM++ 2M SDE':
-        generation_params['2M SDE variant'] = shared.opts.dpmpp_2m_sde_mode
+        generation_params['2M SDE variant'] = opts.dpmpp_2m_sde_mode
     elif p.sampler_name == 'UniPC':
-        generation_params['UniPC variant'] = shared.opts.uni_pc_variant
-        generation_params['UniPC order'] = shared.opts.uni_pc_order
-        generation_params['UniPC skip type'] = shared.opts.uni_pc_skip_type
-        generation_params['UniPC lower order final'] = shared.opts.uni_pc_lower_order_final
+        generation_params['UniPC variant'] = opts.uni_pc_variant
+        generation_params['UniPC order'] = opts.uni_pc_order
+        generation_params['UniPC skip type'] = opts.uni_pc_skip_type
+        generation_params['UniPC lower order final'] = opts.uni_pc_lower_order_final
     elif p.sampler_name == 'Adaptive-ODE':
-        generation_params['Adaptive-ODE solver'] = shared.opts.adaptive_ode_solver
-        generation_params['Adaptive-ODE rtol'] = shared.opts.adaptive_ode_rtol
-        generation_params['Adaptive-ODE atol'] = shared.opts.adaptive_ode_atol
+        generation_params['Adaptive-ODE solver'] = opts.adaptive_ode_solver
+        generation_params['Adaptive-ODE rtol'] = opts.adaptive_ode_rtol
+        generation_params['Adaptive-ODE atol'] = opts.adaptive_ode_atol
     elif p.sampler_name == 'Fixed-ODE':
-        generation_params['Fixed-ODE solver'] = shared.opts.fixed_ode_solver
+        generation_params['Fixed-ODE solver'] = opts.fixed_ode_solver
 
     # if HiRes fix was used, p.firstpass_use_distilled_cfg_scale is appropriately set, otherwise it doesn't exist
     firstpass_use_distilled_cfg_scale = getattr(p,'firstpass_use_distilled_cfg_scale', p.sd_model.use_distilled_cfg_scale)
     if firstpass_use_distilled_cfg_scale:
         generation_params['Distilled CFG scale'] = p.distilled_cfg_scale
 
-    noise_source_type = get_noise_source_type()
+    noise_source_type = rng.get_noise_source_type()
 
     generation_params.update({
         "Image CFG scale": getattr(p, 'image_cfg_scale', None),
@@ -756,7 +747,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "Variation seed strength": (None if p.subseed_strength == 0 else p.subseed_strength),
         "Seed resize from": (None if p.seed_resize_from_w <= 0 or p.seed_resize_from_h <= 0 else f"{p.seed_resize_from_w}x{p.seed_resize_from_h}"),
         "Denoising strength": p.extra_generation_params.get("Denoising strength"),
-        "Conditional mask weight": getattr(p, "inpainting_mask_weight", shared.opts.inpainting_mask_weight) if p.is_using_inpainting_conditioning else None,
+        "Conditional mask weight": getattr(p, "inpainting_mask_weight", opts.inpainting_mask_weight) if p.is_using_inpainting_conditioning else None,
         "Clip skip": None if clip_skip <= 1 else clip_skip,
         "ENSD": opts.eta_noise_seed_delta if uses_ensd else None,
         "Token merging ratio": None if token_merging_ratio == 0 else token_merging_ratio,
@@ -769,12 +760,11 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "ELLA": opts.use_ELLA if ("ELLA" in opts.use_ELLA and shared.sd_model.is_sd1) else None,
     })
 
-    if shared.opts.forge_unet_storage_dtype != 'Automatic':
-        generation_params['Diffusion in Low Bits'] = shared.opts.forge_unet_storage_dtype
+    if opts.forge_unet_storage_dtype != 'Automatic':
+        generation_params['Diffusion in Low Bits'] = opts.forge_unet_storage_dtype
 
-    if isinstance(shared.opts.forge_additional_modules, list) and len(shared.opts.forge_additional_modules) > 0:
-        for i, m in enumerate(shared.opts.forge_additional_modules):
-            generation_params[f'Module {i+1}'] = os.path.splitext(os.path.basename(m))[0]
+    for i, m in enumerate(opts.forge_additional_modules):
+        generation_params[f'Module {i+1}'] = os.path.splitext(os.path.basename(m))[0]
 
     if use_main_prompt:
         if "HiRes prompt" in generation_params and hasattr(p, "hr_main_prompt"):
@@ -809,7 +799,7 @@ def manage_model_and_prompt_cache(p: StableDiffusionProcessing):
     global need_global_unload
 
     p.sd_model = None # will be re-set by loader
-    p.sd_model, just_reloaded = forge_model_reload()
+    p.sd_model, just_reloaded = sd_models.forge_model_reload()
 
     # set up 'opt_f', not all models use 8x8 latent downscale
     # could be better in forge_model_reload(), but changing architecture in refiner or with latent upscale isn't supported anyway
@@ -926,7 +916,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             p.init(p.all_prompts, p.all_seeds, p.all_subseeds)
 
             # for OSX, loading the model during sampling changes the generated picture, so it is loaded here
-            if shared.opts.live_previews_enable and opts.show_progress_type == "Approx NN":
+            if opts.live_previews_enable and opts.show_progress_type == "Approx NN":
                 sd_vae_approx.model()
 
         if state.job_count == -1:
@@ -986,7 +976,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             # infotext could be modified by that callback
             # Example: a wildcard processed by process_batch sets an extra model
             # strength, which is saved as "Model Strength: 1.0" in the infotext
-            if n == 0 and not cmd_opts.no_prompt_history:
+            if n == 0 and not shared.cmd_opts.no_prompt_history:
                 with open(os.path.join(paths.data_path, "params.txt"), "w", encoding="utf8") as file:
                     processed = Processed(p, [])
                     file.write(processed.infotext(p, 0))
@@ -1081,7 +1071,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
                 mask_for_overlay = getattr(p, "mask_for_overlay", None)
 
-                if not shared.opts.overlay_inpaint:
+                if not opts.overlay_inpaint:
                     overlay_image = None
                 elif getattr(p, "overlay_images", None) is not None and i < len(p.overlay_images):
                     overlay_image = p.overlay_images[i]
@@ -1369,7 +1359,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             x = self.rng.next()
 
             self.sd_model.forge_objects = self.sd_model.forge_objects_after_applying_lora.shallow_copy()
-            apply_token_merging(self.sd_model, self.get_token_merging_ratio())
+            sd_models.apply_token_merging(self.sd_model, self.get_token_merging_ratio())
 
             if self.scripts is not None:
                 self.scripts.process_before_every_sampling(self,
@@ -1396,8 +1386,8 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 decoded_samples = None
 
         with sd_models.SkipWritingToConfig():
-            fp_checkpoint = getattr(shared.opts, 'sd_model_checkpoint')
-            fp_additional_modules = getattr(shared.opts, 'forge_additional_modules')
+            fp_checkpoint = getattr(opts, 'sd_model_checkpoint')
+            fp_additional_modules = getattr(opts, 'forge_additional_modules')
 
             reload = False
             if self.hr_additional_modules is not None and 'Use same choices' not in self.hr_additional_modules:
@@ -1474,7 +1464,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
             # Avoid making the inpainting conditioning unless necessary as
             # this does need some extra compute to decode / encode the image again.
-            if getattr(self, "inpainting_mask_weight", shared.opts.inpainting_mask_weight) < 1.0:
+            if getattr(self, "inpainting_mask_weight", opts.inpainting_mask_weight) < 1.0:
                 image_conditioning = self.img2img_image_conditioning(decode_first_stage(self.sd_model, samples), samples)
             else:
                 image_conditioning = self.txt2img_image_conditioning(samples)
@@ -1521,7 +1511,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             self.calculate_hr_conds()
 
         self.sd_model.forge_objects = self.sd_model.forge_objects_after_applying_lora.shallow_copy()
-        apply_token_merging(self.sd_model, self.get_token_merging_ratio(for_hr=True))
+        sd_models.apply_token_merging(self.sd_model, self.get_token_merging_ratio(for_hr=True))
 
         if self.scripts is not None:
             self.scripts.before_hr(self)
@@ -1615,7 +1605,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         self.hr_c = None
 
         if self.enable_hr and self.hr_checkpoint_info is None:
-            if shared.opts.hires_fix_use_firstpass_conds:
+            if opts.hires_fix_use_firstpass_conds:
                 self.calculate_hr_conds()
             else:
                 with devices.autocast():
@@ -1743,9 +1733,9 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
                     image_mask = None
                     self.mask_for_overlay = None
                     self.inpaint_full_res = False
-                    massage = 'Unable to perform "Inpaint Only mask" because mask is blank, switch to img2img mode.'
-                    self.sd_model.comments.append(massage)
-                    logging.info(massage)
+                    message = 'Unable to perform "Inpaint Only mask" because mask is blank, switch to img2img mode.'
+                    self.sd_model.comments.append(message)
+                    print(message)
             else:
                 image_mask = images.resize_image(self.resize_mode, image_mask, self.width, self.height)
                 np_mask = np.array(image_mask)
@@ -1862,7 +1852,7 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
             x *= self.initial_noise_multiplier
 
         self.sd_model.forge_objects = self.sd_model.forge_objects_after_applying_lora.shallow_copy()
-        apply_token_merging(self.sd_model, self.get_token_merging_ratio())
+        sd_models.apply_token_merging(self.sd_model, self.get_token_merging_ratio())
 
         if self.scripts is not None:
             self.scripts.process_before_every_sampling(self,
