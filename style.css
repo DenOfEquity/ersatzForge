@@ -85,10 +85,6 @@ div.compact{
     background-color: var(--neutral-900);
 }
 
-.gradio-dropdown div.wrap.wrap.wrap.wrap{
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-}
-
 .gradio-dropdown:not(.multiselect) .wrap-inner.wrap-inner.wrap-inner{
     flex-wrap: unset;
 }
@@ -176,9 +172,7 @@ div.gradio-container, .block.gradio-textbox, div.gradio-group, div.gradio-dropdo
     background: var(--button-secondary-background-fill);
     color: var(--button-secondary-text-color);
 }
-.gradio-button.secondary-down, .gradio-button.secondary-down:hover{
-    box-shadow: 1px 1px 1px rgba(0,0,0,0.25) inset, 0px 0px 3px rgba(0,0,0,0.15) inset;
-}
+
 .gradio-button.secondary-down:hover{
     background: var(--button-secondary-background-fill-hover);
     color: var(--button-secondary-text-color-hover);
@@ -196,7 +190,6 @@ button.custom-button{
     justify-content: center;
     align-items: center;
     transition: var(--button-transition);
-    box-shadow: var(--button-shadow);
     text-align: center;
 }
 
@@ -231,13 +224,11 @@ input[type="checkbox"].input-accordion-checkbox{
 
 .block.token-counter span{
     background: var(--input-background-fill) !important;
-    box-shadow: 0 0 0.0 0.3em rgba(192,192,192,0.15), inset 0 0 0.6em rgba(192,192,192,0.075);
     border: 2px solid rgba(192,192,192,0.4) !important;
     border-radius: 0.4em;
 }
 
 .block.token-counter.error span{
-    box-shadow: 0 0 0.0 0.3em rgba(255,0,0,0.15), inset 0 0 0.6em rgba(255,0,0,0.075);
     border: 2px solid rgba(255,0,0,0.4) !important;
 }
 
@@ -716,7 +707,6 @@ table.popup-table .link{
 }
 .modalControls span{
     color: white;
-    text-shadow: 0px 0px 0.25em black;
     font-size: 35px;
     font-weight: bold;
     cursor: pointer;
@@ -805,7 +795,6 @@ table.popup-table .link{
     padding:0px 0;
     border:2px solid var(--primary-800);
     border-radius:8px;
-    box-shadow:1px 1px 2px var(--primary-500);
     width: 200px;
 }
 
@@ -1012,7 +1001,6 @@ footer {
 
 .extra-network-pane .card-button {
     width: 1.5em;
-    text-shadow: 2px 2px 3px black;
     color: white;
     padding: 0.25em 0.1em;
 }
@@ -1041,7 +1029,6 @@ footer {
     margin: 0.5rem;
     width: 16rem;
     height: 24rem;
-    box-shadow: 0 0 5px rgba(128, 128, 128, 0.5);
     border-radius: 0.2rem;
     position: relative;
 
@@ -1051,10 +1038,6 @@ footer {
     cursor: pointer;
 
     background-image: url('./file=html/card-no-preview.png')
-}
-
-.extra-network-pane .card:hover{
-    box-shadow: 0 0 2px 0.3em rgba(0, 128, 255, 0.35);
 }
 
 .extra-network-pane .card .actions .additional{
@@ -1068,8 +1051,6 @@ footer {
     right: 0;
     padding: 0.5em;
     background: rgba(0,0,0,0.5);
-    box-shadow: 0 0 0.25em 0.25em rgba(0,0,0,0.5);
-    text-shadow: 0 0 0.2em black;
 }
 
 .extra-network-pane .card .actions *{
@@ -1324,8 +1305,6 @@ body.resizing .resize-handle {
 .extra-network-tree .tree-list--subgroup {
     margin: 0 !important;
     padding: 0 !important;
-    box-shadow: 0.5rem 0 0 var(--body-background-fill) inset,
-                0.7rem 0 0 var(--neutral-800) inset;
 }
 
 /* Set indentation for each depth of tree. */
