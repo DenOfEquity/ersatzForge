@@ -1,5 +1,4 @@
 import datetime
-import random
 
 import gradio as gr
 import re
@@ -133,31 +132,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
             user_metadata.get('activation text', ''),
             float(user_metadata.get('preferred weight', 1.0)),
             user_metadata.get('negative text', ''),
-            gr.update(visible=True if tags else False),
-            gr.update(value=self.generate_random_prompt_from_tags(tags), visible=True if tags else False),
         ]
-
-    def generate_random_prompt(self, name):
-        item = self.page.items.get(name, {})
-        metadata = item.get("metadata") or {}
-        tags = build_tags(metadata)
-
-        return self.generate_random_prompt_from_tags(tags)
-
-    def generate_random_prompt_from_tags(self, tags):
-        max_count = None
-        res = []
-        for tag, count in tags:
-            if not max_count:
-                max_count = count
-
-            v = random.random() * max_count
-            if count > v:
-                for x in "({[]})":
-                    tag = tag.replace(x, '\\' + x)
-                res.append(tag)
-
-        return ", ".join(sorted(res))
 
     def create_extra_default_items_in_left_column(self):
         self.select_sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Flux', 'Unknown'], value='Unknown', label='Base model', interactive=True)
@@ -165,20 +140,11 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
     def create_editor(self):
         self.create_default_editor_elems()
 
-        self.taginfo = gr.HighlightedText(label="Training dataset tags")
-        self.edit_activation_text = gr.Text(label='Activation text', info="Will be added to prompt along with Lora")
-        self.slider_preferred_weight = gr.Slider(label='Preferred weight', info="Set to 0 to disable", minimum=0.0, maximum=2.0, value=1.0, step=0.01)
-        self.edit_negative_text = gr.Text(label='Negative prompt', info="Will be added to negative prompts")
-        with gr.Row() as row_random_prompt:
-            with gr.Column(scale=8):
-                random_prompt = gr.Textbox(label='Random prompt', lines=4, max_lines=4, interactive=False)
-
-            with gr.Column(scale=1, min_width=120):
-                generate_random_prompt = gr.Button('Generate', size="lg", scale=1)
-
+        self.taginfo = gr.HighlightedText(show_label=False)
+        self.edit_activation_text = gr.Text(label='Activation text', info='Will be added to prompt along with Lora', value='')
+        self.edit_negative_text = gr.Text(label='Negative prompt', info='Will be added to negative prompts', value='')
+        self.slider_preferred_weight = gr.Slider(label='Preferred weight', info='Set to 0 to disable', minimum=0.0, maximum=2.0, value=1.0, step=0.01)
         self.edit_notes = gr.TextArea(label='Notes', lines=4)
-
-        generate_random_prompt.click(fn=self.generate_random_prompt, inputs=[self.edit_name_input], outputs=[random_prompt], show_progress=False)
 
         def select_tag(activation_text, evt: gr.SelectData):
             tag = evt.value[0]
@@ -188,7 +154,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
                 words = [x for x in words if x != tag and x.strip()]
                 return ", ".join(words)
 
-            return activation_text + ", " + tag if activation_text else tag
+            return activation_text + ", " + tag
 
         self.taginfo.select(fn=select_tag, inputs=[self.edit_activation_text], outputs=[self.edit_activation_text], show_progress=False)
 
@@ -205,8 +171,6 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
             self.edit_activation_text,
             self.slider_preferred_weight,
             self.edit_negative_text,
-            row_random_prompt,
-            random_prompt,
         ]
 
         self.button_edit\
