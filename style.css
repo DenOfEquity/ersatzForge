@@ -32,6 +32,10 @@ div.form{
     gap: 0.5em;
 }
 
+.icon-wrap {
+    right: var(--size-1) !important;
+}
+
 .block.gradio-dropdown,
 .block.gradio-slider,
 .block.gradio-checkbox,
@@ -1565,4 +1569,5 @@ body.resizing .resize-handle {
 
 .forge_space_btn{
     min-width: 0 !important;
+
 }
