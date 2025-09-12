@@ -14,10 +14,10 @@ ui_forge_preset: gr.Dropdown = None
 
 ui_checkpoint: gr.Dropdown = None
 ui_vae: gr.Dropdown = None
-ui_clip_skip: gr.Slider = None
+ui_clip_skip: gr.Number = None
 
 ui_forge_unet_storage_dtype_options: gr.Dropdown = None
-ui_forge_inference_memory: gr.Slider = None
+ui_forge_inference_memory: gr.Number = None
 ui_forge_swap: gr.Dropdown = None
 
 
@@ -122,7 +122,7 @@ def make_checkpoint_manager_ui():
             shared.opts.set('sd_model_checkpoint', next(iter(sd_models.checkpoints_list.values())).name)
 
     ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value=lambda: shared.opts.forge_preset, 
-                                  choices=['sd', 'xl', 'sd3', 'flux', 'all'], scale=0)
+                                  choices=['sd', 'xl', 'sd3', 'flux', 'all'], scale=0, filterable=False)
 
     ui_checkpoint = gr.Dropdown(
         value=lambda: shared.opts.sd_model_checkpoint,
@@ -135,6 +135,7 @@ def make_checkpoint_manager_ui():
         value=lambda: [os.path.basename(x) for x in shared.opts.forge_additional_modules],
         multiselect=True,
         label="Additional modules",
+        elem_classes=['module_selection'],
         choices=list(module_list.keys())
     )
 
@@ -159,7 +160,7 @@ def make_checkpoint_manager_ui():
 
 
     ui_forge_swap = gr.Dropdown(label="Swap Location + Method", value=lambda: shared.opts.forge_swap, choices=["CPU + Async", "CPU + Queue", "Shared + Async", "Shared + Queue"], filterable=False)
-    ui_forge_inference_memory = gr.Slider(label="GPU Weights (MB)", value=lambda: total_vram - shared.opts.forge_inference_memory, minimum=0, maximum=int(memory_management.total_vram), step=1)
+    ui_forge_inference_memory = gr.Number(label="GPU Weights (MB)", value=lambda: total_vram - shared.opts.forge_inference_memory, minimum=0, maximum=int(memory_management.total_vram), step=1, scale=0)
 
     mem_comps = [ui_forge_inference_memory, ui_forge_swap]
 
@@ -168,7 +169,7 @@ def make_checkpoint_manager_ui():
 
     Context.root_block.load(ui_refresh_memory_management_settings, inputs=mem_comps, queue=False, show_progress=False)
 
-    ui_clip_skip = gr.Slider(label="Clip skip", value=lambda: shared.opts.CLIP_stop_at_last_layers, minimum=1, maximum=12, step=1)
+    ui_clip_skip = gr.Number(label="Clip skip", value=lambda: shared.opts.CLIP_stop_at_last_layers, minimum=1, maximum=12, step=1, scale=0)
     bind_to_opts(ui_clip_skip, 'CLIP_stop_at_last_layers', save=True)
 
     ui_checkpoint.change(checkpoint_change_ui, inputs=[ui_checkpoint, ui_vae], outputs=[ui_vae], show_progress=False)

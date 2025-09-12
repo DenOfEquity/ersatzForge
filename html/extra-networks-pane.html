@@ -1,5 +1,5 @@
 <div id='{tabname}_{extra_networks_tabname}_pane' class='extra-network-pane {tree_view_div_default_display_class}'>
-    <div class="extra-network-control" id="{tabname}_{extra_networks_tabname}_controls" style="display:none" >
+    <div class="extra-network-control" id="{tabname}_{extra_networks_tabname}_controls" style="display:none">
         <div class="extra-network-control--search">
             <input
                 id="{tabname}_{extra_networks_tabname}_extra_search"
@@ -17,6 +17,7 @@
             data-sortkey="date_modified"
             title="Sort by date modified"
             onclick="extraNetworksControlSortOnClick(event, '{tabname}', '{extra_networks_tabname}');"
+			
         >
             Date
         </div>
@@ -42,7 +43,7 @@
         <small> </small>
         <div
             id="{tabname}_{extra_networks_tabname}_extra_sort_dir"
-            class="extra-network-control--sort-dir"
+            class="extra-network-control--sort"
             data-sortdir="{data_sortdir}"
             title="Sort ascending"
             onclick="extraNetworksControlSortDirOnClick(event, '{tabname}', '{extra_networks_tabname}');"
@@ -50,11 +51,11 @@
             A-Z
         </div>
 
-
         <small> </small>
+
         <div
             id="{tabname}_{extra_networks_tabname}_extra_tree_view"
-            class="extra-network-control--tree-view {tree_view_btn_extra_class}"
+            class="extra-network-control--sort {tree_view_btn_extra_class}"
             title="Enable Tree View"
             onclick="extraNetworksControlTreeViewOnClick(event, '{tabname}', '{extra_networks_tabname}');"
         >
@@ -62,7 +63,7 @@
         </div>
         <div
             id="{tabname}_{extra_networks_tabname}_extra_refresh"
-            class="extra-network-control--refresh"
+            class="extra-network-control--sort"
             title="Refresh page"
             onclick="extraNetworksControlRefreshOnClick(event, '{tabname}', '{extra_networks_tabname}');"
         >

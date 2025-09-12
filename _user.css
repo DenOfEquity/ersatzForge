@@ -1,0 +1,21 @@
+* {
+  text-shadow: none !important;
+  border-radius: 4px !important;
+}
+
+.input-accordion:has(.input-accordion-checkbox:checked) {
+  border: 1px solid #554499 !important;
+}
+
+.prompt {
+  font-family: monospace;
+}
+
+.tabitem {
+  border: 0px !important;
+  padding: 4px 0 0 0 !important;
+}
+
+#quicksettings .gradio-number {
+  min-width: 80px !important;
+}

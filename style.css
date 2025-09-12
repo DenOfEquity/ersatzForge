@@ -414,9 +414,10 @@ div.toprow-compact-tools{
     max-width: fit-content;
 }
 
+
 /* settings */
 #quicksettings {
-    --checkbox-label-padding: 6px 6px;
+    --checkbox-label-padding: 4px 0px 4px 2px;
     align-items: end;
 }
 
@@ -430,28 +431,38 @@ div.toprow-compact-tools{
 }
 
 #quicksettings > div.model_selection{
-    min-width: 20em !important;
+    min-width: 18em !important;
 }
-
-#quicksettings > div.model_selection input{
-    margin-left: 2% !important; /* override the margin set for subdued */
-    width: 100%;
-}
-
-#quicksettings .icon-wrap {
-    margin-right: -4% !important;
-    background-color: var(--background-fill-secondary);
-}
-
 #quicksettings > div.model_selection li{
     overflow-x: visible !important;
     width: 100% !important; /* Set size to max element */
 }
+#quicksettings > div.model_selection input{
+    margin-left: 2% !important;
+    width: 100%;
+}
 
-#quicksettings .subdued{
-    display: block;
-    margin-left: auto;
-    width: 30px;
+#quicksettings > div.module_selection{
+    min-width: 12em !important;
+}
+#quicksettings > div.module_selection li{
+    overflow-x: visible !important;
+    width: 100% !important; /* Set size to max element */
+}
+#quicksettings > div.module_selection input{
+    margin-left: 2% !important;
+    width: 100%;
+}
+
+#quicksettings div.module_selection .secondary-wrap {
+    width: 64px !important;
+}
+#quicksettings div.module_selection:placeholder-shown .secondary-wrap {
+    width: auto !important;
+}
+
+#quicksettings .gradio-slider span {
+    padding-right: 4px;
 }
 
 #settings{
@@ -983,14 +994,6 @@ footer {
     visibility: visible;
 }
 
-.extra-network-pane .card-button{
-    color: white;
-}
-
-.extra-network-pane .copy-path-button::before {
-    content: "⎘";
-}
-
 .extra-network-pane .metadata-button::before{
     content: "🛈";
 }
@@ -1040,9 +1043,6 @@ footer {
     background-image: url('./file=html/card-no-preview.png')
 }
 
-.extra-network-pane .card .actions .additional{
-    display: none;
-}
 
 .extra-network-pane .card .actions{
     position: absolute;
@@ -1051,15 +1051,12 @@ footer {
     right: 0;
     padding: 0.5em;
     background: rgba(0,0,0,0.5);
-}
-
-.extra-network-pane .card .actions *{
     color: white;
 }
 
 .extra-network-pane .card .actions .name{
-    font-size: 1.7em;
-    font-weight: bold;
+    font-size: 1.1em;
+    font-weight: 500;
     line-break: anywhere;
 }
 
@@ -1067,13 +1064,16 @@ footer {
     display: block;
     max-height: 3em;
     white-space: pre-wrap;
-    line-height: 1.1;
+    line-height: 1.0;
+    font-style: italic;
 }
-
 .extra-network-pane .card .actions .description:hover {
     max-height: none;
 }
 
+.extra-network-pane .card .actions .additional{
+    display: none;
+}
 .extra-network-pane .card .actions:hover .additional{
     display: block;
 }
@@ -1286,7 +1286,7 @@ body.resizing .resize-handle {
     user-select: none;
     background-color: transparent;
     border: none;
-    transition: background 33.333ms linear;
+/*    transition: background 33.333ms linear;*/
     grid-template-rows: min-content;
     grid-template-columns: minmax(0, auto) repeat(4, min-content);
     grid-gap: 0.1rem;
@@ -1358,7 +1358,7 @@ body.resizing .resize-handle {
     user-select: none;
     background-color: transparent;
     border: none;
-    transition: background 33.333ms linear;
+/*    transition: background 33.333ms linear;*/
     grid-template-rows: min-content;
     grid-template-areas: "leading-action leading-visual label trailing-visual trailing-action";
     grid-template-columns: min-content min-content minmax(0, auto) min-content min-content;
@@ -1376,8 +1376,6 @@ body.resizing .resize-handle {
 }
 
 .dark .extra-network-tree div.tree-list-content:hover {
-    -webkit-transition: all 0.05s ease-in-out;
-	transition: all 0.05s ease-in-out;
     background-color: var(--neutral-800);
 }
 
@@ -1390,8 +1388,6 @@ body.resizing .resize-handle {
 }
 
 .extra-network-tree div.tree-list-content:hover {
-    -webkit-transition: all 0.05s ease-in-out;
-	transition: all 0.05s ease-in-out;
     background-color: var(--neutral-200);
 }
 
@@ -1461,53 +1457,19 @@ body.resizing .resize-handle {
     background-color: var(--input-placeholder-color);
 }
 
-/* ==== SORT ICON ACTIONS ==== */
+/* ==== SORT OPTIONS, DIRECTION, TREE, REFRESH ==== */
 .extra-network-control .extra-network-control--sort {
-    padding: 0.25rem;
+    padding: 0.5rem;
     display: inline-flex;
     cursor: pointer;
     justify-self: center;
     align-self: center;
 }
-
-.extra-network-control .extra-network-control--sort .extra-network-control--sort-icon {
-    height: 1.5rem;
-    width: 1.5rem;
-    background-color: var(--input-placeholder-color);
+.dark .extra-network-control .extra-network-control--sort:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 0.25rem;
 }
 
-
-/* ==== SORT DIRECTION ICON ACTIONS ==== */
-.extra-network-control .extra-network-control--sort-dir {
-    padding: 0.25rem;
-    display: inline-flex;
-    cursor: pointer;
-    justify-self: center;
-    align-self: center;
-}
-
-.extra-network-control .extra-network-control--sort-dir .extra-network-control--sort-dir-icon {
-    height: 1.5rem;
-    width: 1.5rem;
-    background-color: var(--input-placeholder-color);
-}
-
-
-
-/* ==== TREE VIEW ICON ACTIONS ==== */
-.extra-network-control .extra-network-control--tree-view {
-    padding: 0.25rem;
-    display: inline-flex;
-    cursor: pointer;
-    justify-self: center;
-    align-self: center;
-}
-
-.extra-network-control .extra-network-control--tree-view .extra-network-control--tree-view-icon {
-    height: 1.5rem;
-    width: 1.5rem;
-    background-color: var(--input-placeholder-color);
-}
 
 .extra-network-control .extra-network-control--enabled {
     background-color: rgba(0, 0, 0, 0.1);
@@ -1518,32 +1480,7 @@ body.resizing .resize-handle {
     background-color: rgba(255, 255, 255, 0.15);
 }
 
-.extra-network-control .extra-network-control--enabled .extra-network-control--icon{
-    background-color: var(--button-secondary-text-color);
-}
 
-/* ==== REFRESH ICON ACTIONS ==== */
-.extra-network-control .extra-network-control--refresh {
-    padding: 0.25rem;
-    display: inline-flex;
-    cursor: pointer;
-    justify-self: center;
-    align-self: center;
-}
-
-.extra-network-control .extra-network-control--refresh .extra-network-control--refresh-icon {
-    height: 1.5rem;
-    width: 1.5rem;
-    content: "↻";
-    background-color: var(--input-placeholder-color);
-}
-
-.extra-network-control .extra-network-control--refresh-icon:active {
-    -ms-transform: rotate(180deg);
-    -webkit-transform: rotate(180deg);
-    transform: rotate(180deg);
-    transition: transform 0.2s;
-}
 
 /* ==== TREE GRID CONFIG ==== */
 
@@ -1582,22 +1519,17 @@ body.resizing .resize-handle {
 /* Icon for button when it is after label. */
 .extra-network-tree .tree-list-item-visual--trailing {
     grid-area: trailing-visual;
-    width: 1rem;
-    text-align: right;
 }
 
 /* Dropdown arrow for button. */
 .extra-network-tree .tree-list-item-action--leading {
     margin-right: 0.5rem;
     margin-left: 0.2rem;
+    grid-area: leading-action;
 }
 
 .extra-network-tree .tree-list-content-file .tree-list-item-action--leading {
     visibility: hidden;
-}
-
-.extra-network-tree .tree-list-item-action--leading {
-    grid-area: leading-action;
 }
 
 .extra-network-tree .tree-list-item-action--trailing {
@@ -1619,10 +1551,6 @@ body.resizing .resize-handle {
 
 .prompt textarea[disabled] {
     opacity: 0.25 !important;
-}
-
-#quicksettings .gradio-slider span {
-    padding-right: 5px;
 }
 
 .forge_space_label{
