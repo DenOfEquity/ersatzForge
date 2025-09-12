@@ -140,7 +140,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
     def create_editor(self):
         self.create_default_editor_elems()
 
-        self.taginfo = gr.HighlightedText(show_label=False)
+        self.taginfo = gr.HighlightedText(label='Training tags')
         self.edit_activation_text = gr.Text(label='Activation text', info='Will be added to prompt along with Lora', value='')
         self.edit_negative_text = gr.Text(label='Negative prompt', info='Will be added to negative prompts', value='')
         self.slider_preferred_weight = gr.Slider(label='Preferred weight', info='Set to 0 to disable', minimum=0.0, maximum=2.0, value=1.0, step=0.01)
@@ -148,6 +148,11 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
 
         def select_tag(activation_text, evt: gr.SelectData):
             tag = evt.value[0]
+
+            if activation_text == '':
+                return tag
+            if activation_text == tag:
+                return ''
 
             words = re.split(re_comma, activation_text)
             if tag in words:
