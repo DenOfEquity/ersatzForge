@@ -96,7 +96,7 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
 
         open_folder_button.click(
             fn=lambda images, index: open_folder(shared.opts.outdir_samples or outdir, images, index),
-            _js="(y, w) => [y, selected_gallery_index()]",
+            js="(y, w) => [y, selected_gallery_index()]",
             inputs=[
                 res.gallery,
                 open_folder_button,  # placeholder for index
@@ -170,8 +170,8 @@ def setup_dialog(button_show, dialog, *, button_close=None):
         fn=lambda: gr.update(visible=True),
         inputs=None,
         outputs=[dialog],
-    ).then(fn=None, _js="function(){ popupId('" + dialog.elem_id + "'); }")
+    ).then(fn=None, js="function(){ popupId('" + dialog.elem_id + "'); }")
 
     if button_close:
-        button_close.click(fn=None, _js="closePopup")
+        button_close.click(fn=None, js="closePopup")
 

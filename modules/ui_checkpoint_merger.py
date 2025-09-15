@@ -4,7 +4,7 @@ import gradio as gr
 from modules import shared, sd_models, errors, extras, call_queue
 from modules.ui_components import FormRow
 from modules.ui_common import ToolButton, refresh_symbol
-from modules_forge.main_entry import module_list, module_vae_list, module_te_list, refresh_models
+from modules_forge.main_entry import module_list, module_vae_list, module_te_list, refresh_vaete
 
 
 def update_interp_description(value, choices):
@@ -131,7 +131,7 @@ class UiCheckpointMerger:
     te_list = []
 
     def refresh_additional (fromUI=True):
-        refresh_models()
+        _ = refresh_vaete()
 
         te_list = list(module_te_list.keys())
         vae_list = [""] + list(module_vae_list.keys())
@@ -253,7 +253,7 @@ class UiCheckpointMerger:
         self.modelmerger_merge.click(fn=lambda: '', inputs=None, outputs=[self.modelmerger_result])
         self.modelmerger_merge.click(
             fn=call_queue.wrap_gradio_gpu_call(modelmerger, extra_outputs=lambda: [gr.update() for _ in range(4)]),
-            _js='modelmerger',
+            js='modelmerger',
             inputs=[
                 dummy_component,
                 self.model_names,

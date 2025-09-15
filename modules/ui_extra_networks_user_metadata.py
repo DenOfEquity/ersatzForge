@@ -5,7 +5,7 @@ import os.path
 
 import gradio as gr
 
-from modules import infotext_utils, images, sysinfo, errors, ui_extra_networks
+from modules import infotext_utils, images, sysinfo, errors, ui_extra_networks, shared
 
 
 class UserMetadataEditor:
@@ -26,9 +26,8 @@ class UserMetadataEditor:
         self.edit_notes = None
         self.html_filedata = None
         self.html_preview = None
-        self.html_status = None
 
-        self.button_cancel = None
+        # self.button_cancel = None
         self.button_replace_preview = None
         self.button_save = None
 
@@ -60,13 +59,11 @@ class UserMetadataEditor:
     def create_default_buttons(self):
 
         with gr.Row(elem_classes="edit-user-metadata-buttons"):
-            self.button_cancel = gr.Button('Cancel')
+            # self.button_cancel = gr.Button('Cancel')
             self.button_replace_preview = gr.Button('Replace preview', variant='primary')
             self.button_save = gr.Button('Save', variant='primary')
 
-        self.html_status = gr.Markdown()
-
-        self.button_cancel.click(fn=None, _js="closePopup")
+        # self.button_cancel.click(fn=None, js="closePopup")
 
     def get_card_html(self, name):
         item = self.page.items.get(name, {})
@@ -147,8 +144,8 @@ class UserMetadataEditor:
 
     def setup_save_handler(self, button, func, components):
         button\
-            .click(fn=func, inputs=[self.edit_name_input, *components], outputs=None)\
-            .then(fn=None, _js="function(name){closePopup(); extraNetworksRefreshSingleCard(" + json.dumps(self.page.name) + "," + json.dumps(self.tabname) + ", name);}", inputs=[self.edit_name_input], outputs=None)
+            .click(fn=func, inputs=[self.edit_name_input, *components], outputs=None, show_progress=False)\
+            .then(fn=None, js="function(name){closePopup(); extraNetworksRefreshSingleCard(" + json.dumps(self.page.name) + "," + json.dumps(self.tabname) + ", name);}", inputs=[self.edit_name_input], outputs=None, show_progress=False)
 
     def create_editor(self):
         self.create_default_editor_elems()
@@ -158,8 +155,8 @@ class UserMetadataEditor:
         self.create_default_buttons()
 
         self.button_edit\
-            .click(fn=self.put_values_into_components, inputs=[self.edit_name_input], outputs=[self.edit_name, self.edit_description, self.html_filedata, self.html_preview, self.edit_notes])\
-            .then(fn=lambda: gr.update(visible=True), inputs=None, outputs=[self.box])
+            .click(fn=self.put_values_into_components, inputs=[self.edit_name_input], outputs=[self.edit_name, self.edit_description, self.html_filedata, self.html_preview, self.edit_notes], show_progress=False)\
+            .then(fn=lambda: gr.update(visible=True), inputs=None, outputs=[self.box], show_progress=False)
 
         self.setup_save_handler(self.button_save, self.save_user_metadata, [self.edit_description, self.edit_notes])
 
@@ -174,32 +171,49 @@ class UserMetadataEditor:
 
     def save_preview(self, index, gallery, name):
         if not gallery or len(gallery) == 0:
-            return self.get_card_html(name), "There is no image in gallery to save as a preview."
+            gr.Info("No gallery: preview image not changed.", 5)
+            return self.get_card_html(name)
 
         item = self.page.items.get(name, {})
 
         index = int(index)
-        index = 0 if index < 0 else index
-        index = len(gallery) - 1 if index >= len(gallery) else index
+        index = max(index, 0)
+        index = min(index, len(gallery)-1)
 
-        img_info = gallery[index if index >= 0 else 0]
+        img_info = gallery[index]
         image = infotext_utils.image_from_url_text(img_info)
         geninfo, items = images.read_info_from_image(image)
 
-        images.save_image_with_geninfo(image, geninfo, item["local_preview"])
+        tw = 2 * shared.opts.extra_networks_card_width
+        th = 2 * shared.opts.extra_networks_card_height
+        old_aspect = image.size[0] / image.size[1]
+        new_aspect = tw / th
+
+        if old_aspect > new_aspect: # original image is wider than needed, adjust preview to match
+            rw = int(old_aspect * th)
+            rh = th
+            crop = ((rw - tw)//2, 0, (rw + tw)//2, th)
+        else:
+            rw = tw
+            rh = int(tw / old_aspect)
+            crop = (0, (rh - th)//2, tw, (rh + th)//2)
+        
+        images.save_image_with_geninfo(image.resize((rw, rh)).crop(crop), geninfo, item["local_preview"])
         self.page.lister.update_file_entry(item["local_preview"])
         item['preview'] = self.page.find_preview(item["local_preview"])
-        return self.get_card_html(name), ''
+        return self.get_card_html(name)
 
     def setup_ui(self, gallery):
         self.button_replace_preview.click(
             fn=self.save_preview,
-            _js=f"function(x, y, z){{return [selected_gallery_index_id('{self.tabname + '_gallery_container'}'), y, z]}}",
+            js=f"function(x, y, z){{return [selected_gallery_index_id('{self.tabname + '_gallery_container'}'), y, z]}}",
             inputs=[self.edit_name_input, gallery, self.edit_name_input],
-            outputs=[self.html_preview, self.html_status]
+            outputs=[self.html_preview],
+            show_progress=False
         ).then(
             fn=None,
-            _js="function(name){extraNetworksRefreshSingleCard(" + json.dumps(self.page.name) + "," + json.dumps(self.tabname) + ", name);}",
+            js="function(name){extraNetworksRefreshSingleCard(" + json.dumps(self.page.name) + "," + json.dumps(self.tabname) + ", name);}",
             inputs=[self.edit_name_input],
-            outputs=None
+            outputs=None,
+            show_progress=False
         )

@@ -321,7 +321,7 @@ def create_ui():
 
                 event(
                     fn=calc_resolution_hires,
-                    _js="onCalcResolutionHires",
+                    js="onCalcResolutionHires",
                     inputs=hr_resolution_preview_inputs,
                     outputs=[hr_final_resolution],
                     show_progress='hidden',
@@ -367,7 +367,7 @@ def create_ui():
 
             txt2img_args = dict(
                 fn=wrap_gradio_gpu_call(modules.txt2img.txt2img, extra_outputs=[None, '', '']),
-                _js="submit",
+                js="submit",
                 inputs=txt2img_inputs,
                 outputs=txt2img_outputs,
                 show_progress='hidden',
@@ -379,7 +379,7 @@ def create_ui():
             txt2img_upscale_inputs = txt2img_inputs[0:1] + [output_panel.gallery, dummy_component_number, output_panel.generation_info] + txt2img_inputs[1:]
             output_panel.button_upscale.click(
                 fn=wrap_gradio_gpu_call(modules.txt2img.txt2img_upscale, extra_outputs=[None, '', '']),
-                _js="submit_txt2img_upscale",
+                js="submit_txt2img_upscale",
                 inputs=txt2img_upscale_inputs,
                 outputs=txt2img_outputs,
                 show_progress='hidden',
@@ -420,12 +420,24 @@ def create_ui():
 
             if not opts.disable_token_counters:
                 toprow.ui_styles.dropdown.change(fn=wrap_queued_call(update_token_counter), inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress='hidden', queue=False)
-                toprow.ui_styles.dropdown.change(fn=wrap_queued_call(update_negative_prompt_token_counter), inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress='hidden', queue=False)
-                toprow.token_button.click(fn=wrap_queued_call(update_token_counter), inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress='hidden', queue=False)
-                toprow.negative_token_button.click(fn=wrap_queued_call(update_negative_prompt_token_counter), inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress='hidden', queue=False)
+                toprow.ui_styles.dropdown.change(fn=wrap_queued_call(update_negative_prompt_token_counter), inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress='hidden')
+                toprow.token_button.click(fn=update_token_counter, inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress='hidden')
+                toprow.negative_token_button.click(fn=update_negative_prompt_token_counter, inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress='hidden')
 
         extra_networks_ui = ui_extra_networks.create_ui(txt2img_interface, [txt2img_generation_tab], 'txt2img')
         ui_extra_networks.setup_ui(extra_networks_ui, output_panel.gallery)
+
+        # with gr.Tab("Misc.", id="txt2img_misc"):
+            # with gr.Accordion(open=False, label="Markdown"):
+                # with gr.Row():
+                    # with gr.Column():
+                        # markdown_input = gr.Textbox(label="Markdown input", value="", lines=11, elem_classes=['prompt'])
+
+                    # with gr.Column():
+                        # go_button = gr.Button("Check markdown")
+                        # markdown_output = gr.Markdown("", height="60vh")
+
+                        # go_button.click(fn=lambda x:x, inputs=markdown_input, outputs=markdown_output, show_progress=False)
 
         extra_tabs.__exit__()
 
@@ -508,7 +520,7 @@ def create_ui():
 
                                     on_change_args = dict(
                                         fn=resize_from_to_html,
-                                        _js="currentImg2imgSourceResolution",
+                                        js="currentImg2imgSourceResolution",
                                         inputs=[dummy_component, dummy_component, scale_by],
                                         outputs=scale_by,
                                         show_progress='hidden',
@@ -618,7 +630,7 @@ def create_ui():
 
             img2img_args = dict(
                 fn=wrap_gradio_gpu_call(modules.img2img.img2img, extra_outputs=[None, '', '']),
-                _js="submit_img2img",
+                js="submit_img2img",
                 inputs=submit_img2img_inputs,
                 outputs=[
                     output_panel.gallery,
@@ -630,7 +642,7 @@ def create_ui():
             )
 
             interrogate_args = dict(
-                _js="get_img2img_tab_index",
+                js="get_img2img_tab_index",
                 inputs=[
                     dummy_component,
                     img2img_batch_input_dir,
@@ -646,7 +658,7 @@ def create_ui():
 
             detect_image_size_btn.click(
                 fn=lambda w, h: (w or gr.update(), h or gr.update()),
-                _js="currentImg2imgSourceResolution",
+                js="currentImg2imgSourceResolution",
                 inputs=[dummy_component, dummy_component],
                 outputs=[width, height],
                 show_progress='hidden',

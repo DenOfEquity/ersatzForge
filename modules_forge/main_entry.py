@@ -6,7 +6,6 @@ from gradio.context import Context
 from modules import shared, ui_common, sd_models, processing, infotext_utils, paths, ui_loadsave
 from backend import memory_management, stream
 from backend.args import dynamic_args
-from modules.shared import cmd_opts
 
 total_vram = int(memory_management.total_vram)
 
@@ -35,6 +34,7 @@ forge_unet_storage_dtype_options = {
     'float8-e5m2 (fp16 LoRA)': (torch.float8_e5m2, True),
 }
 
+ckpt_list = []
 module_list = {}        # vae + te + other
 module_vae_list = {}
 module_te_list = {}
@@ -64,9 +64,9 @@ def find_files_with_extensions(base_path, extensions):
 
 
 def refresh_ckpt():
+    global ckpt_list
     sd_models.list_models()
     ckpt_list = sd_models.checkpoint_tiles()
-    return ckpt_list
     
     
 def refresh_vaete():
@@ -102,15 +102,14 @@ def refresh_vaete():
 
 
 def refresh_models():
-    checkpoint_list = refresh_ckpt()
+    global ckpt_list
+    refresh_ckpt()
     modules_list = refresh_vaete()
 
-    return checkpoint_list, modules_list
+    return ckpt_list, modules_list
 
-ckpt_list = refresh_ckpt()
-if module_list == {}:
-    _ = refresh_vaete()
-
+refresh_ckpt()
+_ = refresh_vaete()
 
 def make_checkpoint_manager_ui():
     global ui_checkpoint, ui_vae, ui_clip_skip, ui_forge_unet_storage_dtype_options, ui_forge_swap, ui_forge_inference_memory, ui_forge_preset, ckpt_list
@@ -230,21 +229,19 @@ def refresh_memory_management_settings(async_loading="Queue", pin_shared_memory=
 
 
 def refresh_model_loading_parameters():
-    from modules.sd_models import select_checkpoint, model_data
-
-    checkpoint_info = select_checkpoint()
+    checkpoint_info = sd_models.select_checkpoint()
 
     unet_storage_dtype, lora_fp16 = forge_unet_storage_dtype_options.get(shared.opts.forge_unet_storage_dtype, (None, False))
 
     dynamic_args['online_lora'] = lora_fp16
 
-    model_data.forge_loading_parameters = dict(
+    sd_models.model_data.forge_loading_parameters = dict(
         checkpoint_info=checkpoint_info,
         additional_modules=shared.opts.forge_additional_modules,
         unet_storage_dtype=unet_storage_dtype
     )
 
-    print(f'Model selected: {model_data.forge_loading_parameters}')
+    print(f'Model selected: {sd_models.model_data.forge_loading_parameters}')
     print(f'Using online LoRAs in FP16: {lora_fp16}')
     processing.need_global_unload = True
 
@@ -292,6 +289,7 @@ def checkpoint_change(ckpt_name:str, save=True, refresh=True):
     if new_ckpt_info == current_ckpt_info:
         return False
 
+# TODO: check are save and refresh always the same? search repo
     shared.opts.set('sd_model_checkpoint', ckpt_name)
 
     if save:
@@ -386,7 +384,7 @@ def on_preset_change(preset=None):
 
     if preset == "all":
         if shared.opts.use_ui_config_json:
-            loadsave = ui_loadsave.UiLoadsave(cmd_opts.ui_config_file)
+            loadsave = ui_loadsave.UiLoadsave(shared.cmd_opts.ui_config_file)
             ui_settings_from_file = loadsave.ui_settings.copy()
 
             return [

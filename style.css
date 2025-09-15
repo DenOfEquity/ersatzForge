@@ -219,7 +219,7 @@ input[type="checkbox"].input-accordion-checkbox{
     min-width: 0 !important;
     width: auto;
     z-index: 100;
-    top: -0.75em;
+    top: -0.5em;
 }
 
 .block.token-counter-visible{
@@ -228,8 +228,9 @@ input[type="checkbox"].input-accordion-checkbox{
 
 .block.token-counter span{
     background: var(--input-background-fill) !important;
-    border: 2px solid rgba(192,192,192,0.4) !important;
-    border-radius: 0.4em;
+    border: 1px solid rgba(192,192,192,0.4) !important;
+    border-radius: 4px;
+    padding: 0.1em 0.5em;
 }
 
 .block.token-counter.error span{
@@ -238,10 +239,6 @@ input[type="checkbox"].input-accordion-checkbox{
 
 .block.token-counter div{
     display: inline;
-}
-
-.block.token-counter span{
-    padding: 0.1em 0.75em;
 }
 
 [id$=_subseed_show]{
@@ -1520,10 +1517,6 @@ body.resizing .resize-handle {
     text-align: right;
 }
 
-/* Icon for button when it is after label. */
-.extra-network-tree .tree-list-item-visual--trailing {
-    grid-area: trailing-visual;
-}
 
 /* Dropdown arrow for button. */
 .extra-network-tree .tree-list-item-action--leading {
@@ -1569,5 +1562,4 @@ body.resizing .resize-handle {
 
 .forge_space_btn{
     min-width: 0 !important;
-
 }

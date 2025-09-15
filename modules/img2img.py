@@ -5,21 +5,17 @@ from pathlib import Path
 from PIL import Image, ImageOps, ImageFilter, UnidentifiedImageError
 import gradio as gr
 
-from modules import images
+from modules import images, shared, scripts
 from modules.infotext_utils import create_override_settings_dict, parse_generation_parameters
-from modules.processing import Processed, StableDiffusionProcessingImg2Img, process_images
-from modules.shared import opts, state
+from modules.processing import Processed, StableDiffusionProcessingImg2Img, process_images, fix_seed
 from modules.sd_models import get_closet_checkpoint_match
-import modules.shared as shared
-import modules.processing as processing
 from modules.ui import plaintext_to_html
-import modules.scripts
 from modules_forge import main_thread
 
 
 def process_batch(p, input, output_dir, inpaint_mask_dir, args, to_scale=False, scale_by=1.0, use_png_info=False, png_info_props=None, png_info_dir=None):
     output_dir = output_dir.strip()
-    processing.fix_seed(p)
+    fix_seed(p)
 
     if isinstance(input, str):
         batch_images = list(shared.walk_files(input, allowed_extensions=(".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".avif")))
@@ -36,7 +32,7 @@ def process_batch(p, input, output_dir, inpaint_mask_dir, args, to_scale=False, 
 
     print(f"Will process {len(batch_images)} images, creating {p.n_iter * p.batch_size} new images for each.")
 
-    state.job_count = len(batch_images) * p.n_iter
+    shared.state.job_count = len(batch_images) * p.n_iter
 
     # extract "default" params to use in case getting png info fails
     prompt = p.prompt
@@ -51,11 +47,11 @@ def process_batch(p, input, output_dir, inpaint_mask_dir, args, to_scale=False, 
     batch_results = None
     discard_further_results = False
     for i, image in enumerate(batch_images):
-        state.job = f"{i+1} out of {len(batch_images)}"
-        if state.skipped:
-            state.skipped = False
+        shared.state.job = f"{i+1} out of {len(batch_images)}"
+        if shared.state.skipped:
+            shared.state.skipped = False
 
-        if state.interrupted or state.stopping_generation:
+        if shared.state.interrupted or shared.state.stopping_generation:
             break
 
         try:
@@ -125,11 +121,11 @@ def process_batch(p, input, output_dir, inpaint_mask_dir, args, to_scale=False, 
             p.outpath_samples = output_dir
             p.override_settings['save_to_dirs'] = False
 
-        if opts.img2img_batch_use_original_name:
+        if shared.opts.img2img_batch_use_original_name:
             filename_pattern = f'{image_path.stem}-[generation_number]' if p.n_iter > 1 or p.batch_size > 1 else f'{image_path.stem}'
             p.override_settings['samples_filename_pattern'] = filename_pattern
 
-        proc = modules.scripts.scripts_img2img.run(p, *args)
+        proc = scripts.scripts_img2img.run(p, *args)
 
         if proc is None:
             proc = process_images(p)
@@ -216,8 +212,8 @@ def img2img_function(id_task: str, request: gr.Request, mode: int, prompt: str, 
     assert 0. <= denoising_strength <= 1., 'can only work with strength in [0.0, 1.0]'
 
     p = StableDiffusionProcessingImg2Img(
-        outpath_samples=opts.outdir_samples or opts.outdir_img2img_samples,
-        outpath_grids=opts.outdir_grids or opts.outdir_img2img_grids,
+        outpath_samples=shared.opts.outdir_samples or shared.opts.outdir_img2img_samples,
+        outpath_grids=shared.opts.outdir_grids or shared.opts.outdir_img2img_grids,
         prompt=prompt,
         negative_prompt=negative_prompt,
         styles=prompt_styles,
@@ -240,7 +236,7 @@ def img2img_function(id_task: str, request: gr.Request, mode: int, prompt: str, 
         distilled_cfg_scale=distilled_cfg_scale
     )
 
-    p.scripts = modules.scripts.scripts_img2img
+    p.scripts = scripts.scripts_img2img
     p.script_args = args
 
     p.user = request.username
@@ -265,17 +261,17 @@ def img2img_function(id_task: str, request: gr.Request, mode: int, prompt: str, 
             processed.images = [image]
 
         else:
-            processed = modules.scripts.scripts_img2img.run(p, *args)
+            processed = scripts.scripts_img2img.run(p, *args)
             if processed is None:
                 processed = process_images(p)
 
     shared.total_tqdm.clear()
 
     generation_info_js = processed.js()
-    if opts.samples_log_stdout:
+    if shared.opts.samples_log_stdout:
         print(generation_info_js)
 
-    if opts.do_not_show_images:
+    if shared.opts.do_not_show_images:
         processed.images = []
 
     return processed.images + processed.extra_images, generation_info_js, plaintext_to_html(processed.info), plaintext_to_html(processed.comments, classname="comments")

@@ -94,7 +94,7 @@ def connect_reuse_seed(seed: gr.Number, reuse_seed: gr.Button, generation_info: 
 
     reuse_seed.click(
         fn=copy_seed,
-        _js="(x, y) => [x, selected_gallery_index()]",
+        js="(x, y) => [x, selected_gallery_index()]",
         show_progress=False,
         inputs=[generation_info, seed],
         outputs=[seed, seed]

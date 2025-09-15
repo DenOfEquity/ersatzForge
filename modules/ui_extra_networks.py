@@ -220,11 +220,6 @@ class ExtraNetworksPage:
 
         item["user_metadata"] = metadata
 
-    def link_preview(self, filename):
-        quoted_filename = urllib.parse.quote(filename.replace('\\', '/'))
-        mtime, _ = self.lister.mctime(filename)
-        return f"./sd_extra_networks/thumb?filename={quoted_filename}&mtime={mtime}"
-
     def search_terms_from_path(self, filename, possible_directories=None):
         abspath = os.path.abspath(filename)
         for parentdir in (possible_directories if possible_directories is not None else self.allowed_directories_for_previews()):
@@ -393,7 +388,6 @@ class ExtraNetworksPage:
                 "action_list_item_action_leading": "<i class='tree-list-item-action-chevron'></i>",
                 "action_list_item_visual_leading": "🗀",
                 "action_list_item_label": os.path.basename(dir_path),
-                "action_list_item_visual_trailing": "",
                 "action_list_item_action_trailing": "",
             }
         )
@@ -442,7 +436,6 @@ class ExtraNetworksPage:
                 "action_list_item_action_leading": "<i class='tree-list-item-action-chevron'></i>",
                 "action_list_item_visual_leading": "🗎",
                 "action_list_item_label": item["name"],
-                "action_list_item_visual_trailing": "",
                 "action_list_item_action_trailing": action_buttons,
             }
         )
@@ -644,14 +637,16 @@ class ExtraNetworksPage:
 
     def find_preview(self, path):
         """
-        Find a preview PNG for a given path (without extension) and call link_preview on it.
+        Find a preview PNG for a given path (without extension).
         """
 
         potential_files = sum([[f"{path}.{ext}", f"{path}.preview.{ext}"] for ext in allowed_preview_extensions()], [])
 
         for file in potential_files:
             if self.lister.exists(file):
-                return self.link_preview(file)
+                quoted_filename = urllib.parse.quote(file.replace('\\', '/'))
+                mtime, _ = self.lister.mctime(file)
+                return f"./sd_extra_networks/thumb?filename={quoted_filename}&mtime={mtime}"
 
         return None
 
@@ -708,9 +703,6 @@ class ExtraNetworksUi:
 
         self.stored_extra_pages = None
 
-        self.button_save_preview = None
-        self.preview_target_filename = None
-
         self.tabname = None
 
 
@@ -755,11 +747,8 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
 
             related_tabs.append(tab)
 
-    ui.button_save_preview = gr.Button('Save preview', elem_id=f"{tabname}_save_preview", visible=False)
-    ui.preview_target_filename = gr.Textbox('Preview save filename', elem_id=f"{tabname}_preview_filename", visible=False)
-
     for tab in unrelated_tabs:
-        tab.select(fn=None, _js=f"function(){{extraNetworksUnrelatedTabSelected('{tabname}');}}", inputs=None, outputs=None, show_progress=False)
+        tab.select(fn=None, js=f"function(){{extraNetworksUnrelatedTabSelected('{tabname}');}}", inputs=None, outputs=None, show_progress=False)
 
     for page, tab in zip(ui.stored_extra_pages, related_tabs):
         jscode = (
@@ -768,7 +757,7 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
             f"applyExtraNetworkFilter('{tabname}_{page.extra_networks_tabname}');"
             "}}"
         )
-        tab.select(fn=None, _js=jscode, inputs=None, outputs=None, show_progress=False)
+        tab.select(fn=None, js=jscode, inputs=None, outputs=None, show_progress=False)
 
         def refresh():
             for pg in ui.stored_extra_pages:
@@ -777,7 +766,7 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
             return ui.pages_contents
 
         button_refresh = gr.Button("Refresh", elem_id=f"{tabname}_{page.extra_networks_tabname}_extra_refresh_internal", visible=False)
-        button_refresh.click(fn=refresh, inputs=None, outputs=ui.pages).then(fn=lambda: None, _js="function(){ " + f"applyExtraNetworkFilter('{tabname}_{page.extra_networks_tabname}');" + " }").then(fn=lambda: None, _js='setupAllResizeHandles')
+        button_refresh.click(fn=refresh, inputs=None, outputs=ui.pages).then(fn=lambda: None, js="function(){ " + f"applyExtraNetworkFilter('{tabname}_{page.extra_networks_tabname}');" + " }").then(fn=lambda: None, js='setupAllResizeHandles')
 
     def create_html():
         ui.pages_contents = [pg.create_html(ui.tabname) for pg in ui.stored_extra_pages]
@@ -787,7 +776,7 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
             create_html()
         return ui.pages_contents
 
-    interface.load(fn=pages_html, inputs=None, outputs=ui.pages).then(fn=lambda: None, _js='setupAllResizeHandles')
+    interface.load(fn=pages_html, inputs=None, outputs=ui.pages, show_progress=False).then(fn=lambda: None, js='setupAllResizeHandles')
 
     return ui
 
@@ -800,39 +789,5 @@ def path_is_parent(parent_path, child_path):
 
 
 def setup_ui(ui, gallery):
-    def save_preview(index, images, filename):
-        # this function is here for backwards compatibility and likely will be removed soon
-
-        if len(images) == 0:
-            print("There is no image in gallery to save as a preview.")
-            return [page.create_html(ui.tabname) for page in ui.stored_extra_pages]
-
-        index = int(index)
-        index = 0 if index < 0 else index
-        index = len(images) - 1 if index >= len(images) else index
-
-        img_info = images[index if index >= 0 else 0]
-        image = image_from_url_text(img_info)
-        geninfo, items = read_info_from_image(image)
-
-        is_allowed = False
-        for extra_page in ui.stored_extra_pages:
-            if any(path_is_parent(x, filename) for x in extra_page.allowed_directories_for_previews()):
-                is_allowed = True
-                break
-
-        assert is_allowed, f'writing to {filename} is not allowed'
-
-        save_image_with_geninfo(image, geninfo, filename)
-
-        return [page.create_html(ui.tabname) for page in ui.stored_extra_pages]
-
-    ui.button_save_preview.click(
-        fn=save_preview,
-        _js="function(x, y, z){return [selected_gallery_index(), y, z]}",
-        inputs=[ui.preview_target_filename, gallery, ui.preview_target_filename],
-        outputs=[*ui.pages]
-    )
-
     for editor in ui.user_metadata_editors:
         editor.setup_ui(gallery)

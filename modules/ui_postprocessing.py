@@ -80,7 +80,7 @@ def create_ui():
 
     submit.click(
         fn=call_queue.wrap_gradio_gpu_call(postprocessing.run_postprocessing_webui, extra_outputs=[None, '']),
-        _js="submit_extras",
+        js="submit_extras",
         inputs=submit_click_inputs,
         outputs=[
             output_panel.gallery,
@@ -94,5 +94,5 @@ def create_ui():
 
     extras_image.change(
         fn=scripts.scripts_postproc.image_changed,
-        inputs=None, outputs=None
+        inputs=None, outputs=None, show_progress=False
     )

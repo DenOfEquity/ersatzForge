@@ -1,11 +1,8 @@
 import json
 from contextlib import closing
 
-import modules.scripts
-from modules import processing, infotext_utils
+from modules import processing, infotext_utils, scripts, shared
 from modules.infotext_utils import create_override_settings_dict, parse_generation_parameters
-from modules.shared import opts
-import modules.shared as shared
 from modules.ui import plaintext_to_html
 
 import gradio as gr
@@ -19,8 +16,8 @@ def txt2img_create_processing(id_task: str, request: gr.Request, prompt: str, ne
         enable_hr = True
 
     p = processing.StableDiffusionProcessingTxt2Img(
-        outpath_samples=opts.outdir_samples or opts.outdir_txt2img_samples,
-        outpath_grids=opts.outdir_grids or opts.outdir_txt2img_grids,
+        outpath_samples=shared.opts.outdir_samples or shared.opts.outdir_txt2img_samples,
+        outpath_grids=shared.opts.outdir_grids or shared.opts.outdir_txt2img_grids,
         prompt=prompt,
         styles=prompt_styles,
         negative_prompt=negative_prompt,
@@ -48,7 +45,7 @@ def txt2img_create_processing(id_task: str, request: gr.Request, prompt: str, ne
         override_settings=override_settings,
     )
 
-    p.scripts = modules.scripts.scripts_txt2img
+    p.scripts = scripts.scripts_txt2img
     p.script_args = args
 
     p.user = request.username
@@ -106,7 +103,7 @@ def txt2img_upscale_function(id_task: str, request: gr.Request, gallery, gallery
                 if iteration == iterations-1:
                     del p.override_settings['samples_save']
                     
-                if processed := modules.scripts.scripts_txt2img.run(p, *p.script_args) is None:
+                if processed := scripts.scripts_txt2img.run(p, *p.script_args) is None:
                     processed = processing.process_images(p)
 
             if iteration != iterations-1:
@@ -123,7 +120,7 @@ def txt2img_upscale_function(id_task: str, request: gr.Request, gallery, gallery
         p.n_iter = 1
 
         with closing(p):
-            if processed := modules.scripts.scripts_txt2img.run(p, *p.script_args) is None:
+            if processed := scripts.scripts_txt2img.run(p, *p.script_args) is None:
                 processed = processing.process_images(p)
 
     shared.total_tqdm.clear()
@@ -150,7 +147,7 @@ def txt2img_function(id_task: str, request: gr.Request, *args):
     p = txt2img_create_processing(id_task, request, *args)
 
     with closing(p):
-        processed = modules.scripts.scripts_txt2img.run(p, *p.script_args)
+        processed = scripts.scripts_txt2img.run(p, *p.script_args)
 
         if processed is None:
             processed = processing.process_images(p)
@@ -158,10 +155,10 @@ def txt2img_function(id_task: str, request: gr.Request, *args):
     shared.total_tqdm.clear()
 
     generation_info_js = processed.js()
-    if opts.samples_log_stdout:
+    if shared.opts.samples_log_stdout:
         print(generation_info_js)
 
-    if opts.do_not_show_images:
+    if shared.opts.do_not_show_images:
         processed.images = []
 
     return processed.images + processed.extra_images, generation_info_js, plaintext_to_html(processed.info), plaintext_to_html(processed.comments, classname="comments")

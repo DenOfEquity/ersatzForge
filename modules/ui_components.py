@@ -127,7 +127,7 @@ class InputAccordionImpl(gr.Checkbox):
         }
         super().__init__(value=value, **kwargs_checkbox)
 
-        self.change(fn=None, _js='function(checked){ inputAccordionChecked("' + self.accordion_id + '", checked); }', inputs=[self])
+        self.change(fn=None, js='function(checked){ inputAccordionChecked("' + self.accordion_id + '", checked); }', inputs=[self])
 
         kwargs_accordion = {
             **kwargs,

@@ -225,7 +225,7 @@ class UiSettings:
                 fn=lambda: None,
                 inputs=None,
                 outputs=None,
-                _js='download_localization'
+                js='download_localization'
             )
 
             def reload_scripts():
@@ -240,7 +240,7 @@ class UiSettings:
 
             restart_gradio.click(
                 fn=shared.state.request_restart,
-                _js='restart_reload',
+                js='restart_reload',
                 inputs=None,
                 outputs=None,
             )

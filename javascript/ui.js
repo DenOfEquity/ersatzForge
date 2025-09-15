@@ -111,26 +111,6 @@ function get_img2img_tab_index() {
     return res;
 }
 
-function create_submit_args(args) {
-    var res = Array.from(args);
-
-    // As it is currently, txt2img and img2img send back the previous output args (txt2img_gallery, generation_info, html_info) whenever you generate a new image.
-    // This can lead to uploading a huge gallery of previously generated images, which leads to an unnecessary delay between submitting and beginning to generate.
-    // I don't know why gradio is sending outputs along with inputs, but we can prevent sending the image gallery here, which seems to be an issue for some.
-
-    // If gradio at some point stops sending outputs, this may break something
-    if (Array.isArray(res[res.length - 4])) {
-        //res[res.length - 4] = null;
-        // simply drop output args
-        res = res.slice(0, res.length - 4);
-    } else if (Array.isArray(res[res.length - 3])) {
-        // for submit_extras()
-        //res[res.length - 3] = null;
-        res = res.slice(0, res.length - 3);
-    }
-
-    return res;
-}
 
 function setSubmitButtonsVisibility(tabname, showInterrupt, showSkip, showInterrupting) {
     gradioApp().getElementById(tabname + '_interrupt').style.display = showInterrupt ? "block" : "none";
@@ -155,8 +135,10 @@ function submit() {
         showSubmitButtons('txt2img', true);
     });
 
-    var res = create_submit_args(arguments);
-
+    var res = Array.from(arguments);
+    if (Array.isArray(res[res.length - 4])) {
+        res = res.slice(0, res.length - 4);
+    }
     res[0] = id;
 
     return res;
@@ -179,8 +161,10 @@ function submit_img2img() {
         showSubmitButtons('img2img', true);
     });
 
-    var res = create_submit_args(arguments);
-
+    var res = Array.from(arguments);
+    if (Array.isArray(res[res.length - 4])) {
+        res = res.slice(0, res.length - 4);
+    }
     res[0] = id;
 
     return res;
@@ -195,8 +179,10 @@ function submit_extras() {
         showSubmitButtons('extras', true);
     });
 
-    var res = create_submit_args(arguments);
-
+    var res = Array.from(arguments);
+    if (Array.isArray(res[res.length - 3])) {
+        res = res.slice(0, res.length - 3);
+    }
     res[0] = id;
 
     return res;
@@ -269,8 +255,9 @@ function modelmerger() {
     var id = randomId();
     requestProgress(id, gradioApp().getElementById('modelmerger_results_panel'), null, function() {});
 
-    var res = create_submit_args(arguments);
+    var res = Array.from(arguments);
     res[0] = id;
+
     return res;
 }
 
@@ -280,6 +267,7 @@ function ask_for_style_name(_, prompt_text, negative_prompt_text) {
     return [name_, prompt_text, negative_prompt_text];
 }
 
+/*
 function confirm_clear_prompt(prompt, negative_prompt) {
     if (confirm("Delete prompt?")) {
         prompt = "";
@@ -288,7 +276,7 @@ function confirm_clear_prompt(prompt, negative_prompt) {
 
     return [prompt, negative_prompt];
 }
-
+*/
 
 
 
@@ -345,7 +333,7 @@ function updateImg2imgResizeToTextAfterChangingImage() {
 }
 */
 
-
+/*
 function setRandomSeed(elem_id) {
     var input = gradioApp().querySelector("#" + elem_id + " input");
     if (!input) return [];
@@ -354,7 +342,8 @@ function setRandomSeed(elem_id) {
     updateInput(input);
     return [];
 }
-
+*/
+/*
 function switchWidthHeight(tabname) {
     var width = gradioApp().querySelector("#" + tabname + "_width input[type=number]");
     var height = gradioApp().querySelector("#" + tabname + "_height input[type=number]");
@@ -368,7 +357,7 @@ function switchWidthHeight(tabname) {
     updateInput(height);
     return [];
 }
-
+*/
 
 var onEditTimers = {};
 

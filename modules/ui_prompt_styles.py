@@ -97,7 +97,7 @@ Styles are additions to the **Prompt** and **Negative prompt**. The *{prompt}* t
 
         self.delete.click(
             fn=delete_style,
-            _js='function(name){ if(name == "") return ""; return confirm("Delete style " + name + "?") ? name : ""; }',
+            js='function(name){ if(name == "") return ""; return confirm("Delete style " + name + "?") ? name : ""; }',
             inputs=[self.selection],
             outputs=[self.selection, self.prompt, self.neg_prompt],
             show_progress=False,

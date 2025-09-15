@@ -79,7 +79,7 @@ class Toprow:
                     shared.state.interrupt()
 
             self.skip.click(fn=shared.state.skip)
-            self.interrupt.click(fn=interrupt_function, _js='function(){ showSubmitInterruptingPlaceholder("' + self.id_part + '"); }')
+            self.interrupt.click(fn=interrupt_function, js='function(){ showSubmitInterruptingPlaceholder("' + self.id_part + '"); }')
             self.interrupting.click(fn=interrupt_function)
 
     def create_tools_row(self):
@@ -101,7 +101,7 @@ class Toprow:
 
         # self.clear_prompt_button.click(
             # fn=lambda *x: x,
-            # _js="confirm_clear_prompt",
+            # js="confirm_clear_prompt",
             # inputs=[self.prompt, self.negative_prompt],
             # outputs=[self.prompt, self.negative_prompt],
             # show_progress=False

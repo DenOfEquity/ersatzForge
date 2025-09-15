@@ -1,5 +1,9 @@
 * {
+/*  box-shadow: none !important;*/
   text-shadow: none !important;
+}
+
+.gradio-button, .gradio-textbox, .gradio-dropdown, .gradio-number {
   border-radius: 4px !important;
 }
 
@@ -18,4 +22,8 @@
 
 #quicksettings .gradio-number {
   min-width: 80px !important;
+}
+
+.icon-wrap {
+  display: none !important;
 }

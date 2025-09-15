@@ -399,14 +399,14 @@ def create_ui():
 
                 apply.click(
                     fn=apply_and_restart,
-                    _js="extensions_apply",
+                    js="extensions_apply",
                     inputs=[extensions_disabled_list, extensions_update_list, extensions_disable_all],
                     outputs=None,
                 )
 
                 check.click(
                     fn=wrap_gradio_gpu_call(check_updates, extra_outputs=[gr.update()]),
-                    _js="extensions_check",
+                    js="extensions_check",
                     inputs=[info, extensions_disabled_list],
                     outputs=[extensions_table, info],
                 )
