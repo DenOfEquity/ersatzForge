@@ -332,12 +332,8 @@ class ControlNetUiGroup(object):
                 )
 
         with FormRow(elem_classes=["controlnet_main_options"]):
-            self.enabled = gr.Checkbox(
-                label="Enable",
-                value=self.default_unit.enabled,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_enable_checkbox",
-                elem_classes=["cnet-unit-enabled"],
-            )
+            self.enabled = gr.State(value=self.default_unit.enabled)
+
             self.pixel_perfect = gr.Checkbox(
                 label="Pixel perfect",
                 value=self.default_unit.pixel_perfect,

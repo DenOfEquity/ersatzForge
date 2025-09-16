@@ -72,7 +72,6 @@
                 this.isImg2Img = tab.querySelector('.cnet-mask-upload').id.includes('img2img');
 
                 this.enabledAccordionCheckbox = tab.querySelector('.input-accordion-checkbox');
-                this.enabledCheckbox = tab.querySelector('.cnet-unit-enabled input');
                 this.inputImage = tab.querySelector('.cnet-input-image-group .cnet-image input[type="file"]');
                 this.inputImageContainer = tab.querySelector('.cnet-input-image-group .cnet-image');
                 this.generatedImageGroup = tab.querySelector('.cnet-generated-image-group');
@@ -91,28 +90,14 @@
                 this.enabledAccordionCheckbox.click();
                 this.enabledAccordionCheckbox.click();
 
-                this.sync_enabled_checkbox();
+
                 this.attachEnabledButtonListener();
                 this.attachControlTypeRadioListener();
-                this.attachImageUploadListener();
                 this.attachImageStateChangeObserver();
                 this.attachA1111SendInfoObserver();
                 this.attachAccordionStateObserver();
             }
 
-            // Sync the states of enabledCheckbox and enabledAccordionCheckbox.
-            sync_enabled_checkbox() {
-                this.enabledCheckbox.addEventListener("change", () => {
-                    if (this.enabledAccordionCheckbox.checked != this.enabledCheckbox.checked) {
-                        this.enabledAccordionCheckbox.click();
-                    }
-                });
-                this.enabledAccordionCheckbox.addEventListener("change", () => {
-                    if (this.enabledCheckbox.checked != this.enabledAccordionCheckbox.checked) {
-                        this.enabledCheckbox.click();
-                    }
-                });
-            }
             // Get the span that has text "Unit {X}".
             getUnitHeaderTextElement() {
                 return this.tab.querySelector(
@@ -133,7 +118,7 @@
                 const unitHeader = this.getUnitHeaderTextElement();
                 if (!unitHeader) return;
 
-                if (this.enabledCheckbox.checked) {
+                if (this.enabledAccordionCheckbox.checked) {
                     unitHeader.classList.add('cnet-unit-active');
                 } else {
                     unitHeader.classList.remove('cnet-unit-active');
@@ -150,7 +135,7 @@
                     return activeUnitCount;
                 }
 
-                const checkboxes = this.accordion.querySelectorAll('.cnet-unit-enabled input');
+				const checkboxes = this.accordion.querySelectorAll('.input-accordion-checkbox');
                 const span = this.accordion.querySelector('.label-wrap span');
 
                 // Remove existing badge.
@@ -186,14 +171,17 @@
                 span.classList.add('control-type-suffix');
                 unitHeader.appendChild(span);
             }
-            getInputImageSrc() {
+
+
+            getInputImageSrc() {	// these should be resized to 128px or so
                 const img = this.inputImageGroup.querySelector('.cnet-image .forge-image');
                 return (img && img.src.startsWith('data')) ? img.src : null;
             }
-            getPreprocessorPreviewImageSrc() {
+/*            getPreprocessorPreviewImageSrc() {			// unused
                 const img = this.generatedImageGroup.querySelector('.cnet-image .forge-image');
                 return (img && img.src.startsWith('data')) ? img.src : null;
             }
+*/
             getMaskImageSrc() {
                 function isEmptyCanvas(canvas) {
                     if (!canvas) return true;
@@ -227,7 +215,7 @@
                     return null;
                 }
             }
-            setThumbnail(imgSrc, maskSrc) {
+            setThumbnail(imgSrc, /*preSrc, */maskSrc) {
                 if (!imgSrc) return;
                 const unitHeader = this.getUnitHeaderTextElement();
                 if (!unitHeader) return;
@@ -236,6 +224,13 @@
                 img.classList.add('cnet-thumbnail');
                 unitHeader.appendChild(img);
 
+/*                if (preSrc) {
+                    const pre = document.createElement('img');
+                    pre.src = preSrc;
+                    pre.classList.add('cnet-thumbnail');
+                    unitHeader.appendChild(pre);
+                }
+*/
                 if (maskSrc) {
                     const mask = document.createElement('img');
                     mask.src = maskSrc;
@@ -253,16 +248,15 @@
             }
             // When the accordion is folded, display a thumbnail of input image and mask on the accordion header.
             updateInputImageThumbnail() {
-                if (!opts.controlnet_input_thumbnail) return;
-                if (this.tabOpen) {
+                if (!opts.controlnet_input_thumbnail || this.tabOpen) {
                     this.removeThumbnail();
                 } else {
-                    this.setThumbnail(this.getInputImageSrc(), this.getMaskImageSrc());
+                    this.setThumbnail(this.getInputImageSrc(), /*this.getPreprocessorPreviewImageSrc(),*/ this.getMaskImageSrc());
                 }
             }
 
             attachEnabledButtonListener() {
-                this.enabledCheckbox.addEventListener('change', () => {
+                this.enabledAccordionCheckbox.addEventListener('change', () => {
                     this.updateActiveState();
                     this.updateActiveUnitCount();
                 });
@@ -274,22 +268,6 @@
                         this.updateActiveControlType();
                     });
                 }
-            }
-
-            attachImageUploadListener() {
-                // Automatically check `enable` checkbox when image is uploaded.
-                this.inputImage.addEventListener('change', (event) => {
-                    if (!event.target.files) return;
-                    if (!this.enabledCheckbox.checked)
-                        this.enabledCheckbox.click();
-                });
-
-                // Automatically check `enable` checkbox when JSON pose file is uploaded.
-                this.tab.querySelector('.cnet-upload-pose input').addEventListener('change', (event) => {
-                    if (!event.target.files) return;
-                    if (!this.enabledCheckbox.checked)
-                        this.enabledCheckbox.click();
-                });
             }
 
             attachImageStateChangeObserver() {
@@ -316,11 +294,7 @@
             // Observe send PNG info buttons in A1111, as they can also directly set states of ControlNetUnit.
             attachA1111SendInfoObserver() {
                 const pasteButtons = gradioApp().querySelectorAll('#paste');
-                const pngButtons = gradioApp().querySelectorAll(
-                    this.isImg2Img ?
-                        '#img2img_tab, #inpaint_tab' :
-                        '#txt2img_tab'
-                );
+                const pngButtons = gradioApp().querySelectorAll(this.isImg2Img ? '#img2img_tab' : '#txt2img_tab');
 
                 for (const button of [...pasteButtons, ...pngButtons]) {
                     button.addEventListener('click', () => {
@@ -376,7 +350,7 @@
             const observerAccordionOpen = new MutationObserver(function (mutations) {
                 for (const mutation of mutations) {
                     if (mutation.target.classList.contains('open') &&
-                        tabs.every(tab => !tab.enabledCheckbox.checked &&
+                        tabs.every(tab => !tab.enabledAccordionCheckbox.checked &&
                                           !tab.tab.querySelector('.label-wrap').classList.contains('open'))
                     ) {
                         tabs[0].tab.querySelector('.label-wrap').click();
