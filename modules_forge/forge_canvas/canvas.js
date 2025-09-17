@@ -145,8 +145,7 @@ class ForgeCanvas {
         drawingCanvas.width = imageContainer.clientWidth;
         drawingCanvas.height = imageContainer.clientHeight;
 
-        const drawContext = drawingCanvas.getContext("2d");
-        this.drawingCanvas_ = drawingCanvas;
+        const drawContext = drawingCanvas.getContext("2d", { willReadFrequently: true });
         drawingCanvas.style.cursor = "crosshair";
 
 
@@ -447,6 +446,14 @@ class ForgeCanvas {
             this._held_W = false;
             this._held_A = false;
             this._held_S = false;
+
+            if (!this.pointerInsideContainer) return;
+
+			if (e.key === "r") {
+				this.adjustInitialPositionAndScale();
+				this.drawImage();
+			}
+			if (e.key === "f")	this.toggleMaximize();
         });
 
         this.maxButton.addEventListener("click", () => {
@@ -469,7 +476,7 @@ class ForgeCanvas {
     }
 
     handleDraw(e) {
-        const canvas = this.drawingCanvas_;
+        const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
         const ctx = canvas.getContext("2d");
         const rect = canvas.getBoundingClientRect();
         const x = (e.clientX - rect.left) / this.imgScale;
