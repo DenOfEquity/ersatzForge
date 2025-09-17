@@ -33,13 +33,9 @@
     left: 0;
     background-size: contain;
     background-repeat: no-repeat;
-    cursor: grab;
+    cursor: crosshair;
     max-width: unset !important;
     max-height: unset !important;
-}
-
-.forge-image:active {
-    cursor: grabbing;
 }
 
 .forge-file-upload {

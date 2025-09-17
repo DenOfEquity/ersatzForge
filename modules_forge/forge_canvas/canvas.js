@@ -147,6 +147,8 @@ class ForgeCanvas {
 
         const drawContext = drawingCanvas.getContext("2d");
         this.drawingCanvas_ = drawingCanvas;
+        drawingCanvas.style.cursor = "crosshair";
+
 
         if (this.no_scribbles) {
             toolbar.querySelector(".forge-toolbar-box-b").style.display = "none";
@@ -191,7 +193,7 @@ class ForgeCanvas {
         uploadButton.addEventListener("click", () => {
             if (this.no_upload) return;
             document.getElementById(`imageInput_${this.uuid}`).click();
-            if (!this.no_scribbles) scribbleIndicator.style.display = "inline-block";
+            if (this.img && !this.no_scribbles) scribbleIndicator.style.display = "inline-block";
         });
 
         removeButton.addEventListener("click", () => {
@@ -260,7 +262,6 @@ class ForgeCanvas {
                 else if (this.img && !this.no_scribbles) {
                     const rect = drawingCanvas.getBoundingClientRect();
                     this.drawing = true;
-                    imageContainer.style.cursor = "crosshair";
                     drawingCanvas.style.cursor = "crosshair";
                     this.temp_draw_points = [[(e.clientX - rect.left) / this.imgScale, (e.clientY - rect.top) / this.imgScale]];
                     this.temp_draw_bg = drawContext.getImageData(0, 0, drawingCanvas.width, drawingCanvas.height);
@@ -296,8 +297,7 @@ class ForgeCanvas {
             if (this.dragging) {
                 this.dragging = false;
             }
-            imageContainer.style.cursor = "pointer";
-            drawingCanvas.style.cursor = "grab";
+            drawingCanvas.style.cursor = "crosshair";
             if (this.img && !this.no_scribbles) scribbleIndicator.style.display = "inline-block";
         });
 
@@ -376,14 +376,6 @@ class ForgeCanvas {
             if (this.img && !this.no_scribbles) scribbleIndicator.style.display = "inline-block";
         });
 
-        this.container.addEventListener("dragleave", () => {
-            toolbar.style.opacity = "0";
-            imageContainer.style.cursor = "";
-            drawingCanvas.style.cursor = "";
-            this.container.style.cursor = "";
-            scribbleIndicator.style.display = "none";
-        });
-
 
         function preventDefaults(e) {
             e.preventDefault();
@@ -394,19 +386,22 @@ class ForgeCanvas {
             this.container.addEventListener(e, preventDefaults, false);
         }
 
+        this.container.addEventListener("dragleave", () => {
+            toolbar.style.opacity = "0";
+            imageContainer.style.cursor = "";
+            drawingCanvas.style.cursor = "";
+            this.container.style.cursor = "";
+            scribbleIndicator.style.display = "none";
+        });
+
         this.container.addEventListener("dragenter", () => {
             imageContainer.style.cursor = "copy";
             drawingCanvas.style.cursor = "copy";
         });
 
-        this.container.addEventListener("dragleave", () => {
-            imageContainer.style.cursor = "";
-            drawingCanvas.style.cursor = "";
-        });
-
         this.container.addEventListener("drop", (e) => {
             imageContainer.style.cursor = "pointer";
-            drawingCanvas.style.cursor = "grab";
+            drawingCanvas.style.cursor = "crosshair";
             const dt = e.dataTransfer;
             const files = dt.files;
             if (files.length > 0) {
@@ -491,7 +486,7 @@ class ForgeCanvas {
 
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        ctx.lineWidth = (this.scribbleWidth / this.imgScale) * 20;
+        ctx.lineWidth = Math.max(1, (this.scribbleWidth / this.imgScale) * 20);
 
         if (this.erasing) {
             ctx.globalCompositeOperation = "destination-out";
