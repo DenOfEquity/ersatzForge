@@ -107,7 +107,7 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
         if tabname == "extras":
             res.generation_info = gr.HTML(elem_id=f'html_info_{tabname}')
             # no gen info update in extras
-            res.gallery.change(fn=select_gallery_0, js="setup_gallery_lightbox", inputs=[dummy], outputs=[res.gallery], show_progress=False)
+            res.gallery.change(fn=select_gallery_0, js="selected_gallery_index", inputs=[dummy], outputs=[res.gallery], show_progress=False).then(fn=None, js="setup_gallery_lightbox", inputs=None, outputs=None)
         else:
             res.generation_info = gr.Textbox(visible=False, elem_id=f'generation_info_{tabname}')
             res.infotext = gr.HTML(elem_id=f'html_info_{tabname}', elem_classes="infotext")
@@ -174,4 +174,5 @@ def setup_dialog(button_show, dialog, *, button_close=None):
 
     if button_close:
         button_close.click(fn=None, js="closePopup")
+
 
