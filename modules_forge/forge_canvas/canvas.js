@@ -117,23 +117,19 @@ class ForgeCanvas {
         const uploadHint = document.getElementById(`uploadHint_${this.uuid}`);
         const scribbleIndicator = document.getElementById(`scribbleIndicator_${this.uuid}`);
 
-        const scribbleColorBlock = document.getElementById(`scribbleColorBlock_${this.uuid}`);
-        if (this.scribbleColorFixed) scribbleColorBlock.style.display = "none";
+        if (this.scribbleColorFixed) document.getElementById(`scribbleColorBlock_${this.uuid}`).style.display = "none";
         const scribbleColor = document.getElementById(`scribbleColor_${this.uuid}`);
         scribbleColor.value = this.scribbleColor;
 
-        const scribbleWidthBlock = document.getElementById(`scribbleWidthBlock_${this.uuid}`);
-        if (this.scribbleWidthFixed) scribbleWidthBlock.style.display = "none";
+        if (this.scribbleWidthFixed) document.getElementById(`scribbleWidthBlock_${this.uuid}`).style.display = "none";
         const scribbleWidth = document.getElementById(`scribbleWidth_${this.uuid}`);
         scribbleWidth.value = this.scribbleWidth;
 
-        const scribbleAlphaBlock = document.getElementById(`scribbleAlphaBlock_${this.uuid}`);
-        if (this.scribbleAlphaFixed) scribbleAlphaBlock.style.display = "none";
+        if (this.scribbleAlphaFixed) document.getElementById(`scribbleAlphaBlock_${this.uuid}`).style.display = "none";
         const scribbleAlpha = document.getElementById(`scribbleAlpha_${this.uuid}`);
         scribbleAlpha.value = this.scribbleAlpha;
 
-        const scribbleSoftnessBlock = document.getElementById(`scribbleSoftnessBlock_${this.uuid}`);
-        if (this.scribbleSoftnessFixed) scribbleSoftnessBlock.style.display = "none";
+        if (this.scribbleSoftnessFixed) document.getElementById(`scribbleSoftnessBlock_${this.uuid}`).style.display = "none";
         const scribbleSoftness = document.getElementById(`scribbleSoftness_${this.uuid}`);
         scribbleSoftness.value = this.scribbleSoftness;
 
@@ -411,12 +407,12 @@ class ForgeCanvas {
 
         this.container.addEventListener("pointerenter", () => {
             this.pointerInsideContainer = true;
-			if (this.img && !this.no_scribbles) scribbleIndicator.style.display = "inline-block";
+            if (this.img && !this.no_scribbles) scribbleIndicator.style.display = "inline-block";
         });
 
         this.container.addEventListener("pointerleave", () => {
             this.pointerInsideContainer = false;
-			scribbleIndicator.style.display = "none";
+            scribbleIndicator.style.display = "none";
         });
 
         document.addEventListener("paste", (e) => { // event listener on container instead?
@@ -449,11 +445,18 @@ class ForgeCanvas {
 
             if (!this.pointerInsideContainer) return;
 
-			if (e.key === "r") {
-				this.adjustInitialPositionAndScale();
-				this.drawImage();
-			}
-			if (e.key === "f")	this.toggleMaximize();
+            if (e.ctrlKey && e.key === "x") {
+                e.preventDefault();
+                this.resetImage();
+            }
+// Ctrl+Q to remove ? maybe not useful
+// Ctrl+O to open ?
+
+            if (e.key === "r") centerButton.click();
+
+            if (e.key === "f") this.toggleMaximize();
+            
+            if (e.key === "e" && !this.scribbleColorFixed) scribbleColor.click();
         });
 
         this.maxButton.addEventListener("click", () => {
@@ -569,8 +572,9 @@ class ForgeCanvas {
             this.adjustInitialPositionAndScale();
             this.drawImage();
             this.updateBackgroundImageData();
+            this.history = [];
+            this.historyIndex == -1;
             this.saveState();
-            this.updateUndoRedoButtons();
             document.getElementById(`imageInput_${this.uuid}`).value = null;
             document.getElementById(`uploadHint_${this.uuid}`).style.display = "none";
         };
@@ -585,7 +589,6 @@ class ForgeCanvas {
             this.adjustInitialPositionAndScale();
             this.drawImage();
             this.saveState();
-            this.updateUndoRedoButtons();
         }
     }
 
@@ -596,6 +599,8 @@ class ForgeCanvas {
             const ctx = canvas.getContext("2d");
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(image, 0, 0);
+            this.history = [];
+            this.historyIndex == -1;
             this.saveState();
         };
         if (base64) {
@@ -649,12 +654,14 @@ class ForgeCanvas {
     }
 
     resetImage() {
-        const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-        const ctx = canvas.getContext("2d");
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        this.adjustInitialPositionAndScale();
-        this.drawImage();
-        this.saveState();
+        if (this.img) {
+            const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            this.adjustInitialPositionAndScale();
+            this.drawImage();
+            this.saveState();
+        }
     }
 
     removeImage() {
@@ -666,11 +673,14 @@ class ForgeCanvas {
         image.src = "";
         image.style.width = "0";
         image.style.height = "0";
+        this.history = [];
+        this.historyIndex = -1;
         this.saveState();
         if (!this.no_upload) {
             document.getElementById(`uploadHint_${this.uuid}`).style.display = "inline-block";
         }
         this.loadImage(null);
+        this.updateUndoRedoButtons();
     }
 
     saveState() {

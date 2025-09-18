@@ -77,7 +77,8 @@
 
 .forge-toolbar .forge-btn, .forge-toolbar-static .forge-btn {
     padding: 2px 6px;
-    border: none;
+    border: none !important;
+    outline: none;
     background-color: #3a3a3a;
     color: white;
     font-size: 14px;
@@ -85,12 +86,11 @@
     transition: background-color 0.3s ease;
 }
 
-.forge-toolbar .forge-btn, .forge-toolbar-static .forge-btn:hover {
+.forge-btn:hover {
     background-color: #5e5e5e;
 }
-
-.forge-toolbar .forge-btn, .forge-toolbar-static .forge-btn:active {
-    background-color: #3e3e3e;
+.forge-btn:active {
+    background-color: #7a7a7a;
 }
 
 .forge-toolbar-box-a {
@@ -119,6 +119,7 @@
 
 .forge-toolbar-color {
     border: none;
+    outline: none;
     background: none;
     padding: 3px;
     border-radius: 50%;
@@ -149,6 +150,7 @@
 }
 
 .forge-toolbar-range {
+    outline: none;
 }
 
 .forge-scribble-indicator {
