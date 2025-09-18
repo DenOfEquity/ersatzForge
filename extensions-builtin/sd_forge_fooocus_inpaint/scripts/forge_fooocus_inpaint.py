@@ -5,9 +5,8 @@ import backend.patcher.lora
 
 from modules_forge.shared import add_supported_control_model
 from modules_forge.supported_controlnet import ControlModelPatcher
-from backend.sampling.sampling_function import sampling_prepare
 from backend.utils import load_torch_file
-from backend.memory_management import cast_to_device, current_loaded_models
+from backend.memory_management import cast_to_device
 from backend.patcher.lora import model_lora_keys_unet
 
 
