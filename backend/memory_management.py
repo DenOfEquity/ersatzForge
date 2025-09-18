@@ -381,6 +381,8 @@ def module_size(module, exclude_device=None, include_device=None, return_split=F
             else:
                 # quanted
                 element_size = 1.1  # a bit more than 0.5 because of quant state parameters
+        elif getattr(p, 'computation_dtype', None) == torch.float16: # gguf
+            element_size = 1.1
 
         module_mem += t.nelement() * element_size
 
@@ -546,7 +548,6 @@ class LoadedModel:
 
 current_inference_memory = 1024 * 1024 * 1024
 
-
 def minimum_inference_memory():
     global current_inference_memory
     return current_inference_memory
@@ -625,8 +626,8 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
 
     execution_start_time = time.perf_counter()
     memory_to_free = max(minimum_inference_memory(), memory_required) + hard_memory_preservation
-    # memory_for_inference = minimum_inference_memory() + hard_memory_preservation
-    memory_for_inference = (memory_required if memory_required > 0 else minimum_inference_memory()) + hard_memory_preservation
+    memory_for_inference = minimum_inference_memory() + hard_memory_preservation
+    # memory_for_inference = (memory_required if memory_required > 0 else minimum_inference_memory()) + hard_memory_preservation
 
     models_to_load = []
     models_already_loaded = []
