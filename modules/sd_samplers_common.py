@@ -167,17 +167,12 @@ def apply_refiner(cfg_denoiser, x):
     completed_ratio = cfg_denoiser.step / cfg_denoiser.total_steps
     refiner_switch_at = cfg_denoiser.p.refiner_switch_at
     refiner_checkpoint_info = cfg_denoiser.p.refiner_checkpoint_info
-    refiner_cfg = cfg_denoiser.p.refiner_cfg
 
     if refiner_switch_at is not None and completed_ratio < refiner_switch_at:
         return False
 
     if refiner_checkpoint_info is None or shared.sd_model.sd_checkpoint_info == refiner_checkpoint_info:
         return False
-
-    if refiner_cfg is not None and refiner_cfg != 0:
-        cfg_denoiser.p.sampler.sampler_extra_args['cond_scale'] = refiner_cfg
-        cfg_denoiser.p.extra_generation_params['Refiner CFG'] = refiner_cfg
 
     if getattr(cfg_denoiser.p, "enable_hr", False):
         is_second_pass = cfg_denoiser.p.is_hr_pass
@@ -190,6 +185,11 @@ def apply_refiner(cfg_denoiser, x):
 
         if opts.hires_fix_refiner_pass != "second pass":
             cfg_denoiser.p.extra_generation_params['Hires refiner'] = opts.hires_fix_refiner_pass
+
+    if cfg_denoiser.p.is_hr_pass:
+        use_cfg = (cfg_denoiser.p.hr_cfg > 1)
+    else:
+        use_cfg = (cfg_denoiser.p.cfg_scale > 1)
 
     cfg_denoiser.p.extra_generation_params['Refiner'] = refiner_checkpoint_info.name
     cfg_denoiser.p.extra_generation_params['Refiner switch at'] = refiner_switch_at
@@ -216,7 +216,7 @@ def apply_refiner(cfg_denoiser, x):
     cfg_denoiser.p.setup_conds()
     cfg_denoiser.update_inner_model()
 
-    sampling_prepare(sd_models.model_data.get_sd_model().forge_objects.unet, x=x)
+    sampling_prepare(sd_models.model_data.get_sd_model().forge_objects.unet, x=x, use_cfg=use_cfg)
     return True
 
 

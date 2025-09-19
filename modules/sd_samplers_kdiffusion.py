@@ -142,8 +142,13 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
         return sigmas.cpu()
 
     def sample_img2img(self, p, x, noise, conditioning, unconditional_conditioning, steps=None, image_conditioning=None):
+        if p.is_hr_pass:
+            use_cfg = (p.hr_cfg > 1)
+        else:
+            use_cfg = (p.cfg_scale > 1)
+
         unet_patcher = self.model_wrap.inner_model.forge_objects.unet
-        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x)
+        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x, use_cfg=use_cfg)
 
         steps, t_enc = sd_samplers_common.setup_img2img_steps(p, steps)
 
@@ -201,8 +206,13 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
         return samples
 
     def sample(self, p, x, conditioning, unconditional_conditioning, steps=None, image_conditioning=None):
+        if p.is_hr_pass:
+            use_cfg = (p.hr_cfg > 1)
+        else:
+            use_cfg = (p.cfg_scale > 1)
+
         unet_patcher = self.model_wrap.inner_model.forge_objects.unet
-        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x)
+        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x, use_cfg=use_cfg)
 
         steps = steps or p.steps
 
