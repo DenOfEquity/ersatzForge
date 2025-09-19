@@ -8,7 +8,7 @@ from einops import repeat, rearrange
 
 from backend.attention import attention_function as optimized_attention
 from backend.memory_management import cast_to_device
-from backend.nn.flux import EmbedND, apply_rope
+from backend.nn.flux import EmbedND#, apply_rope
 
 
 def sinusoidal_embedding_1d(dim, position):
@@ -52,21 +52,36 @@ class WanSelfAttention(nn.Module):
         b, s, n, d = *x.shape[:2], self.num_heads, self.head_dim
 
         # query, key, value function
-        def qkv_fn(x):
-            q = self.norm_q(self.q(x)).view(b, s, n, d)
-            k = self.norm_k(self.k(x)).view(b, s, n, d)
-            v = self.v(x).view(b, s, n * d)
-            return q, k, v
+        # def qkv_fn(x):
+            # q = self.norm_q(self.q(x)).view(b, s, n, d)
+            # k = self.norm_k(self.k(x)).view(b, s, n, d)
+            # v = self.v(x).view(b, s, n * d)
+            # return q, k, v
 
-        q, k, v = qkv_fn(x)
-        q, k = apply_rope(q, k, freqs)
+        # q, k, v = qkv_fn(x)
+        # q, k = apply_rope(q, k, freqs)
+
+
+        q = self.norm_q(self.q(x)).view(b, s, n, d)
+        _shape = q.shape # k.shape is always the same
+        _reshape = list(_shape[:-1]) + [-1, 1, 2]
+        q = q.to(torch.float32).reshape(*_reshape)
+        q = freqs[..., 0] * q[..., 0] + freqs[..., 1] * q[..., 1]
+        q = q.reshape(*_shape).type_as(x)
+
+        k = self.norm_k(self.k(x)).view(b, s, n, d)
+        k = k.to(torch.float32).reshape(*_reshape)
+        k = freqs[..., 0] * k[..., 0] + freqs[..., 1] * k[..., 1]
+        k = k.reshape(*_shape).type_as(x)
 
         x = optimized_attention(
             q.view(b, s, n * d),
             k.view(b, s, n * d),
-            v,
+            self.v(x).view(b, s, n * d),
             heads=self.num_heads,
         )
+
+        del q, k
 
         x = self.o(x)
         return x

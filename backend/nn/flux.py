@@ -13,7 +13,17 @@ from backend.utils import fp16_fix, tensor2parameter
 
 
 def attention(q, k, v, pe):
-    q, k = apply_rope(q, k, pe)
+    _shape = q.shape # k.shape is always the same
+    _reshape = list(_shape[:-1]) + [-1, 1, 2]
+
+    q = q.to(torch.float32).reshape(*_reshape)
+    q = pe[..., 0] * q[..., 0] + pe[..., 1] * q[..., 1]
+    q = q.reshape(*_shape).type_as(v)
+
+    k = k.to(torch.float32).reshape(*_reshape)
+    k = pe[..., 0] * k[..., 0] + pe[..., 1] * k[..., 1]
+    k = k.reshape(*_shape).type_as(v)
+    
     x = attention_function(q, k, v, q.shape[1], skip_reshape=True)
     return x
 
@@ -39,11 +49,14 @@ def rope(pos, dim, theta):
 
 def apply_rope(xq, xk, freqs_cis):
     xq_ = xq.to(torch.float32).reshape(*xq.shape[:-1], -1, 1, 2)
-    xk_ = xk.to(torch.float32).reshape(*xk.shape[:-1], -1, 1, 2)
     xq_out = freqs_cis[..., 0] * xq_[..., 0] + freqs_cis[..., 1] * xq_[..., 1]
+    xq_out = xq_out.reshape(*xq.shape).type_as(xq)
+    del xq, xq_
+    xk_ = xk.to(torch.float32).reshape(*xk.shape[:-1], -1, 1, 2)
     xk_out = freqs_cis[..., 0] * xk_[..., 0] + freqs_cis[..., 1] * xk_[..., 1]
-    del xq_, xk_
-    return xq_out.reshape(*xq.shape).type_as(xq), xk_out.reshape(*xk.shape).type_as(xk)
+    xk_out = xk_out.reshape(*xk.shape).type_as(xk)
+    del xk, xk_
+    return xq_out, xk_out
 
 
 def timestep_embedding(t, dim, max_period=10000, time_factor=1000.0):
@@ -368,8 +381,10 @@ class IntegratedFluxTransformer2DModel(nn.Module):
     def inner_forward(self, img, img_ids, txt, txt_ids, timesteps, y, guidance=None):
         if img.ndim != 3 or txt.ndim != 3:
             raise ValueError("Input img and txt tensors must have 3 dimensions.")
+
         img = self.img_in(img)
         vec = self.time_in(timestep_embedding(timesteps, 256).to(img.dtype))
+
         if self.guidance_embed:
             if guidance is None:
                 raise ValueError("Didn't get guidance strength for guidance distilled model.")
@@ -377,13 +392,16 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         vec = vec + self.vector_in(y)
         txt = self.txt_in(txt)
         del y, guidance
+
         ids = torch.cat((txt_ids, img_ids), dim=1)
         del txt_ids, img_ids
         pe = self.pe_embedder(ids)
         del ids
+
         for block in self.double_blocks:
             img, txt = block(img=img, txt=txt, vec=vec, pe=pe)
         img = torch.cat((txt, img), 1)
+
         for block in self.single_blocks:
             img = block(img, vec=vec, pe=pe)
         del pe
