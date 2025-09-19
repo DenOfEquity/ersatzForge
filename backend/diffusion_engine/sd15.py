@@ -245,12 +245,12 @@ class StableDiffusion(ForgeDiffusionEngine):
         self.text_processing_engine.clip_skip = clip_skip
 
     @torch.inference_mode()
-    def get_learned_conditioning(self, prompt: list[str], end_steps=0):
+    def get_learned_conditioning(self, prompt: list[str], end_steps=[-1]):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
         te_device = memory_management.text_encoder_device()
         off_device = memory_management.text_encoder_offload_device()
 
-        if "ELLA" in shared.opts.use_ELLA:
+        if "ELLA" in shared.opts.use_ELLA and end_steps != [-1]:
             if self.ella is None:
                 self.ella = ELLA()
 
@@ -264,8 +264,8 @@ class StableDiffusion(ForgeDiffusionEngine):
 
             #use diffusers for t5xl, auto-download and nothing else uses it
             from transformers import T5EncoderModel, T5Tokenizer
-            T5model = T5EncoderModel.from_pretrained("QQGYLab/ELLA", subfolder="models--google--flan-t5-xl--text_encoder")
-            T5tokenizer = T5Tokenizer.from_pretrained("QQGYLab/ELLA", subfolder="models--google--flan-t5-xl--text_encoder", legacy=True)
+            T5model = T5EncoderModel.from_pretrained("QQGYLab/ELLA", subfolder="models--google--flan-t5-xl--text_encoder", local_files_only=True)
+            T5tokenizer = T5Tokenizer.from_pretrained("QQGYLab/ELLA", subfolder="models--google--flan-t5-xl--text_encoder", legacy=True, local_files_only=True)
 
             last_step = max(1, end_steps[-1] - 1)
 
