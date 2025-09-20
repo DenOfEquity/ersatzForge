@@ -6,9 +6,9 @@ import torch
 from torch import nn
 from einops import rearrange, repeat
 from backend.utils import fp16_fix
+from backend.attention import attention_function
 
-from .flux import attention, timestep_embedding
-from .flux import EmbedND, MLPEmbedder, RMSNorm, QKNorm, SelfAttention
+from .flux import timestep_embedding, EmbedND, MLPEmbedder, RMSNorm, QKNorm, SelfAttention
 
 
 class Approximator(nn.Module):
@@ -59,7 +59,7 @@ class DoubleStreamBlock(nn.Module):
         t1_shift, t1_scale, t1_gate = torch.split(txt_mod1, 1, dim=1)
         t2_shift, t2_scale, t2_gate = torch.split(txt_mod2, 1, dim=1)
 
-        img_modulated = torch.addcmul(i1_shift, 1 + i1_scale, self.img_norm1(img))
+        img_modulated = torch.addcmul(i1_shift, i1_scale.add_(1), self.img_norm1(img))
         img_qkv = self.img_attn.qkv(img_modulated)
         B, L, _ = img_qkv.shape
         H = self.num_heads
@@ -68,25 +68,40 @@ class DoubleStreamBlock(nn.Module):
         del img_qkv
         img_q, img_k = self.img_attn.norm(img_q, img_k)
         txt_modulated = self.txt_norm1(txt)
-        txt_modulated = torch.addcmul(t1_shift, 1 + t1_scale, txt_modulated)
+        txt_modulated = torch.addcmul(t1_shift, t1_scale.add_(1), txt_modulated)
         txt_qkv = self.txt_attn.qkv(txt_modulated)
         B, L, _ = txt_qkv.shape
         txt_q, txt_k, txt_v = rearrange(txt_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
         del txt_qkv
-        txt_q, txt_k = self.txt_attn.norm(txt_q, txt_k)
-        q = torch.cat((txt_q, img_q), dim=2)
-        k = torch.cat((txt_k, img_k), dim=2)
+
         v = torch.cat((txt_v, img_v), dim=2)
-        del txt_q, img_q
-        del txt_k, img_k
         del txt_v, img_v
 
-        attn = attention(q, k, v, pe=pe)
+        txt_q, txt_k = self.txt_attn.norm(txt_q, txt_k)
+
+        q = torch.cat((txt_q, img_q), dim=2)
+        del txt_q, img_q
+        _shape = q.shape # k.shape is always the same
+        _reshape = list(_shape[:-1]) + [-1, 1, 2]
+        q = q.to(torch.float32).reshape(*_reshape)
+        q = torch.add(torch.mul(pe[..., 0], q[..., 0]), torch.mul(pe[..., 1], q[..., 1]))
+        q = q.reshape(*_shape).type_as(v)
+
+        k = torch.cat((txt_k, img_k), dim=2)
+        del txt_k, img_k
+        k = k.to(torch.float32).reshape(*_reshape)
+        k = torch.add(torch.mul(pe[..., 0], k[..., 0]), torch.mul(pe[..., 1], k[..., 1]))
+        k = k.reshape(*_shape).type_as(v)
+        del pe
+
+        attn = attention_function(q, k, v, q.shape[1], skip_reshape=True)
+        del q, k, v
+
         txt_attn, img_attn = attn[:, :txt.shape[1]], attn[:, txt.shape[1]:]
         img.addcmul_(i1_gate, self.img_attn.proj(img_attn))
-        img.addcmul_(i2_gate, self.img_mlp(torch.addcmul(i2_shift, 1 + i2_scale, self.img_norm2(img))))
+        img.addcmul_(i2_gate, self.img_mlp(torch.addcmul(i2_shift, i2_scale.add_(1), self.img_norm2(img))))
         txt.addcmul_(t1_gate, self.txt_attn.proj(txt_attn))
-        txt.addcmul_(t2_gate, self.txt_mlp(torch.addcmul(t2_shift, 1 + t2_scale, self.txt_norm2(txt))))
+        txt.addcmul_(t2_gate, self.txt_mlp(torch.addcmul(t2_shift, t2_scale.add_(1), self.txt_norm2(txt))))
 
         txt = fp16_fix(txt)
         return img, txt
@@ -108,7 +123,7 @@ class SingleStreamBlock(nn.Module):
         self.mlp_act = nn.GELU(approximate="tanh")
 
     def forward(self, x, shift, scale, gate, pe):
-        x_mod = torch.addcmul(shift, scale, self.pre_norm(x))
+        x_mod = torch.addcmul(shift, scale.add_(1), self.pre_norm(x))
         del shift, scale
         qkv, mlp = torch.split(self.linear1(x_mod), [3 * self.hidden_size, self.mlp_hidden_dim], dim=-1)
         del x_mod
@@ -117,8 +132,23 @@ class SingleStreamBlock(nn.Module):
         del qkv
 
         q, k = self.norm(q, k)
-        attn = attention(q, k, v, pe=pe)
-        del q, k, v, pe
+
+        _shape = q.shape # k.shape is always the same
+        _reshape = list(_shape[:-1]) + [-1, 1, 2]
+
+        q = q.to(torch.float32).reshape(*_reshape)
+        q = torch.add(torch.mul(pe[..., 0], q[..., 0]), torch.mul(pe[..., 1], q[..., 1]))
+        q = q.reshape(*_shape).type_as(v)
+
+        k = k.to(torch.float32).reshape(*_reshape)
+        k = torch.add(torch.mul(pe[..., 0], k[..., 0]), torch.mul(pe[..., 1], k[..., 1]))
+        k = k.reshape(*_shape).type_as(v)
+
+        del pe
+        
+        attn = attention_function(q, k, v, q.shape[1], skip_reshape=True)
+        del q, k, v
+
         output = self.linear2(torch.cat((attn, self.mlp_act(mlp)), dim=2))
         del attn, mlp
 
@@ -136,7 +166,7 @@ class LastLayer(nn.Module):
         self.linear = nn.Linear(hidden_size, patch_size * patch_size * out_channels, bias=True)
 
     def forward(self, x, shift, scale):
-        x = torch.addcmul(shift, scale, self.norm_final(x))
+        x = torch.addcmul(shift, scale.add_(1), self.norm_final(x))
         x = self.linear(x)
         return x
 
@@ -226,13 +256,13 @@ class IntegratedChromaTransformer2DModel(nn.Module):
 
         idx = 0
         for i, block in enumerate(self.single_blocks):
-            img = block(img, shift=mod_vectors[:, idx+0:idx+1, :], scale=mod_vectors[:, idx+1:idx+2, :] + 1, gate=mod_vectors[:, idx+2:idx+3, :], pe=pe)
+            img = block(img, shift=mod_vectors[:, idx+0:idx+1, :], scale=mod_vectors[:, idx+1:idx+2, :], gate=mod_vectors[:, idx+2:idx+3, :], pe=pe)
             idx += 3
         del pe
         img = img[:, txt.shape[1]:, ...]
 
         idx = 3 * nb_single_block + 12 * nb_double_block
-        img = self.final_layer(img, mod_vectors[:, idx:idx+1, :], mod_vectors[:, idx+1:idx+2, :] + 1)
+        img = self.final_layer(img, mod_vectors[:, idx:idx+1, :], mod_vectors[:, idx+1:idx+2, :])
 
         return img
 

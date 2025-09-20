@@ -17,11 +17,11 @@ def attention(q, k, v, pe):
     _reshape = list(_shape[:-1]) + [-1, 1, 2]
 
     q = q.to(torch.float32).reshape(*_reshape)
-    q = pe[..., 0] * q[..., 0] + pe[..., 1] * q[..., 1]
+    q = torch.add(torch.mul(pe[..., 0], q[..., 0]), torch.mul(pe[..., 1], q[..., 1]))
     q = q.reshape(*_shape).type_as(v)
 
     k = k.to(torch.float32).reshape(*_reshape)
-    k = pe[..., 0] * k[..., 0] + pe[..., 1] * k[..., 1]
+    k = torch.add(torch.mul(pe[..., 0], k[..., 0]), torch.mul(pe[..., 1], k[..., 1]))
     k = k.reshape(*_shape).type_as(v)
     
     x = attention_function(q, k, v, q.shape[1], skip_reshape=True)
@@ -260,12 +260,12 @@ class DoubleStreamBlock(nn.Module):
 
         img.addcmul_(img_mod1_gate, self.img_attn.proj(img_attn))
         del img_attn, img_mod1_gate
-        img = img + img_mod2_gate * self.img_mlp(torch.addcmul(img_mod2_shift, (1 + img_mod2_scale), self.img_norm2(img)))
+        img.addcmul_(img_mod2_gate, self.img_mlp(torch.addcmul(img_mod2_shift, (1 + img_mod2_scale), self.img_norm2(img))))
         del img_mod2_gate, img_mod2_scale, img_mod2_shift
 
         txt.addcmul_(txt_mod1_gate, self.txt_attn.proj(txt_attn))
         del txt_attn, txt_mod1_gate
-        txt = txt + txt_mod2_gate * self.txt_mlp(torch.addcmul(txt_mod2_shift, (1 + txt_mod2_scale), self.txt_norm2(txt)))
+        txt.addcmul_(txt_mod2_gate, self.txt_mlp(torch.addcmul(txt_mod2_shift, (1 + txt_mod2_scale), self.txt_norm2(txt))))
         del txt_mod2_gate, txt_mod2_scale, txt_mod2_shift
 
         txt = fp16_fix(txt)
@@ -308,7 +308,7 @@ class SingleStreamBlock(nn.Module):
         output = self.linear2(torch.cat((attn, self.mlp_act(mlp)), dim=2))
         del attn, mlp
 
-        x.addcmul_(mod_gate, output)    # x += mod_gate * output
+        x.addcmul_(mod_gate, output)
         del mod_gate, output
 
         x = fp16_fix(x)

@@ -46,14 +46,11 @@ def apply_control(h, control, name):
     if control is not None and name in control and len(control[name]) > 0:
         ctrl = control[name].pop()
         if ctrl is not None:
-            try:
-                h += ctrl
-            except:
-                # Kohya HighRes fix changes shape of h
-                c = torch.nn.functional.interpolate(ctrl, (h.shape[-2], h.shape[-1]), mode='bilinear')
-                h += c
-                del c
-#                print("warning control could not be applied", h.shape, ctrl.shape)
+            if h.shape == ctrl.shape:
+                h.add_(ctrl)
+            else: # Kohya HighRes fix changes shape of h
+                h.add_c(torch.nn.functional.interpolate(ctrl, (h.shape[-2], h.shape[-1]), mode='bilinear'))
+
     return h
 
 
@@ -215,10 +212,10 @@ class BasicTransformerBlock(nn.Module):
         extra_options["n_heads"] = self.n_heads
         extra_options["dim_head"] = self.d_head
         if self.ff_in:
-            x_skip = x
-            x = self.ff_in(self.norm_in(x))
             if self.is_res:
-                x += x_skip
+                x.add_(self.ff_in(self.norm_in(x)))
+            else:
+                x = self.ff_in(self.norm_in(x))
         n = self.norm1(x)
         if self.disable_self_attn:
             context_attn1 = context
@@ -287,13 +284,13 @@ class BasicTransformerBlock(nn.Module):
             patch = transformer_patches["attn2_output_patch"]
             for p in patch:
                 n = p(n, extra_options)
-        x += n
-        x_skip = 0
+        x.add_(n)
+
         if self.is_res:
-            x_skip = x
-        x = self.ff(self.norm3(x))
-        if self.is_res:
-            x += x_skip
+            x.add_(self.ff(self.norm3(x)))
+        else:
+            x = self.ff(self.norm3(x))
+
         return x
 
 
@@ -328,21 +325,28 @@ class SpatialTransformer(nn.Module):
             context = [context] * len(self.transformer_blocks)
         b, c, h, w = x.shape
         x_in = x
+
         x = self.norm(x)
-        if not self.use_linear:
-            x = self.proj_in(x)
-        x = rearrange(x, 'b c h w -> b (h w) c').contiguous()
+
         if self.use_linear:
+            x = rearrange(x, 'b c h w -> b (h w) c').contiguous()
             x = self.proj_in(x)
+        else:
+            x = self.proj_in(x)
+            x = rearrange(x, 'b c h w -> b (h w) c').contiguous()
+            
         for i, block in enumerate(self.transformer_blocks):
             transformer_options["block_index"] = i
             x = block(x, context=context[i], transformer_options=transformer_options)
+
         if self.use_linear:
             x = self.proj_out(x)
-        x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w).contiguous()
-        if not self.use_linear:
+            x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w).contiguous()
+        else:
+            x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w).contiguous()
             x = self.proj_out(x)
-        return x + x_in
+
+        return torch.add(x, x_in)
 
 
 class Upsample(nn.Module):
@@ -356,17 +360,17 @@ class Upsample(nn.Module):
             self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=padding)
 
     def forward(self, x, output_shape=None):
-        assert x.shape[1] == self.channels
         if self.dims == 3:
-            shape = [x.shape[2], x.shape[3] * 2, x.shape[4] * 2]
-            if output_shape is not None:
-                shape[1] = output_shape[3]
-                shape[2] = output_shape[4]
+            if output_shape is None:
+                shape = [x.shape[2], x.shape[3] * 2, x.shape[4] * 2]
+            else:
+                shape = [x.shape[2], output_shape[3], output_shape[4]]
         else:
-            shape = [x.shape[2] * 2, x.shape[3] * 2]
-            if output_shape is not None:
-                shape[0] = output_shape[2]
-                shape[1] = output_shape[3]
+            if output_shape is None:
+                shape = [x.shape[2] * 2, x.shape[3] * 2]
+            else:
+                shape = [output_shape[2], output_shape[3]]
+
         x = torch.nn.functional.interpolate(x, size=shape, mode="nearest")
         if self.use_conv:
             x = self.conv(x)
@@ -388,7 +392,6 @@ class Downsample(nn.Module):
             self.op = avg_pool_nd(dims, kernel_size=stride, stride=stride)
 
     def forward(self, x):
-        assert x.shape[1] == self.channels
         return self.op(x)
 
 
@@ -480,20 +483,19 @@ class ResBlock(TimestepBlock):
                 h = out_norm(h)
             if emb_out is not None:
                 scale, shift = torch.chunk(emb_out, 2, dim=1)
-                h *= (1 + scale)
-                h += shift
+                h.addcmul_(shift, scale.add_(1))
             h = out_rest(h)
         else:
             if emb_out is not None:
                 if self.exchange_temb_dims:
                     emb_out = rearrange(emb_out, "b t c ... -> b c t ...")
-                h = h + emb_out
+                h.add_(emb_out)
             if "group_norm_wrapper" in transformer_options:
                 h = transformer_options["group_norm_wrapper"](self.out_layers[0], h, transformer_options)
                 h = self.out_layers[1:](h)
             else:
                 h = self.out_layers(h)
-        return self.skip_connection(x) + h
+        return h.add_(self.skip_connection(x))
 
 
 class IntegratedUNet2DConditionModel(nn.Module, ConfigMixin):
@@ -722,7 +724,7 @@ class IntegratedUNet2DConditionModel(nn.Module, ConfigMixin):
         emb = self.time_embed(t_emb)
         if self.num_classes is not None:
             assert y.shape[0] == x.shape[0]
-            emb = emb + self.label_emb(y)
+            emb.add_(self.label_emb(y))
         h = x
         for id, module in enumerate(self.input_blocks):
             transformer_options["block"] = ("input", id)
