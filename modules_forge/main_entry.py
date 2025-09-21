@@ -159,7 +159,7 @@ def make_checkpoint_manager_ui():
 
 
     ui_forge_swap = gr.Dropdown(label="Swap Location + Method", value=lambda: shared.opts.forge_swap, choices=["CPU + Async", "CPU + Queue", "Shared + Async", "Shared + Queue"], filterable=False)
-    ui_forge_inference_memory = gr.Number(label="GPU Weights (MB)", value=lambda: total_vram - shared.opts.forge_inference_memory, minimum=0, maximum=int(memory_management.total_vram), step=1, scale=0)
+    ui_forge_inference_memory = gr.Number(label="Reserve VRAM (MB)", value=lambda: shared.opts.forge_inference_memory, minimum=0, maximum=int(memory_management.total_vram), step=1, scale=0)
 
     mem_comps = [ui_forge_inference_memory, ui_forge_swap]
 
@@ -177,52 +177,45 @@ def make_checkpoint_manager_ui():
     return
 
 
-def ui_refresh_memory_management_settings(model_memory, swap):
-    """ Passes precalculated 'model_memory' from "GPU Weights" UI slider (skip redundant calculation) """
+def ui_refresh_memory_management_settings(inference_extra, swap):
     refresh_memory_management_settings(
         async_loading="Async" if "Async" in swap else "Queue",
         pin_shared_memory="CPU" if "CPU" in swap else "Shared",
-        model_memory=model_memory  # Use model_memory directly from UI slider value
+        inference_memory=inference_extra
     )
 
-def refresh_memory_management_settings(async_loading="Queue", pin_shared_memory="CPU", inference_memory=None, model_memory=None):
+def refresh_memory_management_settings(async_loading="Queue", pin_shared_memory="CPU", inference_memory=None):
     # Fallback to defaults if values are not passed
     if inference_memory is None:
         inference_memory = shared.opts.forge_inference_memory
-
-    # If model_memory is provided, calculate inference memory accordingly, otherwise use inference_memory directly
-    if model_memory is None:
-        model_memory = total_vram - inference_memory
-    else:
-        inference_memory = total_vram - model_memory
 
     shared.opts.set('forge_swap', f'{pin_shared_memory} + {async_loading}')
     shared.opts.set('forge_inference_memory', inference_memory)
 
     stream.stream_activated = async_loading == 'Async'
-    memory_management.current_inference_memory = inference_memory * 1024 * 1024  # Convert MB to bytes
+    memory_management.extra_inference_memory = inference_memory * 1024 * 1024  # Convert MB to bytes
     memory_management.PIN_SHARED_MEMORY = pin_shared_memory == 'Shared'
 
     log_dict = dict(
         stream=stream.should_use_stream(),
-        inference_memory=memory_management.minimum_inference_memory() / (1024 * 1024),
+        inference_memory=memory_management.extra_inference_memory / (1024 * 1024),
         pin_shared_memory=memory_management.PIN_SHARED_MEMORY
     )
 
-    print(f'Environment vars changed: {log_dict}')
+    # print(f'Environment vars changed: {log_dict}')
 
-    if inference_memory < min(512, total_vram * 0.05):
-        print('------------------')
-        print(f'[Low VRAM Warning] You just set Forge to use 100% GPU memory ({model_memory:.2f} MB) to load model weights.')
-        print('[Low VRAM Warning] This means you will have 0% GPU memory (0.00 MB) to do matrix computation. Computations may fallback to CPU or go Out of Memory.')
-        print('[Low VRAM Warning] In many cases, image generation will be 10x slower.')
-        print("[Low VRAM Warning] To solve the problem, you can set the 'GPU Weights' (on the top of page) to a lower value.")
-        print("[Low VRAM Warning] If you cannot find 'GPU Weights', you can click the 'all' option in the 'UI' area on the left-top corner of the webpage.")
-        print('[Low VRAM Warning] Make sure that you know what you are testing.')
-        print('------------------')
-    else:
-        compute_percentage = (inference_memory / total_vram) * 100.0
-        print(f'[GPU Setting] You will use {(100 - compute_percentage):.2f}% GPU memory ({model_memory:.2f} MB) to load weights, and use {compute_percentage:.2f}% GPU memory ({inference_memory:.2f} MB) to do matrix computation.')
+    # if inference_memory < min(512, total_vram * 0.05):
+        # print('------------------')
+        # print(f'[Low VRAM Warning] You just set Forge to use 100% GPU memory ({inference_memory:.2f} MB) to load model weights.')
+        # print('[Low VRAM Warning] This means you will have 0% GPU memory (0.00 MB) to do matrix computation. Computations may fallback to CPU or go Out of Memory.')
+        # print('[Low VRAM Warning] In many cases, image generation will be 10x slower.')
+        # print("[Low VRAM Warning] To solve the problem, you can set the 'GPU Weights' (on the top of page) to a lower value.")
+        # print("[Low VRAM Warning] If you cannot find 'GPU Weights', you can click the 'all' option in the 'UI' area on the left-top corner of the webpage.")
+        # print('[Low VRAM Warning] Make sure that you know what you are testing.')
+        # print('------------------')
+    # else:
+        # compute_percentage = (inference_memory / total_vram) * 100.0
+        # print(f'[GPU Setting] You will use {(100 - compute_percentage):.2f}% GPU memory ({inference_memory:.2f} MB) to load weights, and use {compute_percentage:.2f}% GPU memory ({inference_memory:.2f} MB) to do matrix computation.')
 
     processing.need_global_unload = True
     return
@@ -391,7 +384,7 @@ def on_preset_change(preset=None):
                 gr.update(),
                 gr.update(visible=True),
                 gr.update(),
-                gr.update(value=total_vram - 1024),
+                gr.update(value=0),
                 gr.update(value=ui_settings_from_file['txt2img/Width/value']),
                 gr.update(value=ui_settings_from_file['img2img/Width/value']),
                 gr.update(value=ui_settings_from_file['txt2img/Height/value']),
@@ -412,7 +405,7 @@ def on_preset_change(preset=None):
                 gr.update(),
                 gr.update(visible=True),
                 gr.update(),
-                gr.update(value=total_vram - 1024),
+                gr.update(value=0),
                 gr.update(value=1024),
                 gr.update(value=1024),
                 gr.update(value=1024),
@@ -429,9 +422,9 @@ def on_preset_change(preset=None):
                 gr.update(visible=True, value=3.5),
             ]
     else: # other presets
-        model_mem = getattr(shared.opts, f"{preset}_GPU_MB", total_vram - 1024)
+        model_mem = getattr(shared.opts, f"{preset}_GPU_MB", 0)
         if model_mem < 0 or model_mem > total_vram:
-            model_mem = total_vram - 1024
+            model_mem = 0
         return [
             gr.update(value=getattr(shared.opts, f"{preset}_vae_te", [""])),
             gr.update(visible=(preset != "flux")),                                                          # ui_clip_skip
@@ -462,7 +455,7 @@ shared.options_templates.update(shared.options_section(('ui_sd', "UI defaults 's
     "sd_i2i_width":  shared.OptionInfo(512,  "img2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd_i2i_height": shared.OptionInfo(512,  "img2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd_i2i_cfg":    shared.OptionInfo(7,    "img2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
-    "sd_GPU_MB":     shared.OptionInfo(total_vram - 1024, "GPU Weights (MB)", gr.Slider, {"minimum": 0,  "maximum": total_vram,   "step": 1}),
+    "sd_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,  "maximum": total_vram,   "step": 1}),
     "sd_vae_te":     shared.OptionInfo([""], "VAE / Text Encoder", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
     "sd_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
 }))
@@ -474,7 +467,7 @@ shared.options_templates.update(shared.options_section(('ui_xl', "UI defaults 'x
     "xl_i2i_width":  shared.OptionInfo(1024, "img2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "xl_i2i_height": shared.OptionInfo(1024, "img2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "xl_i2i_cfg":    shared.OptionInfo(5,    "img2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
-    "xl_GPU_MB":     shared.OptionInfo(total_vram - 1024, "GPU Weights (MB)", gr.Slider, {"minimum": 0,  "maximum": total_vram,   "step": 1}),
+    "xl_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,  "maximum": total_vram,   "step": 1}),
     "xl_vae_te":     shared.OptionInfo([""], "VAE / Text Encoder", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
     "xl_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
 }))
@@ -486,7 +479,7 @@ shared.options_templates.update(shared.options_section(('ui_sd3', "UI defaults '
     "sd3_i2i_width":  shared.OptionInfo(1024, "img2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd3_i2i_height": shared.OptionInfo(1024, "img2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd3_i2i_cfg":    shared.OptionInfo(5,    "img2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
-    "sd3_GPU_MB":     shared.OptionInfo(total_vram - 1024, "GPU Weights (MB)", gr.Slider, {"minimum": 0,  "maximum": total_vram,   "step": 1}),
+    "sd3_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,  "maximum": total_vram,   "step": 1}),
     "sd3_vae_te":     shared.OptionInfo([""], "VAE / Text Encoder", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
     "sd3_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
 }))
@@ -501,7 +494,7 @@ shared.options_templates.update(shared.options_section(('ui_flux', "UI defaults 
     "flux_i2i_height":   shared.OptionInfo(1024, "img2img height",               gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "flux_i2i_cfg":      shared.OptionInfo(1,    "img2img CFG",                  gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
     "flux_i2i_d_cfg":    shared.OptionInfo(3.5,  "img2img Distilled CFG",        gr.Slider, {"minimum": 0,   "maximum": 30,   "step": 0.1}),
-    "flux_GPU_MB":       shared.OptionInfo(total_vram - 1024, "GPU Weights (MB)",gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
+    "flux_GPU_MB":       shared.OptionInfo(0,    "Reserve VRAM (MB)",            gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
     "flux_vae_te":       shared.OptionInfo([""], "VAE / Text Encoder", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
     "flux_unet_dtype":   shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
 }))

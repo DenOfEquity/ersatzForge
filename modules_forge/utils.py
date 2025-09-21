@@ -17,7 +17,7 @@ def prepare_free_memory(aggressive=False):
         print('Cleanup all memory.')
         return
 
-    memory_management.free_memory(memory_required=memory_management.minimum_inference_memory(),
+    memory_management.free_memory(memory_required=0,
                                  device=memory_management.get_torch_device())
     print('Cleanup minimal inference memory.')
     return
@@ -130,8 +130,8 @@ def torch_bgr_to_pil_image(tensor: torch.Tensor) -> Image.Image:
             raise ValueError(f"{tensor.shape} does not describe a BCHW tensor")
         tensor = tensor.squeeze(0)
     assert tensor.ndim == 3, f"{tensor.shape} does not describe a CHW tensor"
-    # TODO: is `tensor.float().cpu()...numpy()` the most efficient idiom?
-    arr = tensor.float().cpu().clamp_(0, 1).numpy()  # clamp
+
+    arr = tensor.to(torch.float32).clamp_(0, 1).cpu().numpy()  # clamp
     arr = 255.0 * np.moveaxis(arr, 0, 2)  # CHW to HWC, rescale
     arr = arr.round().astype(np.uint8)
     arr = arr[:, :, ::-1]  # flip BGR to RGB
@@ -204,7 +204,7 @@ def resize_image_with_pad(img, resolution):
     return safer_memory(img_padded), remove_pad
 
 
-def lazy_memory_management(model):
-    required_memory = memory_management.module_size(model) + memory_management.minimum_inference_memory()
+def lazy_memory_management(model):  # not used
+    required_memory, _ = memory_management.module_size(model) + (1024 * 1024 * 1024)
     memory_management.free_memory(required_memory, device=memory_management.get_torch_device())
     return

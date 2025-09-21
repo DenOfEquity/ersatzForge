@@ -65,7 +65,7 @@ def greedy_move_to_gpu(model, model_gpu_memory_when_using_cpu_swap, silent=True)
     memory_in_swap = 0
     for m in model.modules():
         if hasattr(m, "weight"):
-            module_mem = memory_management.module_size(m)
+            module_mem, _ = memory_management.module_size(m)
             if mem_counter + module_mem < model_gpu_memory_when_using_cpu_swap:
                 m.to(gpu)
                 mem_counter += module_mem

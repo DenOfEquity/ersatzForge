@@ -284,7 +284,8 @@ if 'rtx' in torch_device_name.lower():
     if not args.cuda_malloc:
         print('Hint: your device supports --cuda-malloc for potential speed improvements.')
 
-
+# this is loaded to inference device, not loaded from disk
+# models unloaded can still be in RAM
 current_loaded_models = []
 
 
@@ -357,7 +358,7 @@ def bake_gguf_model(model):
     return model
 
 
-def module_size(module, exclude_device=None, include_device=None, return_split=False):
+def module_size(module, exclude_device=None, include_device=None):
     module_mem = 0
     weight_mem = 0
     weight_patterns = ['weight']
@@ -393,10 +394,7 @@ def module_size(module, exclude_device=None, include_device=None, return_split=F
         if k in weight_patterns:
             weight_mem += t.nelement() * element_size
 
-    if return_split:
-        return module_mem, weight_mem
-
-    return module_mem
+    return module_mem, weight_mem
 
 
 def module_move(module, device, recursive=True, excluded_pattens=[]):
@@ -418,11 +416,16 @@ def build_module_profile(model, model_gpu_memory_when_using_cpu_swap):
     mem_counter = 0
 
     for m in model.modules():
-        if hasattr(m, "parameters_manual_cast"):
-            m.total_mem, m.weight_mem = module_size(m, return_split=True)
+        if hasattr(m, "force_gpu"): # could tag modules with a priority, instead of just force - but seems low value
+            # print ("module *suggested* for GPU.")
+            m.total_mem, m.weight_mem = module_size(m)
+            gpu_modules.append(m)
+            mem_counter += m.total_mem
+        elif hasattr(m, "parameters_manual_cast"):
+            m.total_mem, m.weight_mem = module_size(m)
             all_modules.append(m)
         elif hasattr(m, "weight"):
-            m.total_mem, m.weight_mem = module_size(m, return_split=True)
+            m.total_mem, m.weight_mem = module_size(m)
             gpu_modules.append(m)
             mem_counter += m.total_mem
 
@@ -452,8 +455,8 @@ class LoadedModel:
         self.exclusive_memory = 0
 
     def compute_inclusive_exclusive_memory(self):
-        self.inclusive_memory = module_size(self.model.model, include_device=self.device)
-        self.exclusive_memory = module_size(self.model.model, exclude_device=self.device)
+        self.inclusive_memory, _ = module_size(self.model.model, include_device=self.device)
+        self.exclusive_memory, _ = module_size(self.model.model, exclude_device=self.device)
         return
 
     def model_load(self, memory_for_inference=0):
@@ -570,12 +573,7 @@ class LoadedModel:
         return self.model is other.model  # and self.memory_required == other.memory_required
 
 
-current_inference_memory = 1024 * 1024 * 1024
-
-def minimum_inference_memory():
-    global current_inference_memory
-    return current_inference_memory
-
+extra_inference_memory = 0 * 1024 * 1024 * 1024
 
 def unload_model_clones(model):
     to_unload = []
@@ -587,24 +585,21 @@ def unload_model_clones(model):
         current_loaded_models.pop(i).model_unload(avoid_model_moving=True)
 
 
-def free_memory(memory_required, device, keep_loaded=[], free_all=False):
-    # this check fully unloads any 'abandoned' models - seems to happen with JointTextEncoder on model change
-    # but not with KModel or IntegratedAutoencoderKL
+def free_memory(memory_required, device, keep_loaded=[]):
     for i in range(len(current_loaded_models) - 1, -1, -1):
         if sys.getrefcount(current_loaded_models[i].model) <= 2: # one reference is the list, another is the check
-            current_loaded_models[i].model_unload() #test
-            current_loaded_models[i].model = None
+            # current_loaded_models[i].model_unload()     # offloads, including patches
+            current_loaded_models[i].model = None       # remove ...
             current_loaded_models[i].real_model = None
             current_loaded_models.pop(i)
 
-    if free_all:
-        memory_required = 1e30
+    free_memory = get_free_memory(device)
+    if free_memory > memory_required:
+        return
+
+    if memory_required == 1e30:
         print(f"[Unload] Trying to free all memory for {device} with {len(keep_loaded)} models keep loaded ... ", end="")
     else:
-        free_memory = get_free_memory(device)
-        if free_memory > memory_required:
-            return
-        
         print(f"[Unload] Trying to free {memory_required / (1024 * 1024):.2f} MB for {device} with {len(keep_loaded)} models keep loaded ... ", end="")
 
     offload_everything = ALWAYS_VRAM_OFFLOAD or vram_state == VRAMState.NO_VRAM
@@ -647,9 +642,13 @@ def compute_model_gpu_memory_when_using_cpu_swap(current_free_mem, inference_mem
 
 
 def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
+    global extra_inference_memory
     execution_start_time = time.perf_counter()
-    memory_to_free = max(minimum_inference_memory(), memory_required) + hard_memory_preservation
-    memory_for_inference = (memory_required if memory_required > 0 else minimum_inference_memory()) + hard_memory_preservation
+    
+    if memory_required == 0:
+        memory_required = 1 * 1024 * 1024 * 1024
+
+    memory_for_inference = memory_required + extra_inference_memory + hard_memory_preservation
 
     models_to_load = []
     models_already_loaded = []
@@ -665,7 +664,7 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
         devs = set(map(lambda a: a.device, models_already_loaded))
         for d in devs:
             if d != torch.device("cpu"):
-                free_memory(memory_to_free, d, models_already_loaded)
+                free_memory(memory_for_inference, d, models_already_loaded)
 
         moving_time = time.perf_counter() - execution_start_time
         if moving_time > 0.1:
@@ -683,7 +682,7 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
 
     for device in total_memory_required:
         if device != torch.device("cpu"):
-            free_memory(total_memory_required[device] + memory_to_free, device, models_already_loaded)
+            free_memory(total_memory_required[device] + memory_for_inference, device, models_already_loaded)
 
     for loaded_model in models_to_load:
         loaded_model.model_load(memory_for_inference)
@@ -1123,7 +1122,7 @@ def should_use_fp16(device=None, model_params=0, prioritize_performance=True, ma
         if x in props.name.lower():
             if manual_cast:
                 # For storage dtype
-                free_model_memory = (get_free_memory() * 0.9 - minimum_inference_memory())
+                free_model_memory = (get_free_memory() * 0.9 - extra_inference_memory)
                 if (not prioritize_performance) or model_params * 4 > free_model_memory:
                     return True
             else:
@@ -1178,7 +1177,7 @@ def should_use_bf16(device=None, model_params=0, prioritize_performance=True, ma
         # So in this case bf16 should only be used as storge dtype
         if manual_cast:
             # For storage dtype
-            free_model_memory = (get_free_memory() * 0.9 - minimum_inference_memory())
+            free_model_memory = (get_free_memory() * 0.9 - extra_inference_memory)
             if (not prioritize_performance) or model_params * 4 > free_model_memory:
                 return True
 
@@ -1218,4 +1217,4 @@ def soft_empty_cache(force=False):
 
 
 def unload_all_models():
-    free_memory(1e30, get_torch_device(), free_all=True)
+    free_memory(1e30, get_torch_device())

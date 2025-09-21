@@ -73,7 +73,7 @@ class ModelPatcher:
     def model_size(self):
         if self.size > 0:
             return self.size
-        self.size = memory_management.module_size(self.model)
+        self.size, _ = memory_management.module_size(self.model)
         return self.size
 
     def clone(self):
