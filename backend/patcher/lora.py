@@ -53,8 +53,8 @@ def weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation
     # Modified from https://github.com/comfyanonymous/ComfyUI/blob/39f114c44bb99d4a221e8da451d4f2a20119c674/comfy/model_patcher.py#L33
 
     dora_scale = memory_management.cast_to_device(dora_scale, weight.device, computation_dtype)
-    lora_diff *= alpha
-    weight_calc = weight + lora_diff.type(weight.dtype)
+    lora_diff.mul_(alpha)
+    weight_calc = torch.add(weight, lora_diff.type(weight.dtype))
 
     # fixed DoRA w/ backward compatibility by KohakuBlueleaf (https://github.com/comfyanonymous/ComfyUI/pull/7727)
     wd_on_output_axis = dora_scale.shape[0] == weight_calc.shape[0]
@@ -72,12 +72,12 @@ def weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation
             .reshape(weight_calc.shape[1], *[1] * (weight_calc.dim() - 1))
             .transpose(0, 1)
         )
-    weight_norm = weight_norm + torch.finfo(weight.dtype).eps
+    weight_norm.add_(torch.finfo(weight.dtype).eps)
     
-    weight_calc *= (dora_scale / weight_norm).type(weight.dtype)
+    weight_calc.mul_((dora_scale / weight_norm).type(weight.dtype))
     if strength != 1.0:
-        weight_calc -= weight
-        weight += strength * weight_calc
+        weight_calc.sub_(weight)
+        weight.add_(torch.mul(strength, weight_calc))
     else:
         weight[:] = weight_calc
     return weight
@@ -110,7 +110,7 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
             weight = weight.narrow(offset[0], offset[1], offset[2])
 
         if strength_model != 1.0:
-            weight *= strength_model
+            weight.mul_(strength_model)
 
         if isinstance(v, list):
             v = (merge_lora_to_weight(v[1:], v[0].clone(), key),)
@@ -139,7 +139,7 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                     else:
                         print("WARNING SHAPE MISMATCH {} WEIGHT NOT MERGED {} != {}".format(key, w1.shape, weight.shape))
                 else:
-                    weight += strength * memory_management.cast_to_device(w1, weight.device, weight.dtype)
+                    weight.add_(torch.mul(memory_management.cast_to_device(w1, weight.device, weight.dtype), strength))
 
         elif patch_type == "set":
             weight.copy_(v[0])
@@ -176,7 +176,7 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 if dora_scale is not None:
                     weight = function(weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype))
                 else:
-                    weight += function(((strength * alpha) * lora_diff).type(weight.dtype))
+                    weight.add_(function(torch.mul(lora_diff, (strength*alpha)).type(weight.dtype)))
 
             except Exception as e:
                 print("ERROR {} {} {}".format(patch_type, key, e))
@@ -224,7 +224,7 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 if dora_scale is not None:
                     weight = function(weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype))
                 else:
-                    weight += function(((strength * alpha) * lora_diff).type(weight.dtype))
+                    weight.add_(function(torch.mul(lora_diff, (strength*alpha)).type(weight.dtype)))
             except Exception as e:
                 print("ERROR {} {} {}".format(patch_type, key, e))
                 raise e
@@ -258,11 +258,11 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                               memory_management.cast_to_device(w2b, weight.device, computation_dtype))
 
             try:
-                lora_diff = (m1 * m2).reshape(weight.shape)
+                lora_diff = torch.mul(m1, m2).reshape(weight.shape)
                 if dora_scale is not None:
                     weight = function(weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype))
                 else:
-                    weight += function(((strength * alpha) * lora_diff).type(weight.dtype))
+                    weight.add_(function(torch.mul(lora_diff, (strength*alpha)).type(weight.dtype)))
             except Exception as e:
                 print("ERROR {} {} {}".format(patch_type, key, e))
                 raise e
@@ -306,7 +306,7 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 if dora_scale is not None:
                     weight = weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype, function)
                 else:
-                    weight += function(((strength * alpha) * lora_diff).type(weight.dtype))
+                    weight.add_(function(torch.mul(lora_diff, (strength*alpha)).type(weight.dtype)))
             except Exception as e:
                 print("ERROR {} {} {}".format(patch_type, key, e))
                 raise e
