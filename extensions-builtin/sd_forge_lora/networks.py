@@ -22,12 +22,10 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
     lora_unet, lora_unmatch = load_lora(lora_unmatch, unet_keys)
     lora_clip, lora_unmatch = load_lora(lora_unmatch, clip_keys)
 
-    # if len(lora_unmatch) > 12:
-        # print(f'[LORA] LoRA version mismatch for {model_flag}: {filename}')
-        # return model, clip
+    if len(lora_unmatch) > 12:
+        print(f'[LORA] apparent version mismatch for {model_flag}: {filename}')
 
-    if len(lora_unmatch) > 0:
-        print(f'[LORA] Loading {filename} for {model_flag} with unmatched keys {list(lora_unmatch.keys())}')
+    del lora, lora_unmatch
 
     new_model = model.clone() if model is not None else None
     new_clip = clip.clone() if clip is not None else None
