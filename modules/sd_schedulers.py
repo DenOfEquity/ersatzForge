@@ -81,31 +81,23 @@ def ddim_scheduler(n, sigma_min, sigma_max, inner_model, device):
 
 def beta_scheduler(n, sigma_min, sigma_max, inner_model, device):
     # From "Beta Sampling is All You Need" [arXiv:2407.12173] (Lee et. al, 2024) """
-    
+
     alpha = shared.opts.beta_dist_alpha
     beta = shared.opts.beta_dist_beta
-    timesteps = 1 - np.linspace(0, 1, n)
-    timesteps = [stats.beta.ppf(x, alpha, beta) for x in timesteps]
-    sigmas = [sigma_min + (x * (sigma_max-sigma_min)) for x in timesteps]
-    sigmas += [0.0]
 
-#   uses inner_model.inner_model.model.get_sigmas and total_timesteps for compatibility with FlowMatching
-    # alpha = shared.opts.beta_dist_alpha
-    # beta = shared.opts.beta_dist_beta
+    total_timesteps = (len(inner_model.sigmas) - 1)
+    ts = 1 - np.linspace(0, 1, n, endpoint=False)
+    ts = np.ceil(stats.beta.ppf(ts, alpha, beta) * total_timesteps)
 
-    # total_timesteps = (len(inner_model.sigmas) - 1)
-    # ts = 1 - np.linspace(0, 1, n, endpoint=False)
-    # ts = np.ceil(stats.beta.ppf(ts, alpha, beta) * total_timesteps)
+    sigs = []
+    last_t = -1
+    for t in ts:
+        if t != last_t:
+            sigs += [float(inner_model.sigmas[int(t)])]
+        last_t = t
+    sigs += [0.0]
 
-    # sigs = []
-    # last_t = -1
-    # for t in ts:
-        # if t != last_t:
-            # sigs += [float(inner_model.sigmas[int(t)])]
-        # last_t = t
-    # sigs += [0.0]
-
-    return torch.FloatTensor(sigmas).to(device)
+    return torch.FloatTensor(sigs).to(device)
 
 
 def turbo_scheduler(n, sigma_min, sigma_max, inner_model, device):
