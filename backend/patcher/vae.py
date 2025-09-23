@@ -186,8 +186,8 @@ class VAE:
         if no_init:
             return
 
-        self.memory_used_encode = lambda shape, dtype: (1767 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
-        self.memory_used_decode = lambda shape, dtype: (2178 * shape[-2] * shape[-1] * 64) * memory_management.dtype_size(dtype)
+        self.memory_used_encode = lambda shape, dtype: (526 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
+        self.memory_used_decode = lambda shape, dtype: (64854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
 
         if hasattr(model.config, "downscale_ratio"):
             self.downscale_ratio = int(model.config.downscale_ratio)
