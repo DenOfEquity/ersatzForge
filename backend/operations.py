@@ -37,7 +37,7 @@ def get_weight_and_bias(layer, weight_args=None, bias_args=None, weight_fn=None,
         if weight_args is not None:
             weight = weight.to(**weight_args)
         if scale_weight is not None:
-            weight = weight*scale_weight.to(device=weight.device, dtype=weight.dtype)
+            weight.mul_(scale_weight.to(device=weight.device, dtype=weight.dtype))
         if weight_patches is not None:
             weight = merge_lora_to_weight(patches=weight_patches, weight=weight, key="online weight lora", computation_dtype=weight.dtype)
 
