@@ -188,6 +188,15 @@ function submit_extras() {
     return res;
 }
 
+function modelmerger() {
+    var id = randomId();
+    requestProgress(id, gradioApp().getElementById('modelmerger_result'), null, function() {});
+
+    var res = Array.from(arguments);
+    res[0] = id;
+
+    return res;
+}
 
 
 /**
@@ -249,17 +258,6 @@ onUiLoaded(function() {
 
     json_elem.parentElement.style.display = "none";
 });
-
-
-function modelmerger() {
-    var id = randomId();
-    requestProgress(id, gradioApp().getElementById('modelmerger_results_panel'), null, function() {});
-
-    var res = Array.from(arguments);
-    res[0] = id;
-
-    return res;
-}
 
 
 function ask_for_style_name(_, prompt_text, negative_prompt_text) {
