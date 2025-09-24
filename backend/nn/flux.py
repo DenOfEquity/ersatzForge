@@ -145,7 +145,7 @@ class QKNorm(nn.Module):
     def forward(self, q, k):
         q = self.query_norm(q)
         k = self.key_norm(k)
-        return q.to(k), k.to(q)
+        return q.to(k), k
 
 
 class SelfAttention(nn.Module):
@@ -212,60 +212,55 @@ class DoubleStreamBlock(nn.Module):
             nn.Linear(mlp_hidden_dim, hidden_size, bias=True),
         )
 
-    def forward(self, img, txt, vec, pe):
+    def forward(self, scratchQ, scratchK, scratchV, img, txt, vec, pe):
         img_mod1_shift, img_mod1_scale, img_mod1_gate, img_mod2_shift, img_mod2_scale, img_mod2_gate = self.img_mod(vec)
 
         img_modulated = self.img_norm1(img)
-        img_modulated = torch.addcmul(img_mod1_shift, (1 + img_mod1_scale), img_modulated)
+        img_modulated = torch.addcmul(img_mod1_shift, img_mod1_scale.add_(1), img_modulated)
         del img_mod1_shift, img_mod1_scale
         img_qkv = self.img_attn.qkv(img_modulated)
         del img_modulated
+
+        T = txt.shape[1]
 
         # img_q, img_k, img_v = rearrange(img_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
         B, L, _ = img_qkv.shape
         H = self.num_heads
         D = img_qkv.shape[-1] // (3 * H)
-        img_q, img_k, img_v = img_qkv.view(B, L, 3, H, D).permute(2, 0, 3, 1, 4)
+        scratchQ[:, : , T:, :], scratchK[:, : , T:, :], scratchV[:, : , T:, :] = img_qkv.view(B, L, 3, H, D).permute(2, 0, 3, 1, 4)
         del img_qkv
 
-        img_q, img_k = self.img_attn.norm(img_q, img_k)
+        scratchQ[:, : , T:, :], scratchK[:, : , T:, :] = self.img_attn.norm(scratchQ[:, : , T:, :], scratchK[:, : , T:, :])
 
         txt_mod1_shift, txt_mod1_scale, txt_mod1_gate, txt_mod2_shift, txt_mod2_scale, txt_mod2_gate = self.txt_mod(vec)
         del vec
 
         txt_modulated = self.txt_norm1(txt)
-        txt_modulated = torch.addcmul(txt_mod1_shift, (1 + txt_mod1_scale), txt_modulated)
+        txt_modulated = torch.addcmul(txt_mod1_shift, txt_mod1_scale.add_(1), txt_modulated)
         del txt_mod1_shift, txt_mod1_scale
         txt_qkv = self.txt_attn.qkv(txt_modulated)
         del txt_modulated
 
         # txt_q, txt_k, txt_v = rearrange(txt_qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
         B, L, _ = txt_qkv.shape
-        txt_q, txt_k, txt_v = txt_qkv.view(B, L, 3, H, D).permute(2, 0, 3, 1, 4)
+        scratchQ[:, : , :T, :], scratchK[:, : , :T, :], scratchV[:, : , :T, :] = txt_qkv.view(B, L, 3, H, D).permute(2, 0, 3, 1, 4)
         del txt_qkv
 
-        txt_q, txt_k = self.txt_attn.norm(txt_q, txt_k)
+        scratchQ[:, : , :T, :], scratchK[:, : , :T, :] = self.txt_attn.norm(scratchQ[:, : , :T, :], scratchK[:, : , :T, :])
 
-        q = torch.cat((txt_q, img_q), dim=2)
-        del txt_q, img_q
-        k = torch.cat((txt_k, img_k), dim=2)
-        del txt_k, img_k
-        v = torch.cat((txt_v, img_v), dim=2)
-        del txt_v, img_v
-
-        attn = attention(q, k, v, pe=pe)
-        del pe, q, k, v
+        attn = attention(scratchQ, scratchK, scratchV, pe=pe)
+        del pe
         txt_attn, img_attn = attn[:, :txt.shape[1]], attn[:, txt.shape[1]:]
         del attn
 
         img.addcmul_(img_mod1_gate, self.img_attn.proj(img_attn))
         del img_attn, img_mod1_gate
-        img.addcmul_(img_mod2_gate, self.img_mlp(torch.addcmul(img_mod2_shift, (1 + img_mod2_scale), self.img_norm2(img))))
+        img.addcmul_(img_mod2_gate, self.img_mlp(torch.addcmul(img_mod2_shift, img_mod2_scale.add_(1), self.img_norm2(img))))
         del img_mod2_gate, img_mod2_scale, img_mod2_shift
 
         txt.addcmul_(txt_mod1_gate, self.txt_attn.proj(txt_attn))
         del txt_attn, txt_mod1_gate
-        txt.addcmul_(txt_mod2_gate, self.txt_mlp(torch.addcmul(txt_mod2_shift, (1 + txt_mod2_scale), self.txt_norm2(txt))))
+        txt.addcmul_(txt_mod2_gate, self.txt_mlp(torch.addcmul(txt_mod2_shift, txt_mod2_scale.add_(1), self.txt_norm2(txt))))
         del txt_mod2_gate, txt_mod2_scale, txt_mod2_shift
 
         txt = fp16_fix(txt)
@@ -289,10 +284,10 @@ class SingleStreamBlock(nn.Module):
         self.mlp_act = nn.GELU(approximate="tanh")
         self.modulation = Modulation(hidden_size, double=False)
 
-    def forward(self, x, vec, pe):
+    def forward(self, scratchA, x, vec, pe):
         mod_shift, mod_scale, mod_gate = self.modulation(vec)
         del vec
-        x_mod = torch.addcmul(mod_shift, (1 + mod_scale), self.pre_norm(x))
+        x_mod = torch.addcmul(mod_shift, mod_scale.add_(1), self.pre_norm(x))
         del mod_shift, mod_scale
         qkv, mlp = torch.split(self.linear1(x_mod), [3 * self.hidden_size, self.mlp_hidden_dim], dim=-1)
         del x_mod
@@ -303,10 +298,10 @@ class SingleStreamBlock(nn.Module):
         del qkv
 
         q, k = self.norm(q, k)
-        attn = attention(q, k, v, pe=pe)
+        scratchA[:, :, :3072] = attention(q, k, v, pe=pe)
+        scratchA[:, :, 3072:] = self.mlp_act(mlp)
         del q, k, v, pe
-        output = self.linear2(torch.cat((attn, self.mlp_act(mlp)), dim=2))
-        del attn, mlp
+        output = self.linear2(scratchA)
 
         x.addcmul_(mod_gate, output)
         del mod_gate, output
@@ -326,7 +321,8 @@ class LastLayer(nn.Module):
     def forward(self, x, vec):
         shift, scale = self.adaLN_modulation(vec).chunk(2, dim=1)
         del vec
-        x = torch.addcmul(shift[:, None, :], (1 + scale[:, None, :]), self.norm_final(x))
+        # x = torch.addcmul(shift[:, None, :], (1 + scale[:, None, :]), self.norm_final(x))
+        x = torch.addcmul(shift[:, None, :], scale.add_(1)[:, None, :], self.norm_final(x))
         del scale, shift
         x = self.linear(x)
         return x
@@ -382,6 +378,9 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         if img.ndim != 3 or txt.ndim != 3:
             raise ValueError("Input img and txt tensors must have 3 dimensions.")
 
+        device = img.device
+        dtype = img.dtype
+
         img = self.img_in(img)
         vec = self.time_in(timestep_embedding(timesteps, 256).to(img.dtype))
 
@@ -398,12 +397,16 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         pe = self.pe_embedder(ids)
         del ids
 
+        scratchQ = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)   # preallocated for combined q|k|v_img|txt
+        scratchK = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)
+        scratchV = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)
         for block in self.double_blocks:
-            img, txt = block(img=img, txt=txt, vec=vec, pe=pe)
+            img, txt = block(scratchQ, scratchK, scratchV, img=img, txt=txt, vec=vec, pe=pe)
         img = torch.cat((txt, img), 1)
 
+        scratchA = torch.empty((img.shape[0], img.shape[1], 15360), device=device, dtype=dtype)
         for block in self.single_blocks:
-            img = block(img, vec=vec, pe=pe)
+            img = block(scratchA, img, vec=vec, pe=pe)
         del pe
         img = img[:, txt.shape[1]:, ...]
         del txt
