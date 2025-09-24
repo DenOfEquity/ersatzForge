@@ -756,7 +756,6 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
         "Tiling": p.tiling if p.tiling != "None" and (shared.sd_model.is_sd1 or shared.sd_model.is_sd2 or shared.sd_model.is_sdxl) else None,
         **p.extra_generation_params,
-        "User": p.user if opts.add_user_name_to_info else None,
         "ELLA": opts.use_ELLA if ("ELLA" in opts.use_ELLA and shared.sd_model.is_sd1) else None,
     })
 
@@ -803,6 +802,7 @@ def manage_model_and_prompt_cache(p: StableDiffusionProcessing):
 
     # set up 'opt_f', not all models use 8x8 latent downscale
     # could be better in forge_model_reload(), but changing architecture in refiner or with latent upscale isn't supported anyway
+    global opt_f
     if hasattr(shared.sd_model.forge_objects.vae, "downscale_ratio"):
         opt_f = int(shared.sd_model.forge_objects.vae.downscale_ratio)
     elif hasattr(shared.sd_model.forge_objects.vae, "scale_factor_spatial"):

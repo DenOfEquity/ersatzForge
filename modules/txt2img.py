@@ -1,15 +1,15 @@
 import json
+import gradio
 from contextlib import closing
 
 from modules import processing, infotext_utils, scripts, shared
 from modules.infotext_utils import create_override_settings_dict, parse_generation_parameters
 from modules.ui import plaintext_to_html
 
-import gradio as gr
 from modules_forge import main_thread
 
 
-def txt2img_create_processing(id_task: str, request: gr.Request, prompt: str, negative_prompt: str, prompt_styles, n_iter: int, batch_size: int, cfg_scale: float, distilled_cfg_scale: float, height: int, width: int, enable_hr: bool, denoising_strength: float, hr_scale: float, hr_upscaler: str, hr_second_pass_steps: int, hr_resize_x: int, hr_resize_y: int, hr_checkpoint_name: str, hr_additional_modules: list, hr_sampler_name: str, hr_scheduler: str, hr_prompt: str, hr_negative_prompt, hr_cfg: float, hr_distilled_cfg: float, override_settings_texts, *args, force_enable_hr=False):
+def txt2img_create_processing(id_task: str, prompt: str, negative_prompt: str, prompt_styles, n_iter: int, batch_size: int, cfg_scale: float, distilled_cfg_scale: float, height: int, width: int, enable_hr: bool, denoising_strength: float, hr_scale: float, hr_upscaler: str, hr_second_pass_steps: int, hr_resize_x: int, hr_resize_y: int, hr_checkpoint_name: str, hr_additional_modules: list, hr_sampler_name: str, hr_scheduler: str, hr_prompt: str, hr_negative_prompt, hr_cfg: float, hr_distilled_cfg: float, override_settings_texts, *args, force_enable_hr=False):
     override_settings = create_override_settings_dict(override_settings_texts)
 
     if force_enable_hr:
@@ -48,12 +48,10 @@ def txt2img_create_processing(id_task: str, request: gr.Request, prompt: str, ne
     p.scripts = scripts.scripts_txt2img
     p.script_args = args
 
-    p.user = request.username
-
     return p
 
 
-def txt2img_upscale_function(id_task: str, request: gr.Request, gallery, gallery_index, generation_info, *args):
+def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_info, *args):
     assert len(gallery) > 0, 'No image to upscale'
 
     if gallery_index < 0 or gallery_index >= len(gallery):
@@ -68,7 +66,7 @@ def txt2img_upscale_function(id_task: str, request: gr.Request, gallery, gallery
     if len(gallery) > 1 and (gallery_index < first_image_index or gallery_index >= count_images):
         return gallery, generation_info, 'Unable to upscale grid or control images.', ''
 
-    p = txt2img_create_processing(id_task, request, *args, force_enable_hr=True)
+    p = txt2img_create_processing(id_task, *args, force_enable_hr=True)
     p.batch_size = 1
     # txt2img_upscale attribute that signifies this is called by txt2img_upscale
     p.txt2img_upscale = True
@@ -140,11 +138,11 @@ def txt2img_upscale_function(id_task: str, request: gr.Request, gallery, gallery
     else:
         geninfo["infotexts"][gallery_index] = processed.info
 
-    return gr.update(value=new_gallery, selected_index=gallery_index), json.dumps(geninfo), plaintext_to_html(processed.info), plaintext_to_html(processed.comments, classname="comments")
+    return gradio.update(value=new_gallery, selected_index=gallery_index), json.dumps(geninfo), plaintext_to_html(processed.info), plaintext_to_html(processed.comments, classname="comments")
 
 
-def txt2img_function(id_task: str, request: gr.Request, *args):
-    p = txt2img_create_processing(id_task, request, *args)
+def txt2img_function(id_task: str, *args):
+    p = txt2img_create_processing(id_task, *args)
 
     with closing(p):
         processed = scripts.scripts_txt2img.run(p, *p.script_args)
@@ -164,9 +162,9 @@ def txt2img_function(id_task: str, request: gr.Request, *args):
     return processed.images + processed.extra_images, generation_info_js, plaintext_to_html(processed.info), plaintext_to_html(processed.comments, classname="comments")
 
 
-def txt2img_upscale(id_task: str, request: gr.Request, gallery, gallery_index, generation_info, *args):
-    return main_thread.run_and_wait_result(txt2img_upscale_function, id_task, request, gallery, gallery_index, generation_info, *args)
+def txt2img_upscale(id_task: str, gallery, gallery_index, generation_info, *args):
+    return main_thread.run_and_wait_result(txt2img_upscale_function, id_task, gallery, gallery_index, generation_info, *args)
 
 
-def txt2img(id_task: str, request: gr.Request, *args):
-    return main_thread.run_and_wait_result(txt2img_function, id_task, request, *args)
+def txt2img(id_task: str, *args):
+    return main_thread.run_and_wait_result(txt2img_function, id_task, *args)
