@@ -174,12 +174,12 @@ def update_token_counter(text, steps, styles, *, is_positive=True):
         get_prompt_lengths_on_ui = sd_models.model_data.sd_model.get_prompt_lengths_on_ui
         assert get_prompt_lengths_on_ui is not None
     except Exception:
-        return "<span class='gr-box gr-text-input'>?/?</span>"
+        return "<span>?/?</span>"
 
     flat_prompts = reduce(lambda list1, list2: list1+list2, prompt_schedules)
     prompts = [prompt_text for step, prompt_text in flat_prompts]
     token_count, max_length = max([get_prompt_lengths_on_ui(prompt) for prompt in prompts], key=lambda args: args[0])
-    return f"<span class='gr-box gr-text-input'>{token_count}/{max_length}</span>"
+    return f"<span>{token_count}/{max_length}</span>"
 
 
 def update_negative_prompt_token_counter(*args):
@@ -259,7 +259,7 @@ def create_ui():
                         with gr.Row():
                             distilled_cfg_scale = gr.Slider(minimum=0.0, maximum=30.0, step=0.1, label='Distilled CFG scale', value=3.5, elem_id="txt2img_distilled_cfg_scale")
                             cfg_scale = gr.Slider(minimum=1.0, maximum=30.0, step=0.1, label='CFG scale', value=7.0, elem_id="txt2img_cfg_scale")
-                            cfg_scale.change(lambda x: gr.update(interactive=(x != 1)), inputs=[cfg_scale], outputs=[toprow.negative_prompt], queue=False, show_progress='hidden')
+                            cfg_scale.change(lambda x: gr.update(interactive=(x != 1)), inputs=[cfg_scale], outputs=[toprow.negative_prompt], show_progress='hidden')
 
                     elif category == "checkboxes":
                         with FormRow(elem_classes="checkboxes-row", variant="compact"):
@@ -299,7 +299,7 @@ def create_ui():
                                     hr_prompt = gr.Textbox(label="HiRes prompt", elem_id="hires_prompt", show_label=False, lines=3, placeholder="HiRes prompt. Leave empty to use the same prompt as in first pass.", elem_classes=["prompt"], value='')
                                     hr_negative_prompt = gr.Textbox(label="HiRes negative prompt", elem_id="hires_neg_prompt", show_label=False, lines=3, placeholder="HiRes negative prompt. Leave empty to use the same negative prompt as in first pass.", elem_classes=["prompt"], value='')
 
-                                hr_cfg.change(lambda x: gr.update(interactive=(x != 1)), inputs=[hr_cfg], outputs=[hr_negative_prompt], queue=False, show_progress='hidden')
+                                hr_cfg.change(lambda x: gr.update(interactive=(x != 1)), inputs=[hr_cfg], outputs=[hr_negative_prompt], show_progress='hidden')
 
                             scripts.scripts_txt2img.setup_ui_for_section(category)
 
@@ -419,7 +419,7 @@ def create_ui():
             steps = scripts.scripts_txt2img.script('Sampler').steps
 
             if not opts.disable_token_counters:
-                toprow.ui_styles.dropdown.change(fn=wrap_queued_call(update_token_counter), inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress='hidden', queue=False)
+                toprow.ui_styles.dropdown.change(fn=wrap_queued_call(update_token_counter), inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress='hidden')
                 toprow.ui_styles.dropdown.change(fn=wrap_queued_call(update_negative_prompt_token_counter), inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress='hidden')
                 toprow.token_button.click(fn=update_token_counter, inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress='hidden')
                 toprow.negative_token_button.click(fn=update_negative_prompt_token_counter, inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress='hidden')
@@ -554,7 +554,7 @@ def create_ui():
                             distilled_cfg_scale = gr.Slider(minimum=0.0, maximum=30.0, step=0.1, label='Distilled CFG scale', value=3.5, elem_id="img2img_distilled_cfg_scale")
                             cfg_scale = gr.Slider(minimum=1.0, maximum=30.0, step=0.1, label='CFG scale', value=7.0, elem_id="img2img_cfg_scale")
                             image_cfg_scale = gr.Slider(minimum=0, maximum=3.0, step=0.05, label='Image CFG scale', value=1.5, elem_id="img2img_image_cfg_scale", visible=False)
-                            cfg_scale.change(lambda x: gr.update(interactive=(x != 1)), inputs=[cfg_scale], outputs=[toprow.negative_prompt], queue=False, show_progress='hidden')
+                            cfg_scale.change(lambda x: gr.update(interactive=(x != 1)), inputs=[cfg_scale], outputs=[toprow.negative_prompt], show_progress='hidden')
 
                     elif category == "checkboxes":
                         with FormRow(elem_classes="checkboxes-row", variant="compact"):
@@ -677,10 +677,10 @@ def create_ui():
             steps = scripts.scripts_img2img.script('Sampler').steps
 
             if not opts.disable_token_counters:
-                toprow.ui_styles.dropdown.change(fn=wrap_queued_call(update_token_counter), inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress='hidden', queue=False)
-                toprow.ui_styles.dropdown.change(fn=wrap_queued_call(update_negative_prompt_token_counter), inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress='hidden', queue=False)
-                toprow.token_button.click(fn=wrap_queued_call(update_token_counter), inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress='hidden', queue=False)
-                toprow.negative_token_button.click(fn=wrap_queued_call(update_negative_prompt_token_counter), inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress='hidden', queue=False)
+                toprow.ui_styles.dropdown.change(fn=wrap_queued_call(update_token_counter), inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress='hidden')
+                toprow.ui_styles.dropdown.change(fn=wrap_queued_call(update_negative_prompt_token_counter), inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress='hidden')
+                toprow.token_button.click(fn=wrap_queued_call(update_token_counter), inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress='hidden')
+                toprow.negative_token_button.click(fn=wrap_queued_call(update_negative_prompt_token_counter), inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress='hidden')
 
             img2img_paste_fields = [
                 (toprow.prompt, "Prompt"),
@@ -796,7 +796,7 @@ def create_ui():
             no_quick_setting = getattr(shared.opts, "tabs_without_quick_settings_bar", [])
             return gr.update(visible=evt.value not in no_quick_setting)
 
-        tabs.select(tab_changed, outputs=[quicksettings_row], show_progress='hidden', queue=False)
+        tabs.select(tab_changed, outputs=[quicksettings_row], show_progress='hidden')
 
         footer = shared.html("footer.html")
         footer = footer.format(versions=versions_html(), api_docs="/docs" if shared.cmd_opts.api else "https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API")
