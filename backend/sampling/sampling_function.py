@@ -194,7 +194,7 @@ def calc_cond_uncond_batch(model, cond, uncond, x_in, timestep, model_options):
 
         if (not args.disable_gpu_warning) and x_in.device.type == 'cuda':
             free_memory_mb = free_memory / (1024.0 * 1024.0)
-            safe_memory_mb = 1536.0
+            safe_memory_mb = 512.0
             if free_memory_mb < safe_memory_mb:
                 print(f"\n\n----------------------")
                 print(f"[Low GPU VRAM Warning] Your current GPU free memory is {free_memory_mb:.2f} MB for this diffusion iteration.")
@@ -333,6 +333,23 @@ def sampling_function(self, denoiser_params, cond_scale, cond_composition):
     cond = compile_weighted_conditions(denoiser_params.text_cond, cond_composition)
     model_options = unet_patcher.model_options
     seed = self.p.seeds[0]
+
+    # pad cond/uncond to same length, enables batching for potential performance gain
+    if uncond is not None:
+        for c in range(len(cond[0]['cross_attn'])):
+            pos_cond = cond[0]['cross_attn'][c]
+            neg_cond = uncond[0]['cross_attn'][c]
+            
+            if pos_cond.shape[0] > neg_cond.shape[0]: # positive longer than negative, expand negitive with zero
+                new_cond = torch.zeros_like(pos_cond)
+                new_cond[:neg_cond.shape[0], :] = neg_cond
+                neg_cond = new_cond
+                del new_cond
+            elif pos_cond.shape[0] < neg_cond.shape[0]: # negative longer than positive, expand positive with zero
+                new_cond = torch.zeros_like(neg_cond)
+                new_cond[:pos_cond.shape[0], :] = pos_cond
+                pos_cond = new_cond
+                del new_cond
 
     if extra_concat_condition is not None:
         image_cond_in = extra_concat_condition
