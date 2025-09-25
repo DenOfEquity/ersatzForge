@@ -483,7 +483,12 @@ class LoadedModel:
 
         model_gpu_memory_when_using_cpu_swap = -1
 
-        if lowvram_available and (vram_set_state == VRAMState.LOW_VRAM or vram_set_state == VRAMState.NORMAL_VRAM):
+        if 'Autoencoder' in self.model.model.__class__.__name__:
+            # VAE must be fully on one device
+            pass
+        elif vram_set_state == VRAMState.NO_VRAM:
+            model_gpu_memory_when_using_cpu_swap = 0
+        elif lowvram_available and (vram_set_state == VRAMState.LOW_VRAM or vram_set_state == VRAMState.NORMAL_VRAM):
             model_require = self.exclusive_memory
             previously_loaded = self.inclusive_memory
             current_free_mem = get_free_memory(torch_dev)
@@ -504,10 +509,6 @@ class LoadedModel:
             if getattr(self.real_model, 'gguf_baked', False):
                 model_gpu_memory_when_using_cpu_swap -= (1024 * 1024 * 1024 * 0.5)
 
-
-        if vram_set_state == VRAMState.NO_VRAM and 'UnetPatcher' in str(self.model):
-            model_gpu_memory_when_using_cpu_swap = 0
-
         do_not_need_cpu_swap = model_gpu_memory_when_using_cpu_swap < 0
 
         if do_not_need_cpu_swap:
@@ -516,8 +517,6 @@ class LoadedModel:
         else:
             gpu_modules, gpu_modules_only_extras, cpu_modules = build_module_profile(self.real_model, model_gpu_memory_when_using_cpu_swap)
             pin_memory = PIN_SHARED_MEMORY and is_device_cpu(self.model.offload_device)
-
-            # maybe do this only if lists have changed
 
             mem_counter = 0
             swap_counter = 0
