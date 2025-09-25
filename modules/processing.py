@@ -787,7 +787,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
 
     generation_params_text = ", ".join([k if k == v else f'{k}: {infotext_utils.quote(v)}' for k, v in generation_params.items() if v is not None])
 
-    negative_prompt_text = f"\nNegative prompt: {negative_prompt}" if negative_prompt else ""
+    negative_prompt_text = f"\nNegative prompt: {negative_prompt}" if negative_prompt and p.cfg_scale > 1 else ""
 
     return f"{prompt_text}{negative_prompt_text}\n{generation_params_text}".strip()
 
@@ -1290,10 +1290,11 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
             def get_hr_negative_prompt(p, index, negative_prompt, **kwargs):
                 hr_negative_prompt = p.hr_negative_prompts[index] # alternative: p.all_hr_negative_prompts[index + self.batch_size*self.iteration]
-                return hr_negative_prompt if hr_negative_prompt != negative_prompt else None
+                return hr_negative_prompt if hr_negative_prompt != negative_prompt or p.cfg_scale == 1 else None
 
             self.extra_generation_params["HiRes prompt"] = get_hr_prompt
-            self.extra_generation_params["HiRes negative prompt"] = get_hr_negative_prompt
+            if self.hr_cfg > 1:
+                self.extra_generation_params["HiRes negative prompt"] = get_hr_negative_prompt
 
             self.extra_generation_params["HiRes CFG scale"] = self.hr_cfg
             self.extra_generation_params["HiRes Distilled CFG scale"] = None  # set after potential HiRes model load
