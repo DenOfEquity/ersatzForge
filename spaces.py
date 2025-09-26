@@ -87,7 +87,7 @@ def load_module(m, silent=True):
 
     unload_module()
 
-    model_memory = memory_management.module_size(m)
+    model_memory, _ = memory_management.module_size(m)
     current_free_mem = memory_management.get_free_memory(gpu)
     inference_memory = 1.5 * 1024 * 1024 * 1024  # memory_management.minimum_inference_memory() # TODO: connect to main memory system
     estimated_remaining_memory = current_free_mem - model_memory - inference_memory
