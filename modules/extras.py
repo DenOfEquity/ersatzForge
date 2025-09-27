@@ -92,38 +92,38 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
         return theta0 + (alpha * theta1_2_diff)
 
     def filename_nothing(): # avoid overwrite original checkpoint
-        return "[]" + primary_model_info.model_name
+        return "[]" + primary_model_info.name_for_extra
 
     def filename_weighted_sum():
-        a = primary_model_info.model_name
-        b = secondary_model_info.model_name
+        a = primary_model_info.name_for_extra
+        b = secondary_model_info.name_for_extra
         Ma = round(1 - multiplier, 2)
         Mb = round(multiplier, 2)
 
         return f"{Ma}({a}) + {Mb}({b})"
 
     def filename_in_out():
-        a = primary_model_info.model_name
-        b = secondary_model_info.model_name
+        a = primary_model_info.name_for_extra
+        b = secondary_model_info.name_for_extra
 
         return f"{a}-{b}({multiplier})"
 
     def filename_add_difference():
-        a = primary_model_info.model_name
-        b = secondary_model_info.model_name
-        c = tertiary_model_info.model_name
+        a = primary_model_info.name_for_extra
+        b = secondary_model_info.name_for_extra
+        c = tertiary_model_info.name_for_extra
         M = round(multiplier, 2)
 
         return f"{a} + {M}({b} - {c})"
 
     def filename_unet():
-        return "[UNET]-" + primary_model_info.model_name
+        return "[UNET]-" + primary_model_info.name_for_extra
 
     def filename_vae():
-        return "[VAE]-" + primary_model_info.model_name
+        return "[VAE]-" + primary_model_info.name_for_extra
 
     def filename_te():
-        return "[TE]-" + primary_model_info.model_name
+        return "[TE]-" + primary_model_info.name_for_extra
 
     theta_funcs = {
         "None": (filename_nothing, None, None),

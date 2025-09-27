@@ -8,7 +8,7 @@ import sys
 
 import gradio as gr
 from modules.paths import data_path
-from modules import shared, ui_tempdir, script_callbacks, processing, infotext_versions, images, prompt_parser, errors
+from modules import shared, ui_tempdir, script_callbacks, processing, infotext_versions, images, prompt_parser, errors, sd_models
 from PIL import Image
 
 from modules_forge import main_entry
@@ -350,6 +350,9 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
 
     if "HiRes checkpoint" not in res:
         res["HiRes checkpoint"] = "Use same checkpoint"
+    else:
+        ckpt = sd_models.get_closet_checkpoint_match(res["HiRes checkpoint"])
+        res["HiRes checkpoint"] = (ckpt.filename).split('\\')[-1]
 
     if "HiRes prompt" not in res:
         res["HiRes prompt"] = ""
