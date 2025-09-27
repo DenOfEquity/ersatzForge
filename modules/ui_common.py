@@ -16,9 +16,9 @@ refresh_symbol = '\U0001f504'  # 🔄
 
 def select_gallery_and_update_gen_info(generation_info, html_info, index):
     if index < 0:
-        index = 0
+        return gr.update(selected_index=0), update_generation_info(generation_info, html_info, index)
 
-    return gr.update(selected_index=index), update_generation_info(generation_info, html_info, index)
+    return gr.update(), update_generation_info(generation_info, html_info, index)
 
 
 def update_generation_info(generation_info, html_info, index):
@@ -35,9 +35,9 @@ def update_generation_info(generation_info, html_info, index):
 
 def select_gallery_0(index):
     if index < 0:
-        index = 0
+        return gr.update(selected_index=0)
 
-    return gr.update(selected_index=index)
+    return gr.update()
 
 
 def plaintext_to_html(text, classname=None):
@@ -174,5 +174,4 @@ def setup_dialog(button_show, dialog, *, button_close=None):
 
     if button_close:
         button_close.click(fn=None, js="closePopup")
-
 
