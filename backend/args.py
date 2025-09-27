@@ -28,7 +28,6 @@ fpte_group.add_argument("--clip-in-fp16", action="store_true")
 fpte_group.add_argument("--clip-in-fp32", action="store_true")
 
 attn_group = parser.add_mutually_exclusive_group()
-attn_group.add_argument("--attention-split", action="store_true")
 attn_group.add_argument("--attention-quad", action="store_true")
 attn_group.add_argument("--attention-pytorch", action="store_true")
 attn_group.add_argument("--use-sage-attention", action="store_true", help="Use sage attention.")
