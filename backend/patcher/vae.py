@@ -188,7 +188,6 @@ class VAE:
 
         self.memory_used_encode = lambda shape, dtype: (526 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
         self.memory_used_decode = lambda shape, dtype: (64854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
-
         if hasattr(model.config, "downscale_ratio"):
             self.downscale_ratio = int(model.config.downscale_ratio)
         elif hasattr(model.config, "scale_factor_spatial"):
@@ -197,6 +196,7 @@ class VAE:
             self.downscale_ratio = int(2 ** (len(model.config.down_block_types) - 1))
         else:
             self.downscale_ratio = 8
+       
         self.latent_channels = int(model.config.latent_channels)
 
         self.first_stage_model = model.eval()
@@ -269,12 +269,20 @@ class VAE:
 
     def decode_inner(self, samples_in):
         if memory_management.VAE_ALWAYS_TILED:
-            memory_management.load_model_gpu(self.patcher)
+            if hasattr(self, "tile_info") and self.tile_info is not None:
+                tile_x = self.tile_info[0] // self.downscale_ratio
+                tile_y = self.tile_info[1] // self.downscale_ratio
+            else:
+                tile_x = 64
+                tile_y = 64
+            shape = (samples_in.shape[0], samples_in.shape[1], tile_y, tile_x)
+            memory_used = self.memory_used_decode(shape, self.vae_dtype)
+            memory_management.load_models_gpu([self.patcher], memory_used)
             pixel_samples = self.decode_tiled(samples_in)
         else:
             try:
                 memory_used = self.memory_used_decode(samples_in.shape, self.vae_dtype)
-                memory_management.load_models_gpu([self.patcher], memory_required=memory_used)
+                memory_management.load_models_gpu([self.patcher], memory_used)
                 free_memory = memory_management.get_free_memory(self.device)
                 batch_number = int(free_memory / memory_used)
                 batch_number = max(1, batch_number)
@@ -300,6 +308,7 @@ class VAE:
         pixel_samples = pixel_samples.movedim(-1, 1)
 
         if memory_management.VAE_ALWAYS_TILED:
+            # encoding uses relatively little VRAM, no need to calculate
             memory_management.load_model_gpu(self.patcher)
             samples = self.encode_tiled(pixel_samples)
         else:
