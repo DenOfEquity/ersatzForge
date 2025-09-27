@@ -96,10 +96,7 @@ class StableDiffusion3(ForgeDiffusionEngine):
 
         cond_g, g_pooled = self.text_processing_engine_g(prompt)
         cond_l, l_pooled = self.text_processing_engine_l(prompt)
-        if opts.sd3_enable_t5:
-            cond_t5 = self.text_processing_engine_t5(prompt)
-        else:
-            cond_t5 = torch.zeros([len(prompt), 256, 4096]).to(cond_l.device)
+        cond_t5 = self.text_processing_engine_t5(prompt)
 
         #   conds get concatenated later, in dimension 2, so sizes of dimension 1 must match
         #   seems like some embeddings contribute different numbers of tokens to _l and _g
