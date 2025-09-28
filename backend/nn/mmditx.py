@@ -305,7 +305,7 @@ class RMSNorm(torch.nn.Module):
         x.mul_(torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps))
 
         if self.learnable_scale:
-            return x.mul_(self.weight.to(device=x.device, dtype=x.dtype))
+            return torch.mul(x, self.weight.to(device=x.device, dtype=x.dtype))
         else:
             return x
 
@@ -557,23 +557,8 @@ def block_mixing(context, x, context_block, x_block, c):
     else:
         (SD3_Q[:, SD3_t:, :], SD3_K[:, SD3_t:, :], SD3_V[:, SD3_t:, :]), x_intermediates = x_block.pre_attention(x, c)
 
-    # q = torch.cat([context_qkv[0], x_qkv[0]], dim=1)
-    # k = torch.cat([context_qkv[1], x_qkv[1]], dim=1)
-    # v = torch.cat([context_qkv[2], x_qkv[2]], dim=1)
-
-#modify pre-attention to get direct?
-    # SD3_Q[:, :SD3_t, :] = context_qkv[0]
-    # SD3_K[:, :SD3_t, :] = context_qkv[1]
-    # SD3_V[:, :SD3_t, :] = context_qkv[2]
-    # SD3_Q[:, SD3_t:, :] = x_qkv[0]
-    # SD3_K[:, SD3_t:, :] = x_qkv[1]
-    # SD3_V[:, SD3_t:, :] = x_qkv[2]
-
-    # attn = attention_function(q, k, v, x_block.attn.num_heads)
     attn = attention_function(SD3_Q, SD3_K, SD3_V, x_block.attn.num_heads)
     context_attn, x_attn = (
-        # attn[:, : context_qkv[0].shape[1]],
-        # attn[:, context_qkv[0].shape[1] :],
         attn[:, :SD3_t],
         attn[:, SD3_t:],
     )
@@ -876,9 +861,9 @@ class MMDiTX(nn.Module):
         global SD3_Q, SD3_K, SD3_V, SD3_t
         s = (x.shape[2] * x.shape[3]) // 4
         SD3_t = context.shape[1]
-        SD3_Q = torch.empty((x.shape[0], SD3_t + s, 1536), device=x.device, dtype=x.dtype)
-        SD3_K = torch.empty((x.shape[0], SD3_t + s, 1536), device=x.device, dtype=x.dtype)
-        SD3_V = torch.empty((x.shape[0], SD3_t + s, 24, 64), device=x.device, dtype=x.dtype)
+        SD3_Q = torch.empty((x.shape[0], SD3_t + s, self.num_heads*64),  device=x.device, dtype=x.dtype)
+        SD3_K = torch.empty((x.shape[0], SD3_t + s, self.num_heads*64),  device=x.device, dtype=x.dtype)
+        SD3_V = torch.empty((x.shape[0], SD3_t + s, self.num_heads, 64), device=x.device, dtype=x.dtype)
 
         skip_layers = transformer_options.get("skip_layers", [])
 
