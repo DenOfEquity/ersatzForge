@@ -6,23 +6,15 @@
 
 ## minor modifications to MMDiTX.__init__() and MMDiTX.forward()
 
+from backend.attention import attention_function
+
 import math
 from typing import Dict, List, Optional
 
-import numpy as np
 import torch
 import torch.nn as nn
 from einops import rearrange, repeat
 
-def attention(q, k, v, heads, mask=None):
-    """Convenience wrapper around a basic attention operation"""
-    b, _, dim_head = q.shape
-    dim_head //= heads
-    q, k, v = map(lambda t: t.view(b, -1, heads, dim_head).transpose(1, 2), (q, k, v))
-    out = torch.nn.functional.scaled_dot_product_attention(
-        q, k, v, attn_mask=mask, dropout_p=0.0, is_causal=False
-    )
-    return out.transpose(1, 2).reshape(b, -1, heads * dim_head)
 
 class Mlp(nn.Module):
     """MLP as used in Vision Transformer, MLP-Mixer and related networks"""
@@ -110,69 +102,9 @@ class PatchEmbed(nn.Module):
 
 def modulate(x, shift, scale):
     if shift is None:
-        shift = torch.zeros_like(scale)
-    return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
-
-
-#################################################################################
-#                   Sine/Cosine Positional Embedding Functions                  #
-#################################################################################
-
-
-def get_2d_sincos_pos_embed(
-    embed_dim,
-    grid_size,
-    cls_token=False,
-    extra_tokens=0,
-    scaling_factor=None,
-    offset=None,
-):
-    """
-    grid_size: int of the grid height and width
-    return:
-    pos_embed: [grid_size*grid_size, embed_dim] or [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
-    """
-    grid_h = np.arange(grid_size, dtype=np.float32)
-    grid_w = np.arange(grid_size, dtype=np.float32)
-    grid = np.meshgrid(grid_w, grid_h)  # here w goes first
-    grid = np.stack(grid, axis=0)
-    if scaling_factor is not None:
-        grid = grid / scaling_factor
-    if offset is not None:
-        grid = grid - offset
-    grid = grid.reshape([2, 1, grid_size, grid_size])
-    pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
-    if cls_token and extra_tokens > 0:
-        pos_embed = np.concatenate(
-            [np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0
-        )
-    return pos_embed
-
-
-def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
-    assert embed_dim % 2 == 0
-    # use half of dimensions to encode grid_h
-    emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
-    emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
-    emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
-    return emb
-
-
-def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
-    """
-    embed_dim: output dimension for each position
-    pos: a list of positions to be encoded: size (M,)
-    out: (M, D)
-    """
-    assert embed_dim % 2 == 0
-    omega = np.arange(embed_dim // 2, dtype=np.float64)
-    omega /= embed_dim / 2.0
-    omega = 1.0 / 10000**omega  # (D/2,)
-    pos = pos.reshape(-1)  # (M,)
-    out = np.einsum("m,d->md", pos, omega)  # (M, D/2), outer product
-    emb_sin = np.sin(out)  # (M, D/2)
-    emb_cos = np.cos(out)  # (M, D/2)
-    return np.concatenate([emb_sin, emb_cos], axis=1)  # (M, D)
+        return torch.mul(x, scale.add_(1).unsqueeze(1))
+    else:
+        return torch.addcmul(shift.unsqueeze(1), x, scale.add_(1).unsqueeze(1))
 
 
 #################################################################################
@@ -257,10 +189,6 @@ def split_qkv(qkv, head_dim):
     return qkv[0], qkv[1], qkv[2]
 
 
-def optimized_attention(qkv, num_heads):
-    return attention(qkv[0], qkv[1], qkv[2], num_heads)
-
-
 class SelfAttention(nn.Module):
 
     def __init__(
@@ -335,7 +263,7 @@ class SelfAttention(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         (q, k, v) = self.pre_attention(x)
-        x = attention(q, k, v, self.num_heads)
+        x = attention_function(q, k, v, self.num_heads)
         x = self.post_attention(x)
         return x
 
@@ -366,16 +294,6 @@ class RMSNorm(torch.nn.Module):
         else:
             self.register_parameter("weight", None)
 
-    def _norm(self, x):
-        """
-        Apply the RMSNorm normalization to the input tensor.
-        Args:
-            x (torch.Tensor): The input tensor.
-        Returns:
-            torch.Tensor: The normalized tensor.
-        """
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
     def forward(self, x):
         """
         Forward pass through the RMSNorm layer.
@@ -384,9 +302,10 @@ class RMSNorm(torch.nn.Module):
         Returns:
             torch.Tensor: The output tensor after applying RMSNorm.
         """
-        x = self._norm(x)
+        x.mul_(torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps))
+
         if self.learnable_scale:
-            return x * self.weight.to(device=x.device, dtype=x.dtype)
+            return x.mul_(self.weight.to(device=x.device, dtype=x.dtype))
         else:
             return x
 
@@ -531,15 +450,11 @@ class DismantledBlock(nn.Module):
         assert x is not None, "pre_attention called with None input"
         if not self.pre_only:
             if not self.scale_mod_only:
-                shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
-                    self.adaLN_modulation(c).chunk(6, dim=1)
-                )
+                shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=1)
             else:
                 shift_msa = None
                 shift_mlp = None
-                scale_msa, gate_msa, scale_mlp, gate_mlp = self.adaLN_modulation(
-                    c
-                ).chunk(4, dim=1)
+                scale_msa, gate_msa, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(4, dim=1)
             qkv = self.attn.pre_attention(modulate(self.norm1(x), shift_msa, scale_msa))
             return qkv, (x, gate_msa, shift_mlp, scale_mlp, gate_mlp)
         else:
@@ -553,10 +468,8 @@ class DismantledBlock(nn.Module):
 
     def post_attention(self, attn, x, gate_msa, shift_mlp, scale_mlp, gate_mlp):
         assert not self.pre_only
-        x = x + gate_msa.unsqueeze(1) * self.attn.post_attention(attn)
-        x = x + gate_mlp.unsqueeze(1) * self.mlp(
-            modulate(self.norm2(x), shift_mlp, scale_mlp)
-        )
+        x.add_(gate_msa.unsqueeze(1) * self.attn.post_attention(attn))
+        x.add_(gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp)))
         return x
 
     def pre_attention_x(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
@@ -611,45 +524,58 @@ class DismantledBlock(nn.Module):
             )
         else:
             attn_ = gate_msa.unsqueeze(1) * self.attn.post_attention(attn)
-        x = x + attn_
-        attn2_ = gate_msa2.unsqueeze(1) * self.attn2.post_attention(attn2)
-        x = x + attn2_
-        mlp_ = gate_mlp.unsqueeze(1) * self.mlp(
-            modulate(self.norm2(x), shift_mlp, scale_mlp)
-        )
-        x = x + mlp_
+        x.add_(attn_)
+        x.add_(torch.mul(gate_msa2.unsqueeze(1), self.attn2.post_attention(attn2)))
+        x.add_(torch.mul(gate_mlp.unsqueeze(1), self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))))
         return x
 
     def forward(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         assert not self.pre_only
         if self.x_block_self_attn:
             (q, k, v), (q2, k2, v2), intermediates = self.pre_attention_x(x, c)
-            attn = attention(q, k, v, self.attn.num_heads)
-            attn2 = attention(q2, k2, v2, self.attn2.num_heads)
+            attn = attention_function(q, k, v, self.attn.num_heads)
+            attn2 = attention_function(q2, k2, v2, self.attn2.num_heads)
             return self.post_attention_x(attn, attn2, *intermediates)
         else:
             (q, k, v), intermediates = self.pre_attention(x, c)
-            attn = attention(q, k, v, self.attn.num_heads)
+            attn = attention_function(q, k, v, self.attn.num_heads)
             return self.post_attention(attn, *intermediates)
 
+SD3_Q = None
+SD3_K = None
+SD3_V = None
+SD3_t = None
 
 def block_mixing(context, x, context_block, x_block, c):
+    global SD3_Q, SD3_K, SD3_V, SD3_t
+
     assert context is not None, "block_mixing called with None context"
-    context_qkv, context_intermediates = context_block.pre_attention(context, c)
+    (SD3_Q[:, :SD3_t, :], SD3_K[:, :SD3_t, :], SD3_V[:, :SD3_t, :]), context_intermediates = context_block.pre_attention(context, c)
 
     if x_block.x_block_self_attn:
-        x_qkv, x_qkv2, x_intermediates = x_block.pre_attention_x(x, c)
+        (SD3_Q[:, SD3_t:, :], SD3_K[:, SD3_t:, :], SD3_V[:, SD3_t:, :]), x_qkv2, x_intermediates = x_block.pre_attention_x(x, c)
     else:
-        x_qkv, x_intermediates = x_block.pre_attention(x, c)
+        (SD3_Q[:, SD3_t:, :], SD3_K[:, SD3_t:, :], SD3_V[:, SD3_t:, :]), x_intermediates = x_block.pre_attention(x, c)
 
-    q, k, v = tuple(
-        torch.cat(tuple(qkv[i] for qkv in [context_qkv, x_qkv]), dim=1)
-        for i in range(3)
-    )
-    attn = attention(q, k, v, x_block.attn.num_heads)
+    # q = torch.cat([context_qkv[0], x_qkv[0]], dim=1)
+    # k = torch.cat([context_qkv[1], x_qkv[1]], dim=1)
+    # v = torch.cat([context_qkv[2], x_qkv[2]], dim=1)
+
+#modify pre-attention to get direct?
+    # SD3_Q[:, :SD3_t, :] = context_qkv[0]
+    # SD3_K[:, :SD3_t, :] = context_qkv[1]
+    # SD3_V[:, :SD3_t, :] = context_qkv[2]
+    # SD3_Q[:, SD3_t:, :] = x_qkv[0]
+    # SD3_K[:, SD3_t:, :] = x_qkv[1]
+    # SD3_V[:, SD3_t:, :] = x_qkv[2]
+
+    # attn = attention_function(q, k, v, x_block.attn.num_heads)
+    attn = attention_function(SD3_Q, SD3_K, SD3_V, x_block.attn.num_heads)
     context_attn, x_attn = (
-        attn[:, : context_qkv[0].shape[1]],
-        attn[:, context_qkv[0].shape[1] :],
+        # attn[:, : context_qkv[0].shape[1]],
+        # attn[:, context_qkv[0].shape[1] :],
+        attn[:, :SD3_t],
+        attn[:, SD3_t:],
     )
 
     if not context_block.pre_only:
@@ -659,7 +585,7 @@ def block_mixing(context, x, context_block, x_block, c):
 
     if x_block.x_block_self_attn:
         x_q2, x_k2, x_v2 = x_qkv2
-        attn2 = attention(x_q2, x_k2, x_v2, x_block.attn2.num_heads)
+        attn2 = attention_function(x_q2, x_k2, x_v2, x_block.attn2.num_heads)
         x = x_block.post_attention_x(x_attn, attn2, *x_intermediates)
     else:
         x = x_block.post_attention(x_attn, *x_intermediates)
@@ -775,10 +701,6 @@ class MMDiTX(nn.Module):
         self.learn_sigma = learn_sigma
         in_channels = int(in_channels)
         self.in_channels = in_channels
-        # default_out_channels = in_channels * 2 if learn_sigma else in_channels
-        # self.out_channels = (
-            # out_channels if out_channels is not None else default_out_channels
-        # )
         self.out_channels = 16      # hard coded - detected value can be vastly wrong if nf4
                                     # but always 16 for sd3 and sd3.5 (learn_sigma always False)
         patch_size = int(patch_size)
@@ -951,6 +873,13 @@ class MMDiTX(nn.Module):
         y: (N,) tensor of class labels
         """
 
+        global SD3_Q, SD3_K, SD3_V, SD3_t
+        s = (x.shape[2] * x.shape[3]) // 4
+        SD3_t = context.shape[1]
+        SD3_Q = torch.empty((x.shape[0], SD3_t + s, 1536), device=x.device, dtype=x.dtype)
+        SD3_K = torch.empty((x.shape[0], SD3_t + s, 1536), device=x.device, dtype=x.dtype)
+        SD3_V = torch.empty((x.shape[0], SD3_t + s, 24, 64), device=x.device, dtype=x.dtype)
+
         skip_layers = transformer_options.get("skip_layers", [])
 
         hw = x.shape[-2:]
@@ -961,7 +890,7 @@ class MMDiTX(nn.Module):
         c = self.t_embedder(t, dtype=x.dtype)  # (N, D)
         if y is not None:
             y = self.y_embedder(y)  # (N, D)
-            c = c + y  # (N, D)
+            c.add_(y) # (N, D)
 
         context = self.context_embedder(context)
 

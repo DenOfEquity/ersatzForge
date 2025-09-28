@@ -21,6 +21,7 @@ class VRAMState(Enum):
     NORMAL_VRAM = 3
     HIGH_VRAM = 4
     SHARED = 5  # No dedicated vram: memory shared between CPU and GPU but models still need to be moved between both.
+    VERY_LOW_VRAM = 6 # special case set by neverOOM, keeps nn.Linear modules on CPU
 
 
 class CPUState(Enum):
@@ -405,10 +406,14 @@ def module_move(module, device, recursive=True, excluded_pattens=[]):
 
 
 def build_module_profile(model, model_gpu_memory_when_using_cpu_swap):
+    global vram_state
+
     all_modules = []
+    cpu_modules = []
     gpu_modules = []
     gpu_modules_only_extras = []
     mem_counter = 0
+    linear_save = 0
 
     for m in model.modules():
         if hasattr(m, "force_gpu"): # could tag modules with a priority, instead of just force - but seems low value
@@ -416,12 +421,16 @@ def build_module_profile(model, model_gpu_memory_when_using_cpu_swap):
             m.total_mem, m.weight_mem = module_size(m)
             gpu_modules.append(m)
             mem_counter += m.total_mem
+        elif vram_state == VRAMState.VERY_LOW_VRAM and m.__class__.__name__.lower() == 'linear':
+            m.total_mem, m.weight_mem = module_size(m)
+            linear_save += m.total_mem
+            cpu_modules.append(m)
         elif hasattr(m, "parameters_manual_cast"):
             m.total_mem, m.weight_mem = module_size(m)
             all_modules.append(m)
         elif hasattr(m, "weight"):
             m.total_mem, m.weight_mem = module_size(m)
-            if mem_counter + m.total_mem < model_gpu_memory_when_using_cpu_swap: # TODO: more tests
+            if mem_counter + m.total_mem < model_gpu_memory_when_using_cpu_swap:
                 gpu_modules.append(m)
                 mem_counter += m.total_mem
             else:
@@ -439,7 +448,10 @@ def build_module_profile(model, model_gpu_memory_when_using_cpu_swap):
             all_modules.remove(m)
             mem_counter += m.total_mem - m.weight_mem
 
-    cpu_modules = all_modules
+    cpu_modules += all_modules
+    
+    if linear_save > 0:
+        print (f"Setting 'Offload nn.Linear modules' has saved {linear_save/(1024*1024):.2f} MB")
 
     return gpu_modules, gpu_modules_only_extras, cpu_modules
 
@@ -488,7 +500,7 @@ class LoadedModel:
             pass
         elif vram_set_state == VRAMState.NO_VRAM:
             model_gpu_memory_when_using_cpu_swap = 0
-        elif lowvram_available and (vram_set_state == VRAMState.LOW_VRAM or vram_set_state == VRAMState.NORMAL_VRAM):
+        elif lowvram_available and (vram_set_state == VRAMState.VERY_LOW_VRAM or vram_set_state == VRAMState.LOW_VRAM or vram_set_state == VRAMState.NORMAL_VRAM):
             model_require = self.exclusive_memory
             previously_loaded = self.inclusive_memory
             current_free_mem = get_free_memory(torch_dev)
