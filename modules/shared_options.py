@@ -154,10 +154,6 @@ options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), 
     "sdxl_refiner_high_aesthetic_score": OptionInfo(6.0, "SDXL high aesthetic score", gr.Slider, {"minimum": 0, "maximum": 10, "step": 0.1}).info("used for refiner model prompt"),
 }))
 
-options_templates.update(options_section(('sd3', "Stable Diffusion 3", "sd"), {
-    "sd3_enable_t5": OptionInfo(False, "Enable T5").info("load T5 text encoder; relatively slow prompt encoding, improves quality of generation"),
-}))
-
 options_templates.update(options_section(('vae', "VAE", "sd"), {
     "sd_vae_explanation": OptionHTML("""
 <abbr title='Variational autoencoder'>VAE</abbr> is a neural network that transforms a standard <abbr title='red/green/blue'>RGB</abbr>
@@ -254,7 +250,6 @@ options_templates.update(options_section(('ui_prompt_editing', "Prompt editing",
 options_templates.update(options_section(('ui_gallery', "Gallery", "ui"), {
     "return_grid": OptionInfo(True, "Show grid in gallery"),
     "do_not_show_images": OptionInfo(False, "Do not show any images in gallery"),
-    "js_modal_lightbox": OptionInfo(True, "Full page image viewer: enable"),
     "js_modal_lightbox_initially_zoomed": OptionInfo(True, "Full page image viewer: show images zoomed in by default"),
     "gallery_height": OptionInfo("", "Gallery height", gr.Textbox).info("can be any valid CSS value, for example 768px or 20em").needs_reload_ui(),
     "open_dir_button_choice": OptionInfo("Subdirectory", "What directory the [📂] button opens", gr.Radio, {"choices": ["Output Root", "Subdirectory", "Subdirectory (even temp dir)"]}),

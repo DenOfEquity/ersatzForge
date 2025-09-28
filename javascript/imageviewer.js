@@ -94,13 +94,12 @@ function setupImageForLightbox(e) {
     }, true);
 
     e.addEventListener('click', function(evt) {
-        if (!opts.js_modal_lightbox || evt.button != 0) return;
+        if (evt.button != 0) return;
 
         modalZoomSet(opts.js_modal_lightbox_initially_zoomed);
         evt.preventDefault();
         showModal(evt);
     }, true);
-
 }
 
 function modalZoomSet(enable) {
