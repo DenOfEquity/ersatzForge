@@ -20,16 +20,9 @@ from backend.nn.flux import timestep_embedding as timestep_embedding_flux
 from backend.nn.unet import IntegratedUNet2DConditionModel, apply_control
 from backend.nn.unet import timestep_embedding as timestep_embedding_unet
 
-try:
-    from backend.nn.mmditx import MMDiTX
-except:
-    MMDiTX = None
-
-try:
-    from backend.nn.chroma import IntegratedChromaTransformer2DModel
-    from backend.nn.chroma import timestep_embedding as timestep_embedding_chroma
-except:
-    IntegratedChromaTransformer2DModel = None
+from backend.nn.mmditx import MMDiTX
+from backend.nn.chroma import IntegratedChromaTransformer2DModel
+from backend.nn.chroma import timestep_embedding as timestep_embedding_chroma
 
 
 class BlockCache(scripts.Script):
@@ -37,12 +30,10 @@ class BlockCache(scripts.Script):
     
     def __init__(self):
         if BlockCache.original_inner_forward is None:
-            if IntegratedChromaTransformer2DModel is not None:
-                BlockCache.chroma_inner_forward = IntegratedChromaTransformer2DModel.inner_forward
+            BlockCache.chroma_inner_forward = IntegratedChromaTransformer2DModel.inner_forward
             BlockCache.original_inner_forward = IntegratedFluxTransformer2DModel.inner_forward
             BlockCache.original_forward_unet = IntegratedUNet2DConditionModel.forward
-            if MMDiTX is not None:
-                BlockCache.original_forward_mmditx = MMDiTX.forward
+            BlockCache.original_forward_mmditx = MMDiTX.forward
 
     def title(self):
         return "First Block Cache / TeaCache Integrated"
@@ -94,20 +85,18 @@ class BlockCache(scripts.Script):
                     IntegratedUNet2DConditionModel.forward = patched_forward_unet_fbc
                 elif p.sd_model.is_sd3 == True:
                     MMDiTX.forward = patched_forward_mmditx_fbc
-                else:
+                elif not p.sd_model.is_webui_legacy_model():
                     IntegratedFluxTransformer2DModel.inner_forward = patched_inner_forward_flux_fbc
-                    if IntegratedChromaTransformer2DModel is not None:
-                        IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_fbc
+                    IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_fbc
             else:
                 if (p.sd_model.is_sd1 == True) or (p.sd_model.is_sd2 == True) or (p.sd_model.is_sdxl == True):
                     IntegratedUNet2DConditionModel.forward = patched_forward_unet_tc
-                elif p.sd_model.is_sd3 == True:
-                    MMDiTX.forward = patched_forward_mmditx_tc
-                else:
-                    # identify flux / chroma to avoid patching both
+                elif p.sd_model.is_sd3 == True: #this form of TeaCache seems very bad with SD3
+                    print ("TeaCache not supported for SD3. Using FirstBlockCache.")
+                    MMDiTX.forward = patched_forward_mmditx_fbc
+                elif not p.sd_model.is_webui_legacy_model():
                     IntegratedFluxTransformer2DModel.inner_forward = patched_inner_forward_flux_tc
-                    if IntegratedChromaTransformer2DModel is not None:
-                        IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_tc
+                    IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_tc
 
             p.extra_generation_params.update({
                 "bc_enabled"        : enabled,
@@ -147,12 +136,10 @@ class BlockCache(scripts.Script):
 
         if enabled:
             # restore the original inner_forward method
-            if IntegratedChromaTransformer2DModel is not None:
-                IntegratedChromaTransformer2DModel.inner_forward = BlockCache.chroma_inner_forward
+            IntegratedChromaTransformer2DModel.inner_forward = BlockCache.chroma_inner_forward
             IntegratedFluxTransformer2DModel.inner_forward = BlockCache.original_inner_forward
             IntegratedUNet2DConditionModel.forward = BlockCache.original_forward_unet
-            if MMDiTX is not None:
-                MMDiTX.forward = BlockCache.original_forward_mmditx
+            MMDiTX.forward = BlockCache.original_forward_mmditx
 
             delattr(BlockCache, "index")
             delattr(BlockCache, "threshold")
@@ -196,9 +183,9 @@ def patched_forward_mmditx_fbc(
     import backend.nn.mmditx
     s = (x.shape[2] * x.shape[3]) // 4
     backend.nn.mmditx.SD3_t = context.shape[1]
-    backend.nn.mmditx.SD3_Q = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, 1536), device=x.device, dtype=x.dtype)
-    backend.nn.mmditx.SD3_K = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, 1536), device=x.device, dtype=x.dtype)
-    backend.nn.mmditx.SD3_V = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, 24, 64), device=x.device, dtype=x.dtype)
+    backend.nn.mmditx.SD3_Q = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, self.num_heads*64),  device=x.device, dtype=x.dtype)
+    backend.nn.mmditx.SD3_K = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, self.num_heads*64),  device=x.device, dtype=x.dtype)
+    backend.nn.mmditx.SD3_V = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, self.num_heads, 64), device=x.device, dtype=x.dtype)
 
     skip_layers = transformer_options.get("skip_layers", [])
 
@@ -235,7 +222,7 @@ def patched_forward_mmditx_fbc(
             controlnet_block_interval = len(self.joint_blocks) // len(
                 control
             )
-            x = x + control[i // controlnet_block_interval]
+            x.add_(control[i // controlnet_block_interval])
 
         if first_block:
             first_block = False
@@ -251,20 +238,22 @@ def patched_forward_mmditx_fbc(
                 skip_check = False
                 
             if skip_check:
-                ## accumulate (then average?) distance per channel
-                thisDistance = torch.zeros_like(x)
-                for i in range(len(x)):
-                    thisDistance += (x[i] - BlockCache.previous[index][i]).abs() / (epsilon + BlockCache.previous[index][i].abs())
+                #method 0
+                # thisDistance = torch.zeros_like(x[0])
+                # for i in range(len(x)):
+                    # thisDistance += (x[i] - BlockCache.previous[index][i]).abs() / (epsilon + BlockCache.previous[index][i].abs())
 
-                avgDistance = thisDistance.mean().cpu().item()
+                # avgDistance = thisDistance.mean().cpu().item()
+                # BlockCache.distance[index] += avgDistance
 
-                BlockCache.distance[index] += avgDistance
+                #method 1 - standard
+                BlockCache.distance[index] += ((x - BlockCache.previous[index]).abs().mean() / BlockCache.previous[index].abs().mean()).cpu().item()
 
                 BlockCache.previous[index] = x.clone()
                 if BlockCache.distance[index] < BlockCache.threshold:
                     BlockCache.skipped[index] += 1
 
-                    x += BlockCache.residual[index] * (x.mean().abs() / BlockCache.residual[index].mean().abs())# * x.std()
+                    x += BlockCache.residual[index] * (x.mean().abs() / BlockCache.residual[index].mean().abs())
 
                     x = self.final_layer(x, c)  # (N, T, patch_size ** 2 * out_channels)
                     x = self.unpatchify(x, hw=hw)  # (N, out_channels, H, W)
@@ -419,9 +408,9 @@ def patched_inner_forward_flux_fbc(self, img, img_ids, txt, txt_ids, timesteps, 
     if self.guidance_embed:
         if guidance is None:
             raise ValueError("Didn't get guidance strength for guidance distilled model.")
-        vec = vec + self.guidance_in(timestep_embedding_flux(guidance, 256).to(img.dtype))
+        vec.add(self.guidance_in(timestep_embedding_flux(guidance, 256).to(img.dtype)))
 
-    vec = vec + self.vector_in(y)
+    vec.add_(self.vector_in(y))
     txt = self.txt_in(txt)
 
     # Merge image and text IDs
@@ -657,37 +646,32 @@ def patched_forward_mmditx_tc(
 
     skip = False
     if skip_check:
-        thisDistance = torch.zeros_like(x)
-        for i in range(len(x)):
-            thisDistance += (x[i] - BlockCache.previous[index][i]).abs() / (epsilon + BlockCache.previous[index][i].abs())
-
-        avgDistance = thisDistance.mean().cpu().item()
-        distance += avgDistance
-
+        distance += ((x - previous).abs().mean() / previous.abs().mean()).cpu().item()
         if distance < BlockCache.threshold:
             skip = True
-
 
     previous = x.clone()
 
     if skip:
-        x.add_(residual)
+        print (distance)
+        x += residual * (x.mean().abs() / residual.mean().abs())
         skipped += 1
     else:
         import backend.nn.mmditx
         s = (x.shape[2] * x.shape[3]) // 4
         backend.nn.mmditx.SD3_t = context.shape[1]
-        backend.nn.mmditx.SD3_Q = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, 1536), device=x.device, dtype=x.dtype)
-        backend.nn.mmditx.SD3_K = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, 1536), device=x.device, dtype=x.dtype)
-        backend.nn.mmditx.SD3_V = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, 24, 64), device=x.device, dtype=x.dtype)
+        backend.nn.mmditx.SD3_Q = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, self.num_heads*64),  device=x.device, dtype=x.dtype)
+        backend.nn.mmditx.SD3_K = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, self.num_heads*64),  device=x.device, dtype=x.dtype)
+        backend.nn.mmditx.SD3_V = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, self.num_heads, 64), device=x.device, dtype=x.dtype)
 
         hw = x.shape[-2:]
-        x = self.x_embedder(x) + self.cropped_pos_embed(hw).to(x.device, x.dtype)
         skip_layers = transformer_options.get("skip_layers", [])
+
+        x = self.x_embedder(x) + self.cropped_pos_embed(hw).to(x.device, x.dtype)
         c = self.t_embedder(t, dtype=x.dtype)  # (N, D)
         if y is not None:
-            y = self.y_embedder(y)  # (N, D)
-            c = c + y  # (N, D)
+            y = self.y_embedder(y)
+            c.add_(y)
 
         context = self.context_embedder(context)
 
@@ -846,9 +830,9 @@ def patched_inner_forward_flux_tc(self, img, img_ids, txt, txt_ids, timesteps, y
     if self.guidance_embed:
         if guidance is None:
             raise ValueError("Didn't get guidance strength for guidance distilled model.")
-        vec = vec + self.guidance_in(timestep_embedding_flux(guidance, 256).to(img.dtype))
+        vec.add_(self.guidance_in(timestep_embedding_flux(guidance, 256).to(img.dtype)))
 
-    vec = vec + self.vector_in(y)
+    vec.add_(self.vector_in(y))
     txt = self.txt_in(txt)
 
     # Merge image and text IDs
