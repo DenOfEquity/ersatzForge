@@ -91,9 +91,8 @@ class BlockCache(scripts.Script):
             else:
                 if (p.sd_model.is_sd1 == True) or (p.sd_model.is_sd2 == True) or (p.sd_model.is_sdxl == True):
                     IntegratedUNet2DConditionModel.forward = patched_forward_unet_tc
-                elif p.sd_model.is_sd3 == True: #this form of TeaCache seems very bad with SD3
-                    print ("TeaCache not supported for SD3. Using FirstBlockCache.")
-                    MMDiTX.forward = patched_forward_mmditx_fbc
+                elif p.sd_model.is_sd3 == True:
+                    MMDiTX.forward = patched_forward_mmditx_tc
                 elif not p.sd_model.is_webui_legacy_model():
                     IntegratedFluxTransformer2DModel.inner_forward = patched_inner_forward_flux_tc
                     IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_tc
@@ -194,8 +193,7 @@ def patched_forward_mmditx_fbc(
     x = self.x_embedder(x) + self.cropped_pos_embed(hw).to(x.device, x.dtype)
     c = self.t_embedder(t, dtype=x.dtype)  # (N, D)
     if y is not None:
-        y = self.y_embedder(y)  # (N, D)
-        c = c + y  # (N, D)
+        c.add_(self.y_embedder(y))  # (N, D)
 
     context = self.context_embedder(context)
 
@@ -219,9 +217,7 @@ def patched_forward_mmditx_fbc(
 
         context, x = block(context, x, c=c)
         if control is not None:
-            controlnet_block_interval = len(self.joint_blocks) // len(
-                control
-            )
+            controlnet_block_interval = len(self.joint_blocks) // len(control)
             x.add_(control[i // controlnet_block_interval])
 
         if first_block:
@@ -629,6 +625,14 @@ def patched_forward_mmditx_tc(
     distance = BlockCache.distance[index]
     skipped  = BlockCache.skipped[index]
 
+    # epsilon = 1e-6
+    b = x.shape[0]
+    hw = x.shape[-2:]
+    x = self.x_embedder(x) + self.cropped_pos_embed(hw).to(x.device, x.dtype)
+    c = self.t_embedder(t, dtype=x.dtype)  # (N, D)
+    if y is not None:
+        c.add_(self.y_embedder(y))
+
     if BlockCache.this_step <= BlockCache.nocache_steps:
         skip_check = False
     elif BlockCache.always_last and BlockCache.this_step == BlockCache.last_step:
@@ -642,8 +646,6 @@ def patched_forward_mmditx_tc(
     if BlockCache.skip_limit > 0 and skipped >= BlockCache.skip_limit:
         skip_check = False
 
-    epsilon = 1e-6
-
     skip = False
     if skip_check:
         distance += ((x - previous).abs().mean() / previous.abs().mean()).cpu().item()
@@ -653,35 +655,44 @@ def patched_forward_mmditx_tc(
     previous = x.clone()
 
     if skip:
-        print (distance)
         x += residual * (x.mean().abs() / residual.mean().abs())
         skipped += 1
     else:
         import backend.nn.mmditx
-        s = (x.shape[2] * x.shape[3]) // 4
+        s = (hw[0] * hw[1]) // 4
         backend.nn.mmditx.SD3_t = context.shape[1]
-        backend.nn.mmditx.SD3_Q = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, self.num_heads*64),  device=x.device, dtype=x.dtype)
-        backend.nn.mmditx.SD3_K = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, self.num_heads*64),  device=x.device, dtype=x.dtype)
-        backend.nn.mmditx.SD3_V = torch.empty((x.shape[0], backend.nn.mmditx.SD3_t + s, self.num_heads, 64), device=x.device, dtype=x.dtype)
+        backend.nn.mmditx.SD3_Q = torch.empty((b, backend.nn.mmditx.SD3_t + s, self.num_heads*64),  device=x.device, dtype=x.dtype)
+        backend.nn.mmditx.SD3_K = torch.empty((b, backend.nn.mmditx.SD3_t + s, self.num_heads*64),  device=x.device, dtype=x.dtype)
+        backend.nn.mmditx.SD3_V = torch.empty((b, backend.nn.mmditx.SD3_t + s, self.num_heads, 64), device=x.device, dtype=x.dtype)
 
-        hw = x.shape[-2:]
         skip_layers = transformer_options.get("skip_layers", [])
 
-        x = self.x_embedder(x) + self.cropped_pos_embed(hw).to(x.device, x.dtype)
-        c = self.t_embedder(t, dtype=x.dtype)  # (N, D)
-        if y is not None:
-            y = self.y_embedder(y)
-            c.add_(y)
-
         context = self.context_embedder(context)
+        if self.register_length > 0:
+            context = torch.cat(
+                (
+                    repeat(self.register, "1 ... -> b ...", b=x.shape[0]),
+                    context if context is not None else torch.Tensor([]).type_as(x),
+                ),
+                1,
+            )
 
-        x = self.forward_core_with_concat(x, c, context, skip_layers, control)
-        x = self.unpatchify(x, hw=hw)  # (N, out_channels, H, W)
+        # x = self.forward_core_with_concat(x, c, context, skip_layers, control)
+        for i, block in enumerate(self.joint_blocks):
+            if i in skip_layers:
+                continue
+
+            context, x = block(context, x, c=c)
+            if control is not None:
+                controlnet_block_interval = len(self.joint_blocks) // len(control)
+                x.add_(control[i // controlnet_block_interval])
 
         residual = x - previous
         distance = 0
         skipped = 0
 
+    x = self.final_layer(x, c)  # (N, T, patch_size ** 2 * out_channels)
+    x = self.unpatchify(x, hw=hw)  # (N, out_channels, H, W)
 
     BlockCache.residual[index] = residual
     BlockCache.previous[index] = previous
