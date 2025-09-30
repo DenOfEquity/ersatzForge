@@ -717,12 +717,10 @@ def create_ui():
         ui_postprocessing.create_ui()
 
     with gr.Blocks(analytics_enabled=False) as pnginfo_interface:
-        with ResizeHandleRow(equal_height=False):
-            with gr.Column(variant='panel'):
-                image = gr.Image(elem_id="pnginfo_image", label="Source", source="upload", interactive=True, type="pil", height="50vh")
+        with gr.Row(equal_height=False):
+            image = gr.Image(elem_id="pnginfo_image", label="Source", source="upload", interactive=True, type="pil", height="50vh")
 
             with gr.Column(variant='panel'):
-                html = gr.HTML()
                 generation_info = gr.Textbox(visible=False, elem_id="pnginfo_generation_info")
                 html2 = gr.HTML()
                 with gr.Row():
@@ -736,7 +734,7 @@ def create_ui():
         image.change(
             fn=wrap_gradio_call_no_job(modules.extras.run_pnginfo),
             inputs=[image],
-            outputs=[html, generation_info, html2],
+            outputs=[generation_info, html2],
         )
 
     modelmerger_ui = ui_checkpoint_merger.UiCheckpointMerger()

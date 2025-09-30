@@ -18,7 +18,7 @@ import huggingface_guess
 
 def run_pnginfo(image):
     if image is None:
-        return '', '', ''
+        return '', ''
 
     geninfo, items = images.read_info_from_image(image)
     items = {**{'parameters': geninfo}, **items}
@@ -32,11 +32,7 @@ def run_pnginfo(image):
 </div>
 """.strip()+"\n"
 
-    if len(info) == 0:
-        message = "Nothing found in the image."
-        info = f"<div><p>{message}<p></div>"
-
-    return '', geninfo, info
+    return geninfo, info
 
 
 checkpoint_dict_skip_on_merge = ["cond_stage_model.transformer.text_model.embeddings.position_ids"]
