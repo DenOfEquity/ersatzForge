@@ -3,15 +3,15 @@ import math
 
 from modules import devices, rng_philox, shared
 
-#### perlin noise via Extraltodeus
+#### perlin noise via Extraltodeus. modified for noise shape; to use Generator for batch consistency
 #    found at https://gist.github.com/vadimkantorov/ac1b097753f217c5c11bc2ff396e0a57
 #    which was ported from https://github.com/pvigier/perlin-numpy/blob/master/perlin2d.py
-def rand_perlin_2d(shape, res, fade = lambda t: 6*t**5 - 15*t**4 + 10*t**3):
+def rand_perlin_2d(shape, generator, res, fade = lambda t: 6*t**5 - 15*t**4 + 10*t**3):
     delta = (res[0] / shape[0], res[1] / shape[1])
     d = (shape[0] // res[0], shape[1] // res[1])
 
     grid = torch.stack(torch.meshgrid(torch.arange(0, res[0], delta[0]), torch.arange(0, res[1], delta[1])), dim = -1) % 1
-    angles = 2*math.pi*torch.rand(res[0]+1, res[1]+1)
+    angles = 2*math.pi*torch.rand(res[0]+1, res[1]+1, generator=generator)
     gradients = torch.stack((torch.cos(angles), torch.sin(angles)), dim = -1)
 
     tile_grads = lambda slice1, slice2: gradients[slice1[0]:slice1[1], slice2[0]:slice2[1]].repeat_interleave(d[0], 0).repeat_interleave(d[1], 1)
@@ -24,27 +24,26 @@ def rand_perlin_2d(shape, res, fade = lambda t: 6*t**5 - 15*t**4 + 10*t**3):
     t = fade(grid[:shape[0], :shape[1]])
     return math.sqrt(2) * torch.lerp(torch.lerp(n00, n10, t[..., 0]), torch.lerp(n01, n11, t[..., 0]), t[..., 1])
 
-def rand_perlin_2d_octaves(shape, res, octaves=1, persistence=0.5):
+def rand_perlin_2d_octaves(shape, generator, res, octaves=1, persistence=0.5):
     noise = torch.zeros(shape)
     frequency = 1
     amplitude = 1
     for _ in range(octaves):
-        noise += amplitude * rand_perlin_2d(shape, (frequency*res[0], frequency*res[1]))
+        noise += amplitude * rand_perlin_2d(shape, generator, (frequency*res[0], frequency*res[1]))
         frequency *= 2
         amplitude *= persistence
     noise = torch.remainder(torch.abs(noise)*1000000,11)/11
-    # noise = (torch.sin(torch.remainder(noise*1000000,83))+1)/2
     return noise
 
 # input width/height is latent width/height, not image
-def create_noisy_latents_perlin(seed, shape):
+def create_noisy_latents_perlin(seed, shape, generator=None):
     detail_level = 1    # Setting?
     channels, height, width = shape
-    if seed != -1:
+    if generator is None and seed != -1:
         torch.manual_seed(seed)
     noise = torch.zeros(shape, dtype=torch.float32, device="cpu")
     for j in range(channels):
-        noise_values = rand_perlin_2d_octaves((height, width), (1,1), 1, 1)
+        noise_values = rand_perlin_2d_octaves((height, width), generator, (1,1), 1, 1)
         result = (1+detail_level/10)*torch.erfinv(2 * noise_values - 1) * (2 ** 0.5)
         result = torch.clamp(result,-5,5)
         noise[j, :, :] = result
@@ -63,20 +62,12 @@ def get_noise_source_type():
 def randn(seed, shape, generator=None):
     """Uses the seed parameter to set the global torch seed; to generate more with that seed, use randn_like/randn_without_seed."""
 
-    if generator is not None:
-        # Forge Note:
-        # If generator is not none, we must use another seed to
-        # avoid global torch.rand to get same noise again.
-        # Note: removing this will make DDPM sampler broken.
-        # manual_seed((seed + 100000) % 65536)
-        seed = (seed + 100000) % 65536
-    # else:
-        # manual_seed(seed)
-    manual_seed(seed)
+    if generator is None:
+        manual_seed(seed)
 
     match get_noise_source_type():
         case "Perlin":
-            return create_noisy_latents_perlin(seed, shape).to(devices.device)
+            return create_noisy_latents_perlin(seed, shape, generator).to(devices.device)
         case "NV":
             return torch.asarray((generator or nv_rng).randn(shape), device=devices.device)
         case "CPU":
@@ -126,7 +117,7 @@ def randn_without_seed(shape, generator=None):
 
     match get_noise_source_type():
         case "Perlin":
-            return create_noisy_latents_perlin(-1, shape).to(devices.device)
+            return create_noisy_latents_perlin(-1, shape, generator).to(devices.device)
         case "NV":
             return torch.asarray((generator or nv_rng).randn(shape), device=devices.device)
         case "CPU":
@@ -151,7 +142,7 @@ def manual_seed(seed):
 def create_generator(seed):
     match get_noise_source_type():
         case "Perlin":
-            return None
+            return torch.Generator(devices.cpu).manual_seed(int(seed))
         case "NV":
             return rng_philox.Generator(seed)
         case "CPU":
@@ -248,4 +239,3 @@ devices.randn_local = randn_local
 devices.randn_like = randn_like
 devices.randn_without_seed = randn_without_seed
 devices.manual_seed = manual_seed
-
