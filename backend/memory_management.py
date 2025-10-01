@@ -670,10 +670,20 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
     for x in models:
         loaded_model = LoadedModel(x)
 
-        if loaded_model in current_loaded_models:
-            models_already_loaded.append(loaded_model)
-        else:
-            models_to_load.append(loaded_model)
+        # check for clones - model patched by SAG/PAG/APG/FreeU whatever - can use already loaded;
+        # LoRA changes - must offload/reload; may be possible to patch/refresh inline but didn't seem to work well
+        matched = False
+        for i in range(len(current_loaded_models)):
+            if x.is_clone(current_loaded_models[i].model) and getattr(x, 'lora_patches') == getattr(current_loaded_models[i].model, 'lora_patches'):
+                models_already_loaded.append(loaded_model)
+                matched = True
+                break
+
+        if not matched:
+            if loaded_model in current_loaded_models:
+                models_already_loaded.append(loaded_model)
+            else:
+                models_to_load.append(loaded_model)
 
     if len(models_to_load) == 0:
         devs = set(map(lambda a: a.device, models_already_loaded))
