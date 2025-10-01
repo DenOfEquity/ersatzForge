@@ -161,8 +161,7 @@ def sample_sa_solver(model, x, sigmas, extra_args=None, callback=None, disable=F
     if len(sigmas) <= 1:
         return x
     extra_args = {} if extra_args is None else extra_args
-    seed = extra_args.get("seed", None)
-    noise_sampler = default_noise_sampler(x, seed=seed) if noise_sampler is None else noise_sampler
+    noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
     s_in = x.new_ones([x.shape[0]])
 
     predictor_order = 3
@@ -269,8 +268,7 @@ def sample_er_sde(model, x, sigmas, extra_args=None, callback=None, disable=None
     Code reference: https://github.com/QinpengCui/ER-SDE-Solver/blob/main/er_sde_solver.py.
     """
     extra_args = {} if extra_args is None else extra_args
-    seed = extra_args.get("seed", None)
-    noise_sampler = default_noise_sampler(x, seed=seed) if noise_sampler is None else noise_sampler
+    noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
     s_in = x.new_ones([x.shape[0]])
 
     def noise_scaler(x):
