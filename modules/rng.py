@@ -126,7 +126,7 @@ def randn_without_seed(shape, generator=None):
 
     match get_noise_source_type():
         case "Perlin":
-            return create_noisy_latents_perlin(-1, x.shape).to(x.device)
+            return create_noisy_latents_perlin(-1, shape).to(devices.device)
         case "NV":
             return torch.asarray((generator or nv_rng).randn(shape), device=devices.device)
         case "CPU":
@@ -248,3 +248,4 @@ devices.randn_local = randn_local
 devices.randn_like = randn_like
 devices.randn_without_seed = randn_without_seed
 devices.manual_seed = manual_seed
+
