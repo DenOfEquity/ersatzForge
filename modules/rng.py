@@ -1,6 +1,56 @@
 import torch
+import math
 
 from modules import devices, rng_philox, shared
+
+#### perlin noise via Extraltodeus
+#    found at https://gist.github.com/vadimkantorov/ac1b097753f217c5c11bc2ff396e0a57
+#    which was ported from https://github.com/pvigier/perlin-numpy/blob/master/perlin2d.py
+def rand_perlin_2d(shape, res, fade = lambda t: 6*t**5 - 15*t**4 + 10*t**3):
+    delta = (res[0] / shape[0], res[1] / shape[1])
+    d = (shape[0] // res[0], shape[1] // res[1])
+
+    grid = torch.stack(torch.meshgrid(torch.arange(0, res[0], delta[0]), torch.arange(0, res[1], delta[1])), dim = -1) % 1
+    angles = 2*math.pi*torch.rand(res[0]+1, res[1]+1)
+    gradients = torch.stack((torch.cos(angles), torch.sin(angles)), dim = -1)
+
+    tile_grads = lambda slice1, slice2: gradients[slice1[0]:slice1[1], slice2[0]:slice2[1]].repeat_interleave(d[0], 0).repeat_interleave(d[1], 1)
+    dot = lambda grad, shift: (torch.stack((grid[:shape[0],:shape[1],0] + shift[0], grid[:shape[0],:shape[1], 1] + shift[1]  ), dim = -1) * grad[:shape[0], :shape[1]]).sum(dim = -1)
+
+    n00 = dot(tile_grads([0, -1], [0, -1]), [0,  0])
+    n10 = dot(tile_grads([1, None], [0, -1]), [-1, 0])
+    n01 = dot(tile_grads([0, -1],[1, None]), [0, -1])
+    n11 = dot(tile_grads([1, None], [1, None]), [-1,-1])
+    t = fade(grid[:shape[0], :shape[1]])
+    return math.sqrt(2) * torch.lerp(torch.lerp(n00, n10, t[..., 0]), torch.lerp(n01, n11, t[..., 0]), t[..., 1])
+
+def rand_perlin_2d_octaves(shape, res, octaves=1, persistence=0.5):
+    noise = torch.zeros(shape)
+    frequency = 1
+    amplitude = 1
+    for _ in range(octaves):
+        noise += amplitude * rand_perlin_2d(shape, (frequency*res[0], frequency*res[1]))
+        frequency *= 2
+        amplitude *= persistence
+    noise = torch.remainder(torch.abs(noise)*1000000,11)/11
+    # noise = (torch.sin(torch.remainder(noise*1000000,83))+1)/2
+    return noise
+
+# input width/height is latent width/height, not image
+def create_noisy_latents_perlin(seed, shape):
+    detail_level = 1    # Setting?
+    channels, height, width = shape
+    if seed != -1:
+        torch.manual_seed(seed)
+    noise = torch.zeros(shape, dtype=torch.float32, device="cpu")
+    for j in range(channels):
+        noise_values = rand_perlin_2d_octaves((height, width), (1,1), 1, 1)
+        result = (1+detail_level/10)*torch.erfinv(2 * noise_values - 1) * (2 ** 0.5)
+        result = torch.clamp(result,-5,5)
+        noise[j, :, :] = result
+
+    return noise
+#### end: perlin
 
 
 def get_noise_source_type():
@@ -11,68 +61,80 @@ def get_noise_source_type():
 
 
 def randn(seed, shape, generator=None):
-    """Generate a tensor with random numbers from a normal distribution using seed.
-
-    Uses the seed parameter to set the global torch seed; to generate more with that seed, use randn_like/randn_without_seed."""
+    """Uses the seed parameter to set the global torch seed; to generate more with that seed, use randn_like/randn_without_seed."""
 
     if generator is not None:
         # Forge Note:
         # If generator is not none, we must use another seed to
         # avoid global torch.rand to get same noise again.
         # Note: removing this will make DDPM sampler broken.
-        manual_seed((seed + 100000) % 65536)
-    else:
-        manual_seed(seed)
+        # manual_seed((seed + 100000) % 65536)
+        seed = (seed + 100000) % 65536
+    # else:
+        # manual_seed(seed)
+    manual_seed(seed)
 
-    if get_noise_source_type() == "NV":
-        return torch.asarray((generator or nv_rng).randn(shape), device=devices.device)
-
-    if get_noise_source_type() == "CPU" or devices.device.type == 'mps':
-        return torch.randn(shape, device=devices.cpu, generator=generator).to(devices.device)
-
-    return torch.randn(shape, device=devices.device, generator=generator)
+    match get_noise_source_type():
+        case "Perlin":
+            return create_noisy_latents_perlin(seed, shape).to(devices.device)
+        case "NV":
+            return torch.asarray((generator or nv_rng).randn(shape), device=devices.device)
+        case "CPU":
+            return torch.randn(shape, device=devices.cpu, generator=generator).to(devices.device)
+        case _:
+            if devices.device.type == 'mps':
+                return torch.randn(shape, device=devices.cpu, generator=generator).to(devices.device)
+            return torch.randn(shape, device=devices.device, generator=generator)
 
 
 def randn_local(seed, shape):
-    """Generate a tensor with random numbers from a normal distribution using seed.
+    """Does not change the global random number generator. You can only generate the seed's first tensor using this function."""
 
-    Does not change the global random number generator. You can only generate the seed's first tensor using this function."""
-
-    if get_noise_source_type() == "NV":
-        rng = rng_philox.Generator(seed)
-        return torch.asarray(rng.randn(shape), device=devices.device)
-
-    local_device = devices.cpu if get_noise_source_type() == "CPU" or devices.device.type == 'mps' else devices.device
-    local_generator = torch.Generator(local_device).manual_seed(int(seed))
-    return torch.randn(shape, device=local_device, generator=local_generator).to(devices.device)
+    match get_noise_source_type():
+        case "Perlin":
+            return create_noisy_latents_perlin(seed, shape).to(devices.device)
+        case "NV":
+            rng = rng_philox.Generator(seed)
+            return torch.asarray(rng.randn(shape), device=devices.device)
+        case "CPU":
+            local_generator = torch.Generator(devices.cpu).manual_seed(int(seed))
+            return torch.randn(shape, device=devices.cpu, generator=local_generator).to(devices.device)
+        case _:
+            local_device = devices.cpu if devices.device.type == 'mps' else devices.device
+            local_generator = torch.Generator(local_device).manual_seed(int(seed))
+            return torch.randn(shape, device=local_device, generator=local_generator).to(devices.device)
 
 
 def randn_like(x):
-    """Generate a tensor with random numbers from a normal distribution using the previously initialized generator.
+    """Use either randn() or manual_seed() to initialize the generator."""
 
-    Use either randn() or manual_seed() to initialize the generator."""
-
-    if get_noise_source_type() == "NV":
-        return torch.asarray(nv_rng.randn(x.shape), device=x.device, dtype=x.dtype)
-
-    if get_noise_source_type() == "CPU" or x.device.type == 'mps':
-        return torch.randn_like(x, device=devices.cpu).to(x.device)
-
-    return torch.randn_like(x)
+    match get_noise_source_type():
+        case "Perlin": # check this with ancestral
+            return create_noisy_latents_perlin(-1, x.shape).to(x.device)
+        case "NV":
+            return torch.asarray(nv_rng.randn(x.shape), device=x.device, dtype=x.dtype)
+        case "CPU":
+            return torch.randn_like(x, device=devices.cpu).to(x.device)
+        case _:
+            if x.device.type == 'mps':
+                return torch.randn_like(x, device=devices.cpu).to(x.device)
+            return torch.randn_like(x)
 
 
 def randn_without_seed(shape, generator=None):
-    """Generate a tensor with random numbers from a normal distribution using the previously initialized generator.
+    """Use either randn() or manual_seed() to initialize the generator."""
 
-    Use either randn() or manual_seed() to initialize the generator."""
-
-    if get_noise_source_type() == "NV":
-        return torch.asarray((generator or nv_rng).randn(shape), device=devices.device)
-
-    if get_noise_source_type() == "CPU" or devices.device.type == 'mps':
-        return torch.randn(shape, device=devices.cpu, generator=generator).to(devices.device)
-
-    return torch.randn(shape, device=devices.device, generator=generator)
+    match get_noise_source_type():
+        case "Perlin":
+            return create_noisy_latents_perlin(-1, x.shape).to(x.device)
+        case "NV":
+            return torch.asarray((generator or nv_rng).randn(shape), device=devices.device)
+        case "CPU":
+            return torch.randn(shape, device=devices.cpu, generator=generator).to(devices.device)
+        case _:
+            if devices.device.type == 'mps':
+                return torch.randn(shape, device=devices.cpu, generator=generator).to(devices.device)
+            return torch.randn(shape, device=devices.device, generator=generator)
 
 
 def manual_seed(seed):
@@ -87,12 +149,16 @@ def manual_seed(seed):
 
 
 def create_generator(seed):
-    if get_noise_source_type() == "NV":
-        return rng_philox.Generator(seed)
-
-    device = devices.cpu if get_noise_source_type() == "CPU" or devices.device.type == 'mps' else devices.device
-    generator = torch.Generator(device).manual_seed(int(seed))
-    return generator
+    match get_noise_source_type():
+        case "Perlin":
+            return None
+        case "NV":
+            return rng_philox.Generator(seed)
+        case "CPU":
+            return torch.Generator(devices.cpu).manual_seed(int(seed))
+        case _:
+            device = devices.cpu if devices.device.type == 'mps' else devices.device
+            return torch.Generator(device).manual_seed(int(seed))
 
 
 # from https://discuss.pytorch.org/t/help-regarding-slerp-function-for-generative-model-sampling/32475/3
