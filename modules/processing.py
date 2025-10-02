@@ -753,11 +753,17 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "Token merging ratio": None if token_merging_ratio == 0 else token_merging_ratio,
         "Token merging ratio hr": None if not enable_hr or token_merging_ratio_hr == 0 else token_merging_ratio_hr,
         "Init image hash": getattr(p, 'init_img_hash', None),
-        "RNG": noise_source_type if noise_source_type != "GPU" else None,
         "Tiling": p.tiling if p.tiling != "None" and (shared.sd_model.is_sd1 or shared.sd_model.is_sd2 or shared.sd_model.is_sdxl) else None,
         **p.extra_generation_params,
         "ELLA": opts.use_ELLA if ("ELLA" in opts.use_ELLA and shared.sd_model.is_sd1) else None,
+        "RNG": noise_source_type if noise_source_type != "GPU" else None,
     })
+    if noise_source_type == 'Perlin':
+        generation_params.update({
+            "Perlin detail": opts.perlin_detail,
+            "Perlin octaves": opts.perlin_octaves,
+            "Perlin persistence": opts.perlin_persist,
+        })
 
     if opts.forge_unet_storage_dtype != 'Automatic':
         generation_params['Diffusion in Low Bits'] = opts.forge_unet_storage_dtype

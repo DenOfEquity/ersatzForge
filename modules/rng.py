@@ -1,28 +1,30 @@
 import torch
-import math
 
 from modules import devices, rng_philox, shared
 
-#### perlin noise via Extraltodeus. modified for noise shape; to use Generator for batch consistency
+#### perlin noise via Extraltodeus.
 #    found at https://gist.github.com/vadimkantorov/ac1b097753f217c5c11bc2ff396e0a57
 #    which was ported from https://github.com/pvigier/perlin-numpy/blob/master/perlin2d.py
+##   modified for: noise shape; to use Generator for batch consistency; fix error at [0,0]; erfinv scaling to avoid -Inf; Settings
 def rand_perlin_2d(shape, generator, res, fade = lambda t: 6*t**5 - 15*t**4 + 10*t**3):
+    pi = 3.141593
+    sqrt2 = 1.414214
     delta = (res[0] / shape[0], res[1] / shape[1])
     d = (shape[0] // res[0], shape[1] // res[1])
 
-    grid = torch.stack(torch.meshgrid(torch.arange(0, res[0], delta[0]), torch.arange(0, res[1], delta[1])), dim = -1) % 1
-    angles = 2*math.pi*torch.rand(res[0]+1, res[1]+1, generator=generator)
-    gradients = torch.stack((torch.cos(angles), torch.sin(angles)), dim = -1)
+    grid = torch.stack(torch.meshgrid(torch.arange(0, res[0], delta[0]), torch.arange(0, res[1], delta[1])), dim=-1) % 1
+    angles = 2*pi*torch.rand(res[0]+1, res[1]+1, generator=generator)
+    gradients = torch.stack((torch.cos(angles), torch.sin(angles)), dim=-1)
 
     tile_grads = lambda slice1, slice2: gradients[slice1[0]:slice1[1], slice2[0]:slice2[1]].repeat_interleave(d[0], 0).repeat_interleave(d[1], 1)
-    dot = lambda grad, shift: (torch.stack((grid[:shape[0],:shape[1],0] + shift[0], grid[:shape[0],:shape[1], 1] + shift[1]  ), dim = -1) * grad[:shape[0], :shape[1]]).sum(dim = -1)
+    dot = lambda grad, shift: (torch.stack((grid[:shape[0],:shape[1],0] + shift[0], grid[:shape[0],:shape[1], 1] + shift[1] ), dim=-1) * grad[:shape[0], :shape[1]]).sum(dim=-1)
 
     n00 = dot(tile_grads([0, -1], [0, -1]), [0,  0])
     n10 = dot(tile_grads([1, None], [0, -1]), [-1, 0])
     n01 = dot(tile_grads([0, -1],[1, None]), [0, -1])
     n11 = dot(tile_grads([1, None], [1, None]), [-1,-1])
     t = fade(grid[:shape[0], :shape[1]])
-    return math.sqrt(2) * torch.lerp(torch.lerp(n00, n10, t[..., 0]), torch.lerp(n01, n11, t[..., 0]), t[..., 1])
+    return sqrt2 * torch.lerp(torch.lerp(n00, n10, t[..., 0]), torch.lerp(n01, n11, t[..., 0]), t[..., 1])
 
 def rand_perlin_2d_octaves(shape, generator, res, octaves=1, persistence=0.5):
     noise = torch.zeros(shape)
@@ -37,15 +39,23 @@ def rand_perlin_2d_octaves(shape, generator, res, octaves=1, persistence=0.5):
 
 # input width/height is latent width/height, not image
 def create_noisy_latents_perlin(seed, shape, generator=None):
-    detail_level = 1    # Setting?
+    detail_level = shared.opts.perlin_detail
+    octaves = shared.opts.perlin_octaves    # must scale into actual latent size
+    power2 = [1, 2, 4, 8, 16, 32, 64, 128]  # seven octaves max, arbitrarily
+    while shape[-1] % power2[octaves-1] != 0:
+        octaves -= 1
+    while shape[-2] % power2[octaves-1] != 0:
+        octaves -= 1
+    persistence = shared.opts.perlin_persist
     channels, height, width = shape
     if generator is None and seed != -1:
         torch.manual_seed(seed)
-    noise = torch.zeros(shape, dtype=torch.float32, device="cpu")
+    noise = torch.zeros((channels, height, width), dtype=torch.float32, device="cpu")
     for j in range(channels):
-        noise_values = rand_perlin_2d_octaves((height, width), generator, (1,1), 1, 1)
-        result = (1+detail_level/10)*torch.erfinv(2 * noise_values - 1) * (2 ** 0.5)
-        result = torch.clamp(result,-5,5)
+        noise_values = rand_perlin_2d_octaves((height, width), generator, (1,1), octaves, persistence)
+        noise_values[:1, :1] = noise_values[-1:, -1:]   # fix bad result at [0,0]
+        result = (1+detail_level/10)*torch.erfinv(1.9992 * noise_values - 0.9996) * (2 ** 0.5) # erfinv input range should be (-1, 1)
+        # result.clamp_(result,-5,5)
         noise[j, :, :] = result
 
     return noise
