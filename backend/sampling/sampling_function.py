@@ -10,9 +10,9 @@ import collections
 from backend import memory_management
 from backend.sampling.condition import Condition, compile_conditions, compile_weighted_conditions
 from backend.operations import cleanup_cache
-from backend.args import dynamic_args, args
 from backend import utils
 
+from modules.shared import opts
 
 def get_area_and_mult(conds, x_in, timestep_in):
     area = (x_in.shape[2], x_in.shape[3], 0, 0)
@@ -192,19 +192,6 @@ def calc_cond_uncond_batch(model, cond, uncond, x_in, timestep, model_options):
 
         free_memory = memory_management.get_free_memory(x_in.device)
 
-        if (not args.disable_gpu_warning) and x_in.device.type == 'cuda':
-            free_memory_mb = free_memory / (1024.0 * 1024.0)
-            safe_memory_mb = 512.0
-            if free_memory_mb < safe_memory_mb:
-                print(f"\n\n----------------------")
-                print(f"[Low GPU VRAM Warning] Your current GPU free memory is {free_memory_mb:.2f} MB for this diffusion iteration.")
-                print(f"[Low GPU VRAM Warning] This number is lower than the safe value of {safe_memory_mb:.2f} MB.")
-                print(f"[Low GPU VRAM Warning] If you continue, you may cause NVIDIA GPU performance degradation for this diffusion process, and the speed may be extremely slow (about 10x slower).")
-                print(f"[Low GPU VRAM Warning] To solve the problem, you can set the 'GPU Weights' (on the top of page) to a lower value.")
-                print(f"[Low GPU VRAM Warning] If you cannot find 'GPU Weights', you can click the 'all' option in the 'UI' area on the left-top corner of the webpage.")
-                print(f"[Low GPU VRAM Warning] If you want to take the risk of NVIDIA GPU fallback and test the 10x slower speed, you can (but are highly not recommended to) add '--disable-gpu-warning' to CMD flags to remove this warning.")
-                print(f"----------------------\n\n")
-
         for i in range(1, len(to_batch_temp) + 1):
             batch_amount = to_batch_temp[:len(to_batch_temp) // i]
             input_shape = [len(batch_amount) * first_shape[0]] + list(first_shape)[1:]
@@ -310,6 +297,11 @@ def sampling_function_inner(model, x, timestep, uncond, cond, cond_scale, model_
         cfg_result = uncond_pred + (cond_pred - uncond_pred) * cond_scale * edit_strength
     else:
         cfg_result = uncond_pred + (cond_pred - uncond_pred) * cond_scale
+
+    if opts.epsilon_scaling != 1.0:
+        diff = x - cfg_result
+        diff /= opts.epsilon_scaling
+        cfg_result = x - diff
 
     for fn in model_options.get("sampler_post_cfg_function", []):
         args = {"denoised": cfg_result, "cond": cond, "uncond": uncond, "model": model, "uncond_denoised": uncond_pred, "cond_denoised": cond_pred,

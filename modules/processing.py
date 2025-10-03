@@ -756,6 +756,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "Tiling": p.tiling if p.tiling != "None" and (shared.sd_model.is_sd1 or shared.sd_model.is_sd2 or shared.sd_model.is_sdxl) else None,
         **p.extra_generation_params,
         "ELLA": opts.use_ELLA if ("ELLA" in opts.use_ELLA and shared.sd_model.is_sd1) else None,
+        "Espilon scaling": opts.epsilon_scaling if opts.epsilon_scaling != 1.0 else None,
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
     })
     if noise_source_type == 'Perlin':
@@ -1392,33 +1393,33 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             else:
                 decoded_samples = None
 
-        with sd_models.SkipWritingToConfig():
-            fp_checkpoint = getattr(opts, 'sd_model_checkpoint')
-            fp_additional_modules = getattr(opts, 'forge_additional_modules')
+        # load HiRes model and modules
+        fp_checkpoint = getattr(opts, 'sd_model_checkpoint')
+        fp_additional_modules = getattr(opts, 'forge_additional_modules')
 
-            reload = False
-            if self.hr_additional_modules is not None and 'Use same choices' not in self.hr_additional_modules:
-                modules_changed = main_entry.modules_change(self.hr_additional_modules, save=False, refresh=False)
-                if modules_changed:
-                    reload = True
+        reload = False
+        if self.hr_additional_modules is not None and 'Use same choices' not in self.hr_additional_modules:
+            modules_changed = main_entry.modules_change(self.hr_additional_modules, save=False, refresh=False)
+            if modules_changed:
+                reload = True
 
-            if self.hr_checkpoint_name and self.hr_checkpoint_name != 'Use same checkpoint':
-                checkpoint_changed = main_entry.checkpoint_change(self.hr_checkpoint_name, save=False, refresh=False)
-                if checkpoint_changed:
-                    self.firstpass_use_distilled_cfg_scale = self.sd_model.use_distilled_cfg_scale
-                    reload = True
+        if self.hr_checkpoint_name and self.hr_checkpoint_name != 'Use same checkpoint':
+            checkpoint_changed = main_entry.checkpoint_change(self.hr_checkpoint_name, save=False, refresh=False)
+            if checkpoint_changed:
+                self.firstpass_use_distilled_cfg_scale = self.sd_model.use_distilled_cfg_scale
+                reload = True
 
-            if reload:
-                try:
-                    main_entry.refresh_model_loading_parameters()
-                    sd_models.forge_model_reload()
-                finally:
-                    main_entry.modules_change(fp_additional_modules, save=False, refresh=False)
-                    main_entry.checkpoint_change(fp_checkpoint, save=False, refresh=False)
-                    main_entry.refresh_model_loading_parameters()
+        if reload:
+            try:
+                main_entry.refresh_model_loading_parameters()
+                sd_models.forge_model_reload()
+            finally:
+                main_entry.modules_change(fp_additional_modules, save=False, refresh=False)
+                main_entry.checkpoint_change(fp_checkpoint, save=False, refresh=False)
+                main_entry.refresh_model_loading_parameters()
 
-            if self.sd_model.use_distilled_cfg_scale:
-                self.extra_generation_params['HiRes Distilled CFG scale'] = self.hr_distilled_cfg
+        if self.sd_model.use_distilled_cfg_scale:
+            self.extra_generation_params['HiRes Distilled CFG scale'] = self.hr_distilled_cfg
 
         return self.sample_hr_pass(samples, decoded_samples, seeds, subseeds, subseed_strength, prompts)
 

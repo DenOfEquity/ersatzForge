@@ -7,7 +7,6 @@ import enum
 import torch
 import re
 import gc
-import contextlib
 
 from modules import paths, shared, modelloader, devices, script_callbacks, errors, hashes, cache
 from modules.shared import opts, cmd_opts
@@ -253,10 +252,6 @@ def read_metadata_from_safetensors(filename):
 
 def read_state_dict(checkpoint_file, print_global_state=False, map_location=None):
     pass
-
-
-def SkipWritingToConfig():
-    return contextlib.nullcontext()
 
 
 def check_fp8(model):

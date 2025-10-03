@@ -7,28 +7,6 @@ from modules.script_callbacks import AfterCFGCallbackParams, cfg_after_cfg_callb
 from backend.sampling.sampling_function import sampling_function
 
 
-def catenate_conds(conds):
-    if not isinstance(conds[0], dict):
-        return torch.cat(conds)
-
-    return {key: torch.cat([x[key] for x in conds]) for key in conds[0].keys()}
-
-
-def subscript_cond(cond, a, b):
-    if not isinstance(cond, dict):
-        return cond[a:b]
-
-    return {key: vec[a:b] for key, vec in cond.items()}
-
-
-def pad_cond(tensor, repeats, empty):
-    if not isinstance(tensor, dict):
-        return torch.cat([tensor, empty.repeat((tensor.shape[0], repeats, 1))], axis=1)
-
-    tensor['crossattn'] = pad_cond(tensor['crossattn'], repeats, empty)
-    return tensor
-
-
 class CFGDenoiser(torch.nn.Module):
     """
     Classifier free guidance denoiser. A wrapper for stable diffusion model (specifically for unet)
@@ -52,7 +30,6 @@ class CFGDenoiser(torch.nn.Module):
         self.step = 0
         self.image_cfg_scale = None
         self.sampler = sampler
-        self.model_wrap = None
         self.p = None
 
         self.need_last_noise_uncond = False
