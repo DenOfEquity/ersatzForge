@@ -495,31 +495,32 @@ class LoadedModel:
 
         model_gpu_memory_when_using_cpu_swap = -1
 
-        if 'Autoencoder' in self.model.model.__class__.__name__:
+        if 'Autoencoder' in self.model.model.__class__.__name__ or 'CLIPVisionModelWithProjection' in self.model.model.__class__.__name__:
             # VAE must be fully on one device
             pass
         elif vram_set_state == VRAMState.NO_VRAM:
             model_gpu_memory_when_using_cpu_swap = 0
         elif lowvram_available and (vram_set_state == VRAMState.VERY_LOW_VRAM or vram_set_state == VRAMState.LOW_VRAM or vram_set_state == VRAMState.NORMAL_VRAM):
             model_require = self.exclusive_memory
-            previously_loaded = self.inclusive_memory
-            current_free_mem = get_free_memory(torch_dev)
-            
-            estimated_remaining_memory = current_free_mem - model_require - memory_for_inference
+            if model_require > 0:
+                previously_loaded = self.inclusive_memory
+                current_free_mem = get_free_memory(torch_dev)
+                
+                estimated_remaining_memory = current_free_mem - model_require - memory_for_inference
 
-            print(f"[Memory Management] Target: {self.model.model.__class__.__name__}, Free GPU: {current_free_mem / (1024 * 1024):.2f} MB, Model Require: {model_require / (1024 * 1024):.2f} MB, Previously Loaded: {previously_loaded / (1024 * 1024):.2f} MB, Inference Require: {memory_for_inference / (1024 * 1024):.2f} MB, Remaining: {estimated_remaining_memory / (1024 * 1024):.2f} MB, ", end="")
+                print(f"[Memory Management] Target: {self.model.model.__class__.__name__}, Free GPU: {current_free_mem / (1024 * 1024):.2f} MB, Model Require: {model_require / (1024 * 1024):.2f} MB, Previously Loaded: {previously_loaded / (1024 * 1024):.2f} MB, Inference Require: {memory_for_inference / (1024 * 1024):.2f} MB, Remaining: {estimated_remaining_memory / (1024 * 1024):.2f} MB, ", end="")
 
-            if estimated_remaining_memory < 0:
-                vram_set_state = VRAMState.LOW_VRAM
+                if estimated_remaining_memory < 0:
+                    vram_set_state = VRAMState.LOW_VRAM
 
-            this_online_lora = dynamic_args['online_lora'] and (len(self.model.lora_patches) > 0)
-            model_gpu_memory_when_using_cpu_swap = current_free_mem - (memory_for_inference * 1)
-            if this_online_lora:
-                model_gpu_memory_when_using_cpu_swap -= (1024 * 1024 * 1024 * 1.25)
+                this_online_lora = dynamic_args['online_lora'] and (len(self.model.lora_patches) > 0)
+                model_gpu_memory_when_using_cpu_swap = current_free_mem - (memory_for_inference * 1)
+                if this_online_lora:
+                    model_gpu_memory_when_using_cpu_swap -= (1024 * 1024 * 1024 * 1.25)
 
-            # reserve a little more for GGUF quants (nf4 doesn't seem to need similar)
-            if getattr(self.real_model, 'gguf_baked', False):
-                model_gpu_memory_when_using_cpu_swap -= (1024 * 1024 * 1024 * 0.5)
+                # reserve a little more for GGUF quants (nf4 doesn't seem to need similar)
+                if getattr(self.real_model, 'gguf_baked', False):
+                    model_gpu_memory_when_using_cpu_swap -= (1024 * 1024 * 1024 * 0.5)
 
         do_not_need_cpu_swap = model_gpu_memory_when_using_cpu_swap < 0
 
