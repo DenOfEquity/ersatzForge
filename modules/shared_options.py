@@ -148,7 +148,7 @@ options_templates.update(options_section(('sd', "Stable Diffusion", "sd"), {
     "tiling": OptionInfo("None", "Tiling", gr.Radio, {"choices": ["None", "X", "Y", "X and Y"]}, infotext='Tiling').info("produce a tileable picture"),
     "hires_fix_refiner_pass": OptionInfo("second pass", "Hires fix: which pass to enable refiner for", gr.Radio, {"choices": ["first pass", "second pass", "both passes"]}, infotext="Hires refiner"),
     "use_ELLA": OptionInfo("CLIP (normal)", "Use ELLA for SD1.5", gr.Radio, {"choices": ["CLIP (normal)", "ELLA only", "ELLA (per step) only", "CLIP + ELLA", "CLIP + ELLA (per step)"]}, infotext="ELLA").info("ELLA text encoder and ELLA model will be automatically downloaded. Info: https://github.com/TencentQQGYLab/ELLA"),
-    "epsilon_scaling": OptionInfo(1.0, "Epsilon scaling factor", gr.Slider, {"minimum": 0.9, "maximum": 1.1, "step": 0.001}, infotext="Espilon scaling").info("Noise scaling multiplier from 'Elucidating the Exposure Bias in Diffusion Models' https://openreview.net/pdf?id=xEJMoj1SpX."),
+    "epsilon_scaling": OptionInfo(1.0, "Epsilon scaling factor", gr.Slider, {"minimum": 0.9, "maximum": 1.1, "step": 0.001}, infotext="Espilon scaling").info("'Elucidating the Exposure Bias in Diffusion Models' https://openreview.net/pdf?id=xEJMoj1SpX"),
 }))
 
 options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), {
@@ -354,9 +354,11 @@ options_templates.update(options_section(('sampler-params', "Sampler parameters"
     'fixed_ode_solver': OptionInfo("rk4", "Fixed-ODE solver", gr.Radio, {"choices": ["implicit_adams", "heun3", "midpoint", "rk4"]}, infotext='Fixed-ODE solver'),
 
     'deis_mode': OptionInfo("tab", "DEIS variant", gr.Radio, {"choices": ["tab", "rhoab"]}, infotext='DEIS variant'),
-    'deis_order': OptionInfo(3, "DEIS order", gr.Slider, {"minimum": 2, "maximum": 4, "step": 1}, infotext='DEIS order').info("must be < sampling steps"),
+    'deis_order': OptionInfo(3, "DEIS order", gr.Slider, {"minimum": 1, "maximum": 5, "step": 1}, infotext='DEIS order').info("must be < sampling steps"),
 
     'dpmpp_2m_sde_mode': OptionInfo("midpoint", "DPM++ 2M SDE variant", gr.Radio, {"choices": ["heun", "midpoint"]}, infotext="2M SDE variant"),
+
+    'lcm_order': OptionInfo(1, "LCM order", gr.Slider, {"minimum": 1, "maximum": 5, "step": 1}, infotext='LCM order').info("limited by number of sampling steps"),
 
     'uni_pc_variant': OptionInfo("bh1", "UniPC variant", gr.Radio, {"choices": ["bh1", "bh2", "vary_coeff"]}, infotext='UniPC variant'),
     'uni_pc_skip_type': OptionInfo("time_uniform", "UniPC skip type", gr.Radio, {"choices": ["time_uniform", "time_quadratic", "logSNR"]}, infotext='UniPC skip type'),

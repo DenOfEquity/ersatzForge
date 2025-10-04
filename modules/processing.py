@@ -143,18 +143,11 @@ class StableDiffusionProcessing:
     do_not_reload_embeddings: bool = False
     denoising_strength: float = None
     ddim_discretize: str = None
-    s_min_uncond: float = None
-    s_churn: float = None
-    s_tmax: float = None
-    s_tmin: float = None
-    s_noise: float = None
     override_settings: dict[str, Any] = None
     override_settings_restore_afterwards: bool = True
     sampler_index: int = None
     refiner_checkpoint: str = None
     refiner_switch_at: float = None
-    token_merging_ratio = 0
-    token_merging_ratio_hr = 0
     disable_extra_networks: bool = False
     firstpass_image: Image = None
 
@@ -243,11 +236,11 @@ class StableDiffusionProcessing:
         self.modified_noise = None
 
     def fill_fields_from_opts(self):
-        self.s_min_uncond = self.s_min_uncond if self.s_min_uncond is not None else opts.s_min_uncond
-        self.s_churn = self.s_churn if self.s_churn is not None else opts.s_churn
-        self.s_tmin = self.s_tmin if self.s_tmin is not None else opts.s_tmin
-        self.s_tmax = (self.s_tmax if self.s_tmax is not None else opts.s_tmax) or float('inf')
-        self.s_noise = self.s_noise if self.s_noise is not None else opts.s_noise
+        self.s_min_uncond = opts.s_min_uncond
+        self.s_churn = opts.s_churn
+        self.s_tmin = opts.s_tmin
+        self.s_tmax = opts.s_tmax or float('inf')
+        self.s_noise = opts.s_noise
 
     @property
     def sd_model(self):
@@ -381,9 +374,9 @@ class StableDiffusionProcessing:
 
     def get_token_merging_ratio(self, for_hr=False):
         if for_hr:
-            return self.token_merging_ratio_hr or opts.token_merging_ratio_hr or self.token_merging_ratio or opts.token_merging_ratio
+            return opts.token_merging_ratio_hr or opts.token_merging_ratio
 
-        return self.token_merging_ratio or opts.token_merging_ratio
+        return opts.token_merging_ratio
 
     def setup_prompts(self):
         if isinstance(self.prompt,list):
@@ -535,8 +528,6 @@ class Processed:
         self.styles = p.styles
         self.job_timestamp = state.job_timestamp
         self.clip_skip = int(opts.CLIP_stop_at_last_layers)
-        self.token_merging_ratio = p.token_merging_ratio
-        self.token_merging_ratio_hr = p.token_merging_ratio_hr
 
         self.eta = p.eta
         self.ddim_discretize = p.ddim_discretize
@@ -596,9 +587,6 @@ class Processed:
 
     def infotext(self, p: StableDiffusionProcessing, index):
         return create_infotext(p, self.all_prompts, self.all_seeds, self.all_subseeds, comments=[], position_in_batch=index % self.batch_size, iteration=index // self.batch_size)
-
-    def get_token_merging_ratio(self, for_hr=False):
-        return self.token_merging_ratio_hr if for_hr else self.token_merging_ratio
 
 
 def create_random_tensors(shape, seeds, subseeds=None, subseed_strength=0.0, seed_resize_from_h=0, seed_resize_from_w=0, p=None):
@@ -717,6 +705,8 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         generation_params['DEIS order'] = opts.deis_order
     elif p.sampler_name == 'DPM++ 2M SDE':
         generation_params['2M SDE variant'] = opts.dpmpp_2m_sde_mode
+    elif p.sampler_name == 'LCM':
+        generation_params['LCM order'] = opts.lcm_order
     elif p.sampler_name == 'UniPC':
         generation_params['UniPC variant'] = opts.uni_pc_variant
         generation_params['UniPC order'] = opts.uni_pc_order
@@ -1891,4 +1881,4 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
         return samples
 
     def get_token_merging_ratio(self, for_hr=False):
-        return self.token_merging_ratio or ("token_merging_ratio" in self.override_settings and opts.token_merging_ratio) or opts.token_merging_ratio_img2img or opts.token_merging_ratio
+        return ("token_merging_ratio" in self.override_settings and opts.token_merging_ratio) or opts.token_merging_ratio_img2img or opts.token_merging_ratio
