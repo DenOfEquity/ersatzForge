@@ -42,6 +42,7 @@ samplers_data_k_diffusion = [
 sampler_extra_params = {
     'sample_euler': ['s_churn', 's_tmin', 's_tmax', 's_noise'],
     'sample_heun': ['s_churn', 's_tmin', 's_tmax', 's_noise'],
+    'sample_heunpp2': ['s_churn', 's_tmin', 's_tmax', 's_noise'],
     'sample_dpm_2': ['s_churn', 's_tmin', 's_tmax', 's_noise'],
     'sample_dpm_fast': ['s_noise'],
     'sample_dpm_2_ancestral': ['s_noise'],
@@ -69,10 +70,15 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
     def __init__(self, funcname, sd_model, options=None):
         super().__init__(funcname)
 
-        self.extra_params = sampler_extra_params.get(funcname, [])
+        # samplers from modules_forge.alter_samplers are passed as Callables, not function name
+        if callable(funcname):
+            self.func = funcname
+            self.extra_params = sampler_extra_params.get(str(funcname).split(' ')[1], [])
+        else:
+            self.func = getattr(k_diffusion.sampling, self.funcname)
+            self.extra_params = sampler_extra_params.get(funcname, [])
 
         self.options = options or {}
-        self.func = funcname if callable(funcname) else getattr(k_diffusion.sampling, self.funcname)
 
         self.model_wrap_cfg = CFGDenoiserKDiffusion(self)
         self.model_wrap = self.model_wrap_cfg.inner_model
