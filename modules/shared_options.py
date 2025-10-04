@@ -354,7 +354,7 @@ options_templates.update(options_section(('sampler-params', "Sampler parameters"
     'fixed_ode_solver': OptionInfo("rk4", "Fixed-ODE solver", gr.Radio, {"choices": ["implicit_adams", "heun3", "midpoint", "rk4"]}, infotext='Fixed-ODE solver'),
 
     'deis_mode': OptionInfo("tab", "DEIS variant", gr.Radio, {"choices": ["tab", "rhoab"]}, infotext='DEIS variant'),
-    'deis_order': OptionInfo(3, "DEIS order", gr.Slider, {"minimum": 1, "maximum": 5, "step": 1}, infotext='DEIS order').info("must be < sampling steps"),
+    'deis_order': OptionInfo(3, "DEIS order", gr.Slider, {"minimum": 2, "maximum": 4, "step": 1}, infotext='DEIS order').info("must be < sampling steps"),
 
     'dpmpp_2m_sde_mode': OptionInfo("midpoint", "DPM++ 2M SDE variant", gr.Radio, {"choices": ["heun", "midpoint"]}, infotext="2M SDE variant"),
 
@@ -386,5 +386,6 @@ options_templates.update(options_section((None, "Hidden options"), {
 }))
 
 forge_shared_options.register(options_templates, options_section, OptionInfo)
+
 
 
