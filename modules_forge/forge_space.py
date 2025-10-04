@@ -15,14 +15,17 @@ from backend import memory_management
 spaces = []
 
 
-def build_html(title, installed=False, url=None):
+def build_html(title, installed=False, url=None, error=None):
     if not installed:
         return f'<div>{title}</div><div style="color: grey;">Not Installed</div>'
 
     if isinstance(url, str):
         return f'<div>{title}</div><div style="color: green;">Currently Running: <a href="{url}" style="color: blue;" target="_blank">{url}</a></div>'
     else:
-        return f'<div>{title}</div><div style="color: grey;">Installed, Ready to Launch</div>'
+        if error is None:
+            return f'<div>{title}</div><div style="color: grey;">Installed, Ready to Launch</div>'
+        else:
+            return f'<div>{title}</div><div style="color: red;">Error: {error}</div>'
 
 
 def find_free_port(server_name, start_port=None):
@@ -87,12 +90,13 @@ class ForgeSpace:
         self.installed = False
         self.block_uninstall = block_uninstall
         self.is_running = False
+        self.error = None
         self.gradio_metas = None
 
         self.allow_patterns = allow_patterns
         self.ignore_patterns = ignore_patterns
 
-        self.label = gr.HTML(build_html(title=title, url=None), elem_classes=['forge_space_label'])
+        self.label = gr.HTML(build_html(title=title), elem_classes=['forge_space_label'])
         self.btn_launch = gr.Button('Launch', elem_classes=['forge_space_btn'])
         self.btn_install = gr.Button('Install', elem_classes=['forge_space_btn'])
 
@@ -118,7 +122,7 @@ class ForgeSpace:
         if isinstance(self.gradio_metas, tuple):
             results.append(build_html(title=self.title, installed=self.installed, url=self.gradio_metas[1]))
         else:
-            results.append(build_html(title=self.title, installed=self.installed, url=None))
+            results.append(build_html(title=self.title, installed=self.installed, error=self.error))
 
         if self.installed:
             if has_requirement:
@@ -168,6 +172,8 @@ class ForgeSpace:
         return self.refresh_gradio()
 
     def run(self):
+        self.error = None
+
         if self.is_running:
             self.is_running = False
             while self.gradio_metas is not None:
@@ -176,7 +182,7 @@ class ForgeSpace:
         else:
             self.is_running = True
             Thread(target=self.gradio_worker).start()
-            while self.gradio_metas is None:
+            while self.is_running and self.gradio_metas is None:
                 time.sleep(0.1)
             return self.refresh_gradio()
 
@@ -201,35 +207,47 @@ class ForgeSpace:
         module_name = 'forge_space_' + str(uuid.uuid4()).replace('-', '_')
         spec = importlib.util.spec_from_file_location(module_name, file_path)
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        demo = getattr(module, 'demo')
 
-        from modules import initialize_util
-        from modules.shared import cmd_opts
+        try:
+            spec.loader.exec_module(module)
+        except Exception as e:
+            print ("[Spaces] Error:", e)
+            self.error = str(e)
+            self.is_running = False
+            sys.path.remove(self.hf_path)
+            sys.path.remove(self.root_path)
+            os.chdir(original_cwd)
 
-        server_name = initialize_util.gradio_server_name()
-        port = find_free_port(server_name=server_name, start_port=cmd_opts.port)
+        if self.is_running:
+            demo = getattr(module, 'demo')
 
-        self.gradio_metas = demo.launch(
-            inbrowser=True,
-            prevent_thread_lock=True,
-            server_name=server_name,
-            server_port=port
-        )
+            from modules import initialize_util
+            from modules.shared import cmd_opts
 
-        sys.modules.update(modules_backup)
+            server_name = initialize_util.gradio_server_name()
+            port = find_free_port(server_name=server_name, start_port=cmd_opts.port)
 
-        if 'models' in sys.modules:
-            del sys.modules['models']
+            self.gradio_metas = demo.launch(
+                inbrowser=True,
+                prevent_thread_lock=True,
+                server_name=server_name,
+                server_port=port
+            )
 
-        sys.path.remove(self.hf_path)
-        sys.path.remove(self.root_path)
-        os.chdir(original_cwd)
+            sys.modules.update(modules_backup)
 
-        while self.is_running:
-            time.sleep(0.1)
+            if 'models' in sys.modules:
+                del sys.modules['models']
 
-        demo.close()
+            sys.path.remove(self.hf_path)
+            sys.path.remove(self.root_path)
+            os.chdir(original_cwd)
+
+            while self.is_running:
+                time.sleep(0.1)
+
+            demo.close()
+
         self.gradio_metas = None
         return
 
