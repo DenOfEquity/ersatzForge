@@ -510,10 +510,18 @@ def create_ui():
                                         with gr.Row():
                                             width = gr.Slider(minimum=256, maximum=4096, step=8, label="Width", value=512, elem_id="img2img_width")
                                             res_switch_btn = ToolButton(value=switch_values_symbol, elem_id="img2img_res_switch_btn", tooltip="Switch width/height")
-                                            res_switch_btn.click(fn=lambda w, h: (h, w), inputs=[width, height], outputs=[width, height], show_progress='hidden', queue=False)
                                         with gr.Row():
                                             height = gr.Slider(minimum=256, maximum=4096, step=8, label="Height", value=512, elem_id="img2img_height")
                                             detect_image_size_btn = ToolButton(value=detect_image_size_symbol, elem_id="img2img_detect_image_size_btn", tooltip="Auto detect size from img2img")
+
+                                        res_switch_btn.click(fn=lambda w, h: (h, w), inputs=[width, height], outputs=[width, height], show_progress='hidden', queue=False)
+                                        detect_image_size_btn.click(
+                                            fn=lambda w, h: (w or gr.update(), h or gr.update()),
+                                            js="currentImg2imgSourceResolution",
+                                            inputs=[dummy_component, dummy_component],
+                                            outputs=[width, height],
+                                            show_progress='hidden',
+                                        )
 
                                     with gr.Tab(label="Resize by", id="by", elem_id="img2img_tab_resize_by") as tab_scale_by:
                                         scale_by = gr.Slider(info="(no image)", minimum=0.05, maximum=4.0, step=0.01, label="Scale", value=1.0, elem_id="img2img_scale")
@@ -653,14 +661,6 @@ def create_ui():
 
             toprow.prompt.submit(**img2img_args)
             toprow.submit.click(**img2img_args)
-
-            detect_image_size_btn.click(
-                fn=lambda w, h: (w or gr.update(), h or gr.update()),
-                js="currentImg2imgSourceResolution",
-                inputs=[dummy_component, dummy_component],
-                outputs=[width, height],
-                show_progress='hidden',
-            )
 
             toprow.button_interrogate.click(
                 fn=lambda *args: process_interrogate(interrogate, *args),
