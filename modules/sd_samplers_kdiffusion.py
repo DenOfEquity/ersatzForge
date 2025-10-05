@@ -89,7 +89,8 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
             discard_next_to_last_sigma = True
             p.extra_generation_params["Discard penultimate sigma"] = True
 
-        steps += 1 if discard_next_to_last_sigma else 0
+        if discard_next_to_last_sigma:
+            steps += 1
 
         scheduler_name = (p.hr_scheduler if p.is_hr_pass else p.scheduler) or 'Automatic'
         if scheduler_name == 'Automatic':
@@ -159,7 +160,7 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
         steps, t_enc = sd_samplers_common.setup_img2img_steps(p, steps)
 
         sigmas = self.get_sigmas(p, steps).to(x.device)
-        sigma_sched = sigmas[steps - t_enc - 1:]
+        sigma_sched = sigmas[steps - t_enc:]
 
         x = x.to(noise)
 
@@ -205,7 +206,7 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
             's_min_uncond': self.s_min_uncond
         }
 
-        samples = self.launch_sampling(t_enc + 1, lambda: self.func(self.model_wrap_cfg, xi, extra_args=self.sampler_extra_args, disable=False, callback=self.callback_state, **extra_params_kwargs))
+        samples = self.launch_sampling(t_enc, lambda: self.func(self.model_wrap_cfg, xi, extra_args=self.sampler_extra_args, disable=False, callback=self.callback_state, **extra_params_kwargs))
 
         sampling_cleanup(unet_patcher)
 

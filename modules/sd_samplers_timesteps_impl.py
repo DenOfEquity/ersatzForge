@@ -19,7 +19,7 @@ def ddim(model, x, timesteps, extra_args=None, callback=None, disable=None, eta=
     extra_args = {} if extra_args is None else extra_args
     s_in = x.new_ones((x.shape[0]))
     s_x = x.new_ones((x.shape[0], 1, 1, 1))
-    for i in tqdm.trange(len(timesteps) - 1, disable=disable):
+    for i in tqdm.trange(len(timesteps), disable=disable):
         index = len(timesteps) - 1 - i
 
         e_t = model(x, timesteps[index].item() * s_in, **extra_args)
@@ -58,7 +58,7 @@ def ddim_cfgpp(model, x, timesteps, extra_args=None, callback=None, disable=None
     extra_args = {} if extra_args is None else extra_args
     s_in = x.new_ones((x.shape[0]))
     s_x = x.new_ones((x.shape[0], 1, 1, 1))
-    for i in tqdm.trange(len(timesteps) - 1, disable=disable):
+    for i in tqdm.trange(len(timesteps), disable=disable):
         index = len(timesteps) - 1 - i
 
         e_t = model(x, timesteps[index].item() * s_in, **extra_args)
@@ -106,7 +106,7 @@ def plms(model, x, timesteps, extra_args=None, callback=None, disable=None):
         x_prev = a_prev.sqrt() * pred_x0 + dir_xt
         return x_prev, pred_x0
 
-    for i in tqdm.trange(len(timesteps) - 1, disable=disable):
+    for i in tqdm.trange(len(timesteps), disable=disable):
         index = len(timesteps) - 1 - i
         ts = timesteps[index].item() * s_in
         t_next = timesteps[max(index - 1, 0)].item() * s_in

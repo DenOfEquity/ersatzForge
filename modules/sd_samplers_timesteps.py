@@ -65,9 +65,14 @@ class CompVisSampler(sd_samplers_common.Sampler):
             discard_next_to_last_sigma = True
             p.extra_generation_params["Discard penultimate sigma"] = True
 
-        steps += 1 if discard_next_to_last_sigma else 0
+        if discard_next_to_last_sigma:
+            steps += 1
 
-        timesteps = torch.clip(torch.asarray(list(range(0, 1000, 1000 // steps)), device=devices.device) + 1, 0, 999)
+        timesteps = [int(1 + (x * 1000 / steps)) for x in range(steps)]
+        timesteps = torch.clip(torch.asarray(timesteps, device=devices.device), 0, 999)
+
+        if discard_next_to_last_sigma:
+            timesteps = torch.cat([timesteps[:-2], timesteps[-1:]])
 
         return timesteps
 
@@ -88,8 +93,8 @@ class CompVisSampler(sd_samplers_common.Sampler):
         timesteps_sched = timesteps[:t_enc]
 
         alphas_cumprod = shared.sd_model.alphas_cumprod
-        sqrt_alpha_cumprod = torch.sqrt(alphas_cumprod[timesteps[t_enc]])
-        sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alphas_cumprod[timesteps[t_enc]])
+        sqrt_alpha_cumprod = torch.sqrt(alphas_cumprod[timesteps[t_enc-1]])
+        sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alphas_cumprod[timesteps[t_enc-1]])
 
         xi = x.to(noise) * sqrt_alpha_cumprod + noise * sqrt_one_minus_alpha_cumprod
 
@@ -119,7 +124,7 @@ class CompVisSampler(sd_samplers_common.Sampler):
             's_min_uncond': self.s_min_uncond
         }
 
-        samples = self.launch_sampling(t_enc + 1, lambda: self.func(self.model_wrap_cfg, xi, extra_args=self.sampler_extra_args, disable=False, callback=self.callback_state, **extra_params_kwargs))
+        samples = self.launch_sampling(t_enc, lambda: self.func(self.model_wrap_cfg, xi, extra_args=self.sampler_extra_args, disable=False, callback=self.callback_state, **extra_params_kwargs))
 
         sampling_cleanup(unet_patcher)
 
@@ -136,7 +141,7 @@ class CompVisSampler(sd_samplers_common.Sampler):
 
         self.model_wrap.inner_model.alphas_cumprod = self.model_wrap.inner_model.alphas_cumprod.to(x.device)
 
-        steps = steps or p.steps
+        steps = (steps or p.steps)
         timesteps = self.get_timesteps(p, steps).to(x.device)
 
         extra_params_kwargs = self.initialize(p)
