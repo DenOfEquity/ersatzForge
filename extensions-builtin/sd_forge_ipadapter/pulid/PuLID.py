@@ -16,7 +16,7 @@ from backend import memory_management
 from facexlib.parsing import init_parsing_model
 from facexlib.utils.face_restoration_helper import FaceRestoreHelper
 
-from backend.attention import attention_basic
+from backend.attention import attention_function
 from backend.misc.image_resize import contrast_adaptive_sharpening
 
 from pulid.IDEncoder import IDEncoder
@@ -117,7 +117,7 @@ class Attn2Replace:
 
     def __call__(self, q, k, v, extra_options):
         dtype = q.dtype
-        out = attention_basic(q, k, v, extra_options["n_heads"])
+        out = attention_function(q, k, v, extra_options["n_heads"])
         sigma = extra_options["sigmas"].detach().cpu()[0].item() if 'sigmas' in extra_options else 999999999.9
 
         for i, callback in enumerate(self.callback):
@@ -137,14 +137,24 @@ def pulid_attention(out, q, k, v, extra_options, module_key='', pulid=None, cond
     batch_prompt = b // len(cond_or_uncond)
     _, _, oh, ow = extra_options["original_shape"]
 
-    k_cond = pulid.ip_layers.to_kvs[k_key](cond).repeat(batch_prompt, 1, 1)
-    k_uncond = pulid.ip_layers.to_kvs[k_key](uncond).repeat(batch_prompt, 1, 1)
-    v_cond = pulid.ip_layers.to_kvs[v_key](cond).repeat(batch_prompt, 1, 1)
-    v_uncond = pulid.ip_layers.to_kvs[v_key](uncond).repeat(batch_prompt, 1, 1)
-    ip_k = torch.cat([(k_cond, k_uncond)[i] for i in cond_or_uncond], dim=0)
-    ip_v = torch.cat([(v_cond, v_uncond)[i] for i in cond_or_uncond], dim=0)
+    if 1 in cond_or_uncond:     #uncond
+        k_uncond = pulid.ip_layers.to_kvs[k_key](uncond).repeat(batch_prompt, 1, 1)
+        v_uncond = pulid.ip_layers.to_kvs[v_key](uncond).repeat(batch_prompt, 1, 1)
+    if 0 in cond_or_uncond:     #cond
+        k_cond = pulid.ip_layers.to_kvs[k_key](cond).repeat(batch_prompt, 1, 1)
+        v_cond = pulid.ip_layers.to_kvs[v_key](cond).repeat(batch_prompt, 1, 1)
 
-    out_ip = attention_basic(q, ip_k, ip_v, extra_options["n_heads"])
+    if cond_or_uncond == [1]:
+        ip_k = k_uncond
+        ip_v = v_uncond
+    elif cond_or_uncond == [0]:
+        ip_k = k_cond
+        ip_v = v_cond
+    else:   # should only ever be [1, 0]
+        ip_k = torch.cat([k_uncond, k_cond], dim=0)
+        ip_v = torch.cat([v_uncond, v_cond], dim=0)
+
+    out_ip = attention_function(q, ip_k, ip_v, extra_options["n_heads"])
 
     if ortho:
         out = out.to(dtype=torch.float32)
@@ -188,7 +198,7 @@ def pulid_attention(out, q, k, v, extra_options, module_key='', pulid=None, cond
             crop_start = (mask_len - seq_len) // 2
             mask = mask[:, crop_start:crop_start+seq_len, :]
 
-        out_ip = out_ip * mask
+        out_ip.mul_(mask)
 
     return out_ip.to(dtype=dtype)
 
@@ -204,10 +214,8 @@ pulid_cache_id = 0
 pulid_preprocess_cache = [(0, 0, None)] * pulid_cache_limit
 
 class ApplyPulid:
-
     def apply_pulid(self, model, pulid, eva_clip, face_analysis, image, weight, start_at, end_at, sharpening=0.0, method=None, noise=0.0, fidelity=8, attn_mask=None):
         global pulid_cache_limit, pulid_cache_id, pulid_preprocess_cache
-        work_model = model.clone()
         
         device = memory_management.get_torch_device()
         dtype = torch.float16 if memory_management.should_use_fp16() else torch.float32
@@ -325,16 +333,20 @@ class ApplyPulid:
             cond_shape = (1, 1280)
             hidden_shape = (1, 577, 1024) # list of 5
 
+            id_vit_hidden_uncond = []
             if noise == 0:
                 id_uncond = torch.zeros(cond_shape, device=device, dtype=dtype)
-            else:
-                id_uncond = torch.randn(cond_shape, device=device, dtype=dtype) * noise
-            id_vit_hidden_uncond = []
-            for idx in range(5):
-                if noise == 0:
+                for idx in range(5):
                     id_vit_hidden_uncond.append(torch.zeros(hidden_shape, device=device, dtype=dtype))
-                else:
+                if num_zero > 0:
+                    zero_tensor = torch.zeros((1, num_zero, cond.size(-1)), dtype=dtype, device=device)
+            else:
+                torch.manual_seed(0)  # use a fixed random for reproducible results
+                id_uncond = torch.randn(cond_shape, device=device, dtype=dtype) * noise
+                for idx in range(5):
                     id_vit_hidden_uncond.append(torch.randn(hidden_shape, device=device, dtype=dtype) * noise)
+                if num_zero > 0:
+                    zero_tensor = torch.randn((1, num_zero, cond.size(-1)), dtype=dtype, device=device) * noise
 
             uc = pulid_model.get_image_embeds(id_uncond, id_vit_hidden_uncond) #always calc this, as based on noise, but shape is known
 
@@ -346,7 +358,7 @@ class ApplyPulid:
         if not cond:
             # No faces detected, return the original model
             print("pulid warning: No faces detected in any of the given images, returning unmodified model.")
-            return (work_model,)
+            return model
         
         # average embeddings
         cond = torch.cat(cond).to(device, dtype=dtype)
@@ -356,10 +368,6 @@ class ApplyPulid:
             uncond = torch.mean(uncond, dim=0, keepdim=True)
 
         if num_zero > 0:
-            if noise == 0:
-                zero_tensor = torch.zeros((cond.size(0), num_zero, cond.size(-1)), dtype=dtype, device=device)
-            else:
-                zero_tensor = torch.randn((cond.size(0), num_zero, cond.size(-1)), dtype=dtype, device=device) * noise
             cond = torch.cat([cond, zero_tensor], dim=1)
             uncond = torch.cat([uncond, zero_tensor], dim=1)
 
@@ -383,20 +391,20 @@ class ApplyPulid:
             block_indices = range(2) if id in [4, 5] else range(10) # transformer_depth
             for index in block_indices:
                 patch_kwargs["module_key"] = str(number*2+1)
-                set_model_patch_replace(work_model, patch_kwargs, ("input", id, index))
+                set_model_patch_replace(model, patch_kwargs, ("input", id, index))
                 number += 1
         for id in range(6): # id of output_blocks that have cross attention
             block_indices = range(2) if id in [3, 4, 5] else range(10) # transformer_depth
             for index in block_indices:
                 patch_kwargs["module_key"] = str(number*2+1)
-                set_model_patch_replace(work_model, patch_kwargs, ("output", id, index))
+                set_model_patch_replace(model, patch_kwargs, ("output", id, index))
                 number += 1
         for index in range(10):
             patch_kwargs["module_key"] = str(number*2+1)
-            set_model_patch_replace(work_model, patch_kwargs, ("middle", 1, index))
+            set_model_patch_replace(model, patch_kwargs, ("middle", 1, index))
             number += 1
 
-        return (work_model,)
+        return model
 
     def prep_image(self, image, sharpening, convertNP=True, channels_last=True):
         if sharpening > 0.0:

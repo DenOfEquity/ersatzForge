@@ -308,8 +308,7 @@ class IPAdapter(nn.Module):
 
     def get_image_embeds_instantid(self, prompt_image_emb, noise):
         c = self.image_proj_model(prompt_image_emb)
-        # uc = self.image_proj_model(torch.zeros_like(prompt_image_emb))
-        uc = self.image_proj_model(torch.randn_like(prompt_image_emb) * prompt_image_emb.std() * noise)
+        uc = self.image_proj_model(torch.zeros_like(prompt_image_emb))
         return c, uc
 
 
@@ -365,51 +364,61 @@ class CrossAttentionPatch:
                 continue
 
             if unfold_batch and cond.shape[0] > 1:
-                # Check AnimateDiff context window
-                if ad_params is not None and ad_params["sub_idxs"] is not None:
-                    # if images length matches or exceeds full_length get sub_idx images
-                    if cond.shape[0] >= ad_params["full_length"]:
-                        cond = torch.Tensor(cond[ad_params["sub_idxs"]])
-                        uncond = torch.Tensor(uncond[ad_params["sub_idxs"]])
-                    # otherwise, need to do more to get proper sub_idxs masks
-                    else:
-                        # check if images length matches full_length - if not, make it match
-                        if cond.shape[0] < ad_params["full_length"]:
-                            cond = torch.cat((cond, cond[-1:].repeat((ad_params["full_length"] - cond.shape[0], 1, 1))), dim=0)
+                if 1 in cond_or_uncond:     #uncond
+                    # Check AnimateDiff context window
+                    if ad_params is not None and ad_params["sub_idxs"] is not None:
+                        if cond.shape[0] >= ad_params["full_length"]:    # if images length matches or exceeds full_length get sub_idx images
+                            uncond = torch.Tensor(uncond[ad_params["sub_idxs"]])
+                        else:    # otherwise, expand by repeating last
                             uncond = torch.cat((uncond, uncond[-1:].repeat((ad_params["full_length"] - uncond.shape[0], 1, 1))), dim=0)
-                        # if we have too many remove the excess (should not happen, but just in case)
-                        if cond.shape[0] > ad_params["full_length"]:
-                            cond = cond[:ad_params["full_length"]]
-                            uncond = uncond[:ad_params["full_length"]]
-                        cond = cond[ad_params["sub_idxs"]]
-                        uncond = uncond[ad_params["sub_idxs"]]
+                            uncond = uncond[ad_params["sub_idxs"]]
 
-                # if we don't have enough reference images repeat the last one until we reach the right size
-                if cond.shape[0] < batch_prompt:
-                    cond = torch.cat((cond, cond[-1:].repeat((batch_prompt - cond.shape[0], 1, 1))), dim=0)
-                    uncond = torch.cat((uncond, uncond[-1:].repeat((batch_prompt - uncond.shape[0], 1, 1))), dim=0)
-                # if we have too many remove the exceeding
-                elif cond.shape[0] > batch_prompt:
-                    cond = cond[:batch_prompt]
-                    uncond = uncond[:batch_prompt]
+                    if cond.shape[0] < batch_prompt:    # if we don't have enough reference images repeat the last one
+                        uncond = torch.cat((uncond, uncond[-1:].repeat((batch_prompt - uncond.shape[0], 1, 1))), dim=0)
+                    elif cond.shape[0] > batch_prompt:    # if we have too many remove the excess
+                        uncond = uncond[:batch_prompt]
 
-                k_cond = ipadapter.ip_layers.to_kvs[self.k_key](cond)
-                k_uncond = ipadapter.ip_layers.to_kvs[self.k_key](uncond)
-                v_cond = ipadapter.ip_layers.to_kvs[self.v_key](cond)
-                v_uncond = ipadapter.ip_layers.to_kvs[self.v_key](uncond)
+                    k_uncond = ipadapter.ip_layers.to_kvs[self.k_key](uncond)
+                    v_uncond = ipadapter.ip_layers.to_kvs[self.v_key](uncond)
+
+                if 0 in cond_or_uncond:     #cond
+                    if ad_params is not None and ad_params["sub_idxs"] is not None:
+                        if cond.shape[0] >= ad_params["full_length"]:
+                            cond = torch.Tensor(cond[ad_params["sub_idxs"]])
+                        else:
+                            cond = torch.cat((cond, cond[-1:].repeat((ad_params["full_length"] - cond.shape[0], 1, 1))), dim=0)
+                            cond = cond[ad_params["sub_idxs"]]
+
+                    if cond.shape[0] < batch_prompt:
+                        cond = torch.cat((cond, cond[-1:].repeat((batch_prompt - cond.shape[0], 1, 1))), dim=0)
+                    elif cond.shape[0] > batch_prompt:
+                        cond = cond[:batch_prompt]
+
+                    k_cond = ipadapter.ip_layers.to_kvs[self.k_key](cond)
+                    v_cond = ipadapter.ip_layers.to_kvs[self.v_key](cond)
+
             else:
-                k_cond = ipadapter.ip_layers.to_kvs[self.k_key](cond).repeat(batch_prompt, 1, 1)
-                k_uncond = ipadapter.ip_layers.to_kvs[self.k_key](uncond).repeat(batch_prompt, 1, 1)
-                v_cond = ipadapter.ip_layers.to_kvs[self.v_key](cond).repeat(batch_prompt, 1, 1)
-                v_uncond = ipadapter.ip_layers.to_kvs[self.v_key](uncond).repeat(batch_prompt, 1, 1)
+                if 1 in cond_or_uncond:
+                    k_uncond = ipadapter.ip_layers.to_kvs[self.k_key](uncond).repeat(batch_prompt, 1, 1)
+                    v_uncond = ipadapter.ip_layers.to_kvs[self.v_key](uncond).repeat(batch_prompt, 1, 1)
+                if 0 in cond or uncond:
+                    k_cond = ipadapter.ip_layers.to_kvs[self.k_key](cond).repeat(batch_prompt, 1, 1)
+                    v_cond = ipadapter.ip_layers.to_kvs[self.v_key](cond).repeat(batch_prompt, 1, 1)
+
+            if cond_or_uncond == [1]:
+                ip_k = k_uncond
+                ip_v = v_uncond
+            elif cond_or_uncond == [0]:
+                ip_k = k_cond
+                ip_v = v_cond
+            else:   # should only ever be [1, 0]
+                ip_k = torch.cat([k_uncond, k_cond], dim=0)
+                ip_v = torch.cat([v_uncond, v_cond], dim=0)
 
             if weight_type.startswith("linear"):
-                ip_k = torch.cat([(k_cond, k_uncond)[i] for i in cond_or_uncond], dim=0) * weight
-                ip_v = torch.cat([(v_cond, v_uncond)[i] for i in cond_or_uncond], dim=0) * weight
+                ip_k *= weight
+                ip_v *= weight
             else:
-                ip_k = torch.cat([(k_cond, k_uncond)[i] for i in cond_or_uncond], dim=0)
-                ip_v = torch.cat([(v_cond, v_uncond)[i] for i in cond_or_uncond], dim=0)
-
                 if weight_type.startswith("channel"):
                     # code by Lvmin Zhang at Stanford University as also seen on Fooocus IPAdapter implementation
                     # please read licensing notes https://github.com/lllyasviel/Fooocus/blob/69a23c4d60c9e627409d0cb0f8862cdb015488eb/extras/ip_adapter.py#L234
@@ -422,6 +431,7 @@ class CrossAttentionPatch:
                     ip_v = ip_v_offset + ip_v_mean * W
 
             out_ip = attention.attention_function(q, ip_k.to(org_dtype), ip_v.to(org_dtype), extra_options["n_heads"])
+            
             if weight_type.startswith("original"):
                 out_ip = out_ip * weight
 
@@ -464,32 +474,11 @@ class CrossAttentionPatch:
                 mask_downsample = mask_downsample.repeat(len(cond_or_uncond), 1, 1)
                 mask_downsample = mask_downsample.view(mask_downsample.shape[0], -1, 1).repeat(1, 1, out.shape[2])
 
-                out_ip = out_ip * mask_downsample
+                out_ip.mul_(mask_downsample)
 
-            out = out + out_ip
+            out.add_(out_ip)
 
         return out.to(dtype=org_dtype)
-
-
-class IPAdapterModelLoader:
-    def load_ipadapter_model(self, ipadapter_file):
-        ckpt_path = os.path.join(controlnet_dir, "ipadapter", ipadapter_file)
-
-        model = utils.load_torch_file(ckpt_path, safe_load=True)
-
-        if ckpt_path.lower().endswith(".safetensors"):
-            st_model = {"image_proj": {}, "ip_adapter": {}}
-            for key in model.keys():
-                if key.startswith("image_proj."):
-                    st_model["image_proj"][key.replace("image_proj.", "")] = model[key]
-                elif key.startswith("ip_adapter."):
-                    st_model["ip_adapter"][key.replace("ip_adapter.", "")] = model[key]
-            model = st_model
-
-        if "ip_adapter" not in model.keys() or not model["ip_adapter"]:
-            raise Exception("invalid IPAdapter model {}".format(ckpt_path))
-
-        return (model,)
 
 
 insightface_face_align = None
@@ -541,7 +530,7 @@ class InsightFaceLoader:
         model = FaceAnalysis(name=name, root=INSIGHTFACE_DIR, providers=[provider + 'ExecutionProvider', ])
         model.prepare(ctx_id=0, det_size=(640, 640))
 
-        return (model,)
+        return model
 
 
 class IPAdapterApply:
@@ -641,10 +630,10 @@ class IPAdapterApply:
                     else:
                         clip_embed_zeroed = zeroed_hidden_states(clip_vision, image.shape[0])
 
-                    face_embed_zeroed = torch.randn_like(face_embed) * face_embed.std() * noise
+                    face_embed_zeroed = torch.zeros_like(face_embed)
                 else:
                     clip_embed = face_embed
-                    clip_embed_zeroed = torch.randn_like(clip_embed) * clip_embed.std() * noise
+                    clip_embed_zeroed = torch.zeros_like(clip_embed)
             else:
                 clip_embeds = []
                 zero_embeds = []
@@ -668,7 +657,7 @@ class IPAdapterApply:
                         if noise > 0:
                             clip_embed_zeroed = clip_vision.encode_image(neg_image).image_embeds
                         else:
-                            clip_embed_zeroed = torch.randn_like(clip_embed) * clip_embed.std() * noise
+                            clip_embed_zeroed = torch.zeros_like(clip_embed)
 
                     clip_embeds.append(clip_embed)
                     zero_embeds.append(clip_embed_zeroed)
@@ -704,8 +693,6 @@ class IPAdapterApply:
         image_prompt_embeds = image_prompt_embeds.to(self.device, dtype=self.dtype)
         uncond_image_prompt_embeds = uncond_image_prompt_embeds.to(self.device, dtype=self.dtype)
 
-        work_model = model.clone()
-
         if self.is_instant_id:
             def modifier(cnet, x_noisy, t, cond, batched_number):
                 cond_mark = cond['transformer_options']['cond_mark'][:, None, None].to(cond['c_crossattn'])  # cond is 0
@@ -713,7 +700,7 @@ class IPAdapterApply:
                 cond['c_crossattn'] = c_crossattn
                 return x_noisy, t, cond, batched_number
 
-            work_model.add_controlnet_conditioning_modifier(modifier)
+            model.add_controlnet_conditioning_modifier(modifier)
 
         if attn_mask is not None:
             attn_mask = attn_mask.to(self.device)
@@ -734,33 +721,31 @@ class IPAdapterApply:
             "unfold_batch": unfold_batch,
         }
 
-#patch different blocks for style/composition
-#Cubiq
+#patch different blocks for style/composition - see Cubiq
         if not self.is_sdxl:
             for id in [1, 2, 4, 5, 7, 8]:  # id of input_blocks that have cross attention
-                set_model_patch_replace(work_model, patch_kwargs, ("input", id))
+                set_model_patch_replace(model, patch_kwargs, ("input", id))
                 patch_kwargs["number"] += 1
             for id in [3, 4, 5, 6, 7, 8, 9, 10, 11]:  # id of output_blocks that have cross attention
-                set_model_patch_replace(work_model, patch_kwargs, ("output", id))
+                set_model_patch_replace(model, patch_kwargs, ("output", id))
                 patch_kwargs["number"] += 1
-            set_model_patch_replace(work_model, patch_kwargs, ("middle", 0))
+            set_model_patch_replace(model, patch_kwargs, ("middle", 0))
         else:
             for id in [4, 5, 7, 8]:  # id of input_blocks that have cross attention
                 block_indices = range(2) if id in [4, 5] else range(10)  # transformer_depth
                 for index in block_indices:
-                    set_model_patch_replace(work_model, patch_kwargs, ("input", id, index))
+                    set_model_patch_replace(model, patch_kwargs, ("input", id, index))
                     patch_kwargs["number"] += 1
             for id in range(6):  # id of output_blocks that have cross attention
                 block_indices = range(2) if id in [3, 4, 5] else range(10)  # transformer_depth
                 for index in block_indices:
-                    set_model_patch_replace(work_model, patch_kwargs, ("output", id, index))
+                    set_model_patch_replace(model, patch_kwargs, ("output", id, index))
                     patch_kwargs["number"] += 1
             for index in range(10):
-                set_model_patch_replace(work_model, patch_kwargs, ("middle", 0, index))
+                set_model_patch_replace(model, patch_kwargs, ("middle", 0, index))
                 patch_kwargs["number"] += 1
 
-
-        return (work_model,)
+        return model
 
     def prep_image(self, image, sharpening, convertNP=True, channels_last=True):
         if sharpening > 0.0:

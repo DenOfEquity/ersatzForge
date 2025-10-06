@@ -44,7 +44,7 @@ class PreprocessorForInstantID(Preprocessor):
     def load_insightface(self):
         global cached_insightfaceA
         if cached_insightfaceA is None:
-            cached_insightfaceA = InsightFaceLoader().load_insight_face(name="antelopev2")[0]
+            cached_insightfaceA = InsightFaceLoader().load_insight_face(name="antelopev2")
         return cached_insightfaceA
 
     def __call__(self, input_image, resolution, slider_1=0.23, slider_2=0.0, **kwargs):
@@ -135,7 +135,7 @@ class PreprocessorForIPAdapter(PreprocessorClipVision):
     def load_insightface(self):
         global cached_insightface
         if cached_insightface is None:
-            cached_insightface = InsightFaceLoader().load_insight_face()[0]
+            cached_insightface = InsightFaceLoader().load_insight_face()
         return cached_insightface
 
     def __call__(self, input_image, resolution, slider_1=0.23, slider_2=0.0, **kwargs):
@@ -143,7 +143,7 @@ class PreprocessorForIPAdapter(PreprocessorClipVision):
             clip_vision=None if '(Portrait)' in self.name else self.load_clipvision(),
             insightface=self.load_insightface() if 'InsightFace' in self.name else None,
             image=input_image,
-            weight_type="original",
+            weight_type="channel",#original
             noise=slider_1,
             sharpening=slider_2,
             embeds=None,
@@ -257,7 +257,7 @@ class IPAdapterPatcher(ControlModelPatcher):
         model_filename = Path(ckpt_path).name.lower()
         if 'v2' in model_filename:
             o.faceid_v2 = True
-            o.weight_v2 = True
+            o.weight_v2 = 2.0
 
         return o
 
@@ -265,35 +265,22 @@ class IPAdapterPatcher(ControlModelPatcher):
         super().__init__()
         self.ip_adapter = state_dict
         self.faceid_v2 = False
-        self.weight_v2 = False
+        self.weight_v2 = 0.0
         return
 
     def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
-        unet = process.sd_model.forge_objects.unet
+        unet = process.sd_model.forge_objects.unet.clone()
 
         if 'pulid' in cond[0] and cond[0]['pulid'] == True:
             if isinstance(cond, list):  # should always be True
                 images = []
                 for c in cond:
                     image = c['image']
-
-                    # r = min(image.shape[0] // 336, image.shape[1] // 336)
-                    # r = min(r, 2)
-                    # if r >= 2:   #interleaved split into r*r images
-                        # for i in range(r):
-                            # for j in range(r):
-                                # part = image[i::r, j::r]
-                                # images.append(numpy_to_pytorch(part))
-                    # else:
-                        # images.append(numpy_to_pytorch(image))
-
                     images.append(numpy_to_pytorch(image))
-
-                # random.shuffle(images)
 
             global cached_insightfaceA
             if cached_insightfaceA is None:
-                cached_insightfaceA = InsightFaceLoader().load_insight_face(name="antelopev2")[0]
+                cached_insightfaceA = InsightFaceLoader().load_insight_face(name="antelopev2")
 
             global cached_eva_clip
             if cached_eva_clip is None:
@@ -326,7 +313,7 @@ class IPAdapterPatcher(ControlModelPatcher):
                 noise=cond[0]['noise'],
                 fidelity=cond[0]['fidelity'],
                 attn_mask=mask.squeeze(1) if mask is not None else None,
-            )[0]
+            )
 
         else:   # ip-adapter / instant-id
             if isinstance(cond, list):  # should always be True
@@ -384,10 +371,10 @@ class IPAdapterPatcher(ControlModelPatcher):
                 start_at=self.start_percent,
                 end_at=self.end_percent,
                 faceid_v2=self.faceid_v2,
-                weight_v2=self.weight_v2,
+                weight_v2=self.strength*self.weight_v2,
                 attn_mask=mask.squeeze(1) if mask is not None else None,
                 **pcond,
-            )[0]
+            )
 
         process.sd_model.forge_objects.unet = unet
         return

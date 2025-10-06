@@ -128,7 +128,7 @@ class Resampler(nn.Module):
         if self.pos_emb is not None:
             n, device = x.shape[1], x.device
             pos_emb = self.pos_emb(torch.arange(n, device=device))
-            x = x + pos_emb
+            x.add_(pos_emb)
 
         latents = self.latents.repeat(x.size(0), 1, 1)
 
@@ -140,8 +140,8 @@ class Resampler(nn.Module):
             latents = torch.cat((meanpooled_latents, latents), dim=-2)
 
         for attn, ff in self.layers:
-            latents = attn(x, latents) + latents
-            latents = ff(latents) + latents
+            latents.add_(attn(x, latents))
+            latents.add_(ff(latents))
 
         latents = self.proj_out(latents)
         return self.norm_out(latents)
