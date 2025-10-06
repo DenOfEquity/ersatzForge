@@ -267,19 +267,12 @@ class VAE:
         samples /= 3.0
         return samples
 
-    def decode_inner(self, samples_in):
+    def decode(self, samples_in):
+        do_tiled = False
         if memory_management.VAE_ALWAYS_TILED:
-            if hasattr(self, "tile_info") and self.tile_info is not None:
-                tile_x = self.tile_info[0] // self.downscale_ratio
-                tile_y = self.tile_info[1] // self.downscale_ratio
-            else:
-                tile_x = 64
-                tile_y = 64
-            shape = (samples_in.shape[0], samples_in.shape[1], tile_y, tile_x)
-            memory_used = self.memory_used_decode(shape, self.vae_dtype)
-            memory_management.load_models_gpu([self.patcher], memory_used)
-            pixel_samples = self.decode_tiled(samples_in)
-        else:
+            do_tiled = True
+
+        if not do_tiled:
             try:
                 memory_used = self.memory_used_decode(samples_in.shape, self.vae_dtype)
                 memory_management.load_models_gpu([self.patcher], memory_used)
@@ -293,27 +286,30 @@ class VAE:
                     pixel_samples[x:x + batch_number] = torch.clamp((self.first_stage_model.decode(samples).to(self.output_device).to(torch.float32) + 1.0) / 2.0, min=0.0, max=1.0)
             except memory_management.OOM_EXCEPTION as e:
                 print("Warning: Ran out of memory when regular VAE decoding, retrying with tiled VAE decoding.")
-                pixel_samples = self.decode_tiled(samples_in)
+                do_tiled = True
+
+        if do_tiled:
+            if hasattr(self, "tile_info") and self.tile_info is not None:
+                tile_x = self.tile_info[0] // self.downscale_ratio
+                tile_y = self.tile_info[1] // self.downscale_ratio
+            else:
+                tile_x = 64
+                tile_y = 64
+            shape = (samples_in.shape[0], samples_in.shape[1], tile_y, tile_x)
+            memory_used = self.memory_used_decode(shape, self.vae_dtype)
+            memory_management.load_models_gpu([self.patcher], memory_used)
+            pixel_samples = self.decode_tiled(samples_in)
 
         return pixel_samples.to(self.output_device).movedim(1, -1)
 
-    def decode(self, samples_in):
-        wrapper = self.patcher.model_options.get('model_vae_decode_wrapper', None)
-        if wrapper is None:
-            return self.decode_inner(samples_in)
-        else:
-            return wrapper(self.decode_inner, samples_in)
-
-    def encode_inner(self, pixel_samples):
+    def encode(self, pixel_samples):
         pixel_samples = pixel_samples.movedim(-1, 1)
 
+        do_tiled = False
         if memory_management.VAE_ALWAYS_TILED:
-            # encoding uses relatively little VRAM, no need to calculate
-            memory_management.load_model_gpu(self.patcher)
-            samples = self.encode_tiled(pixel_samples)
-        else:
-            regulation = self.patcher.model_options.get("model_vae_regulation", None)
+            do_tiled = True
 
+        if not do_tiled:
             try:
                 memory_used = self.memory_used_encode(pixel_samples.shape, self.vae_dtype)
                 memory_management.load_models_gpu([self.patcher], memory_required=memory_used)
@@ -323,17 +319,22 @@ class VAE:
                 samples = torch.empty((pixel_samples.shape[0], self.latent_channels, round(pixel_samples.shape[-2] // self.downscale_ratio), round(pixel_samples.shape[-1] // self.downscale_ratio)), device=self.output_device)
                 for x in range(0, pixel_samples.shape[0], batch_number):
                     pixels_in = (2. * pixel_samples[x:x + batch_number] - 1.).to(self.vae_dtype).to(self.device)
-                    samples[x:x + batch_number] = self.first_stage_model.encode(pixels_in, regulation).to(self.output_device).to(torch.float32)
+                    samples[x:x + batch_number] = self.first_stage_model.encode(pixels_in).to(self.output_device).to(torch.float32)
 
             except memory_management.OOM_EXCEPTION as e:
                 print("Warning: Ran out of memory when regular VAE encoding, retrying with tiled VAE encoding.")
-                samples = self.encode_tiled(pixel_samples)
+                do_tiled = True
+
+        if do_tiled:
+            if hasattr(self, "tile_info") and self.tile_info is not None:
+                tile_x  = self.tile_info[0]
+                tile_y  = self.tile_info[1]
+            else:
+                tile_x = 512
+                tile_y = 512
+            shape = (samples_in.shape[0], samples_in.shape[1], tile_y, tile_x)
+            memory_used = self.memory_used_encode(pixel_samples.shape, self.vae_dtype)
+            memory_management.load_models_gpu([self.patcher], memory_required=memory_used)
+            samples = self.encode_tiled(pixel_samples)
 
         return samples
-
-    def encode(self, pixel_samples):
-        wrapper = self.patcher.model_options.get('model_vae_encode_wrapper', None)
-        if wrapper is None:
-            return self.encode_inner(pixel_samples)
-        else:
-            return wrapper(self.encode_inner, pixel_samples)

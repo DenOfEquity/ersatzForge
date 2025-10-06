@@ -351,7 +351,7 @@ class AutoencoderKLWan(nn.Module, ConfigMixin):
         latents_std = self.latents_std.to(latent.device, latent.dtype)
         return latent * latents_std / self.scale_factor + latents_mean
 
-    def encode(self, x, regulation=None):
+    def encode(self, x):
         x = x.unsqueeze(2)
         
         out = self.encoder(x)
