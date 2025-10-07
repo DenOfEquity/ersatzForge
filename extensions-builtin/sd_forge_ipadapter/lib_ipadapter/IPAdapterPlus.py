@@ -308,7 +308,8 @@ class IPAdapter(nn.Module):
 
     def get_image_embeds_instantid(self, prompt_image_emb, noise):
         c = self.image_proj_model(prompt_image_emb)
-        uc = self.image_proj_model(torch.zeros_like(prompt_image_emb))
+        torch.manual_seed(0)  # use a fixed random for reproducible results
+        uc = self.image_proj_model(torch.randn_like(prompt_image_emb) * prompt_image_emb.std() * noise)
         return c, uc
 
 
@@ -401,7 +402,7 @@ class CrossAttentionPatch:
                 if 1 in cond_or_uncond:
                     k_uncond = ipadapter.ip_layers.to_kvs[self.k_key](uncond).repeat(batch_prompt, 1, 1)
                     v_uncond = ipadapter.ip_layers.to_kvs[self.v_key](uncond).repeat(batch_prompt, 1, 1)
-                if 0 in cond or uncond:
+                if 0 in cond_or_uncond:
                     k_cond = ipadapter.ip_layers.to_kvs[self.k_key](cond).repeat(batch_prompt, 1, 1)
                     v_cond = ipadapter.ip_layers.to_kvs[self.v_key](cond).repeat(batch_prompt, 1, 1)
 
