@@ -131,11 +131,6 @@ def process_interrogate(interrogation_function, mode, ii_input_dir, ii_output_di
         return [gr.update(), None]
 
 
-def interrogate(image):
-    prompt = shared.interrogator.interrogate(image.convert("RGB"))
-    return gr.update() if prompt is None else prompt
-
-
 def interrogate_deepbooru(image):
     prompt = deepbooru.model.tag(image)
     return gr.update() if prompt is None else prompt
@@ -661,11 +656,6 @@ def create_ui():
 
             toprow.prompt.submit(**img2img_args)
             toprow.submit.click(**img2img_args)
-
-            toprow.button_interrogate.click(
-                fn=lambda *args: process_interrogate(interrogate, *args),
-                **interrogate_args,
-            )
 
             toprow.button_deepbooru.click(
                 fn=lambda *args: process_interrogate(interrogate_deepbooru, *args),

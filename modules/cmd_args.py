@@ -33,7 +33,6 @@ parser.add_argument("--ngrok-options", type=json.loads, help='The options to pas
 parser.add_argument("--enable-insecure-extension-access", action='store_true', help="enable extensions tab regardless of other options")
 parser.add_argument("--codeformer-models-path", type=normalized_filepath, help="Path to directory with codeformer model file(s).", default=os.path.join(models_path, 'Codeformer'))
 parser.add_argument("--gfpgan-models-path", type=normalized_filepath, help="Path to directory with GFPGAN model file(s).", default=os.path.join(models_path, 'GFPGAN'))
-parser.add_argument("--clip-models-path", type=normalized_filepath, help="Path to directory with CLIP model file(s), for Interrogate options.", default=None)
 parser.add_argument("--xformers", action='store_true', help="enable xformers for cross attention layers")
 parser.add_argument("--use-ipex", action="store_true", help="use Intel XPU as torch device")
 parser.add_argument("--listen", action='store_true', help="launch gradio with 0.0.0.0 as server name, allowing to respond to network requests")

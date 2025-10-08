@@ -1,7 +1,7 @@
 import os
 import gradio as gr
 
-from modules import localization, ui_components, shared_items, shared, interrogate, shared_gradio_themes, util
+from modules import localization, ui_components, shared_items, shared, shared_gradio_themes, util
 from modules.paths_internal import models_path, script_path, data_path, extensions_dir, extensions_builtin_dir, default_output_dir  # noqa: F401
 from modules.shared_cmd_options import cmd_opts
 from modules.options import options_section, OptionInfo, OptionHTML, categories
@@ -209,11 +209,6 @@ options_templates.update(options_section(('compatibility', "Compatibility", "sd"
 
 options_templates.update(options_section(('interrogate', "Interrogate"), {
     "interrogate_return_ranks": OptionInfo(False, "Include ranks of model tags matches in results.").info("booru only"),
-    "interrogate_clip_num_beams": OptionInfo(1, "BLIP: num_beams", gr.Slider, {"minimum": 1, "maximum": 16, "step": 1}),
-    "interrogate_clip_min_length": OptionInfo(24, "BLIP: minimum description length", gr.Slider, {"minimum": 1, "maximum": 128, "step": 1}),
-    "interrogate_clip_max_length": OptionInfo(48, "BLIP: maximum description length", gr.Slider, {"minimum": 1, "maximum": 256, "step": 1}),
-    "interrogate_clip_dict_limit": OptionInfo(1500, "CLIP: maximum number of lines in text file").info("0 = No limit"),
-    "interrogate_clip_skip_categories": OptionInfo([], "CLIP: skip inquire categories", gr.CheckboxGroup, lambda: {"choices": interrogate.category_types()}, refresh=interrogate.category_types),
     "interrogate_deepbooru_score_threshold": OptionInfo(0.5, "deepbooru: score threshold", gr.Slider, {"minimum": 0, "maximum": 1, "step": 0.01}),
     "deepbooru_sort_alpha": OptionInfo(True, "deepbooru: sort tags alphabetically").info("if not: sort by score"),
     "deepbooru_use_spaces": OptionInfo(True, "deepbooru: use spaces in tags").info("if not: use underscores"),
@@ -263,7 +258,6 @@ options_templates.update(options_section(('ui_alternatives', "UI alternatives", 
     "sd_checkpoint_dropdown_use_short": OptionInfo(False, "Checkpoint dropdown: use filenames without paths").info("models in subdirectories like photo/sd15.ckpt will be listed as just sd15.ckpt"),
     "txt2img_settings_accordion": OptionInfo(False, "Settings in txt2img hidden under Accordion").needs_reload_ui(),
     "img2img_settings_accordion": OptionInfo(False, "Settings in img2img hidden under Accordion").needs_reload_ui(),
-    "interrupt_after_current": OptionInfo(True, "Don't Interrupt in the middle").info("when using Interrupt button, if generating more than one image, stop after the generation of an image has finished, instead of immediately"),
 }))
 
 options_templates.update(options_section(('ui', "User interface", "ui"), {

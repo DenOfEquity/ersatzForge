@@ -13,16 +13,13 @@ class Toprow:
     prompt_img = None
     negative_prompt = None
 
-    button_interrogate = None
     button_deepbooru = None
 
     interrupt = None
-    interrupting = None
     skip = None
     submit = None
 
     paste = None
-    # clear_prompt_button = None
 
     if not shared.opts.disable_token_counters:
         token_counter = None
@@ -66,53 +63,26 @@ class Toprow:
         with gr.Row(elem_id=f"{self.id_part}_generate_box", elem_classes=["generate-box"] + (["generate-box-compact"]), render=False) as submit_box:
             self.submit_box = submit_box
 
-            self.interrupt = gr.Button('Interrupt', elem_id=f"{self.id_part}_interrupt", elem_classes="generate-box-interrupt", tooltip="End generation immediately or after completing current batch")
+            self.interrupt = gr.Button('Interrupt', elem_id=f"{self.id_part}_interrupt", elem_classes="generate-box-interrupt", tooltip="End generation")
             self.skip = gr.Button('Skip', elem_id=f"{self.id_part}_skip", elem_classes="generate-box-skip", tooltip="Stop generation of current batch and continues onto next batch")
-            self.interrupting = gr.Button('Interrupting...', elem_id=f"{self.id_part}_interrupting", elem_classes="generate-box-interrupting", tooltip="Interrupting generation...")
             self.submit = gr.Button('Generate', elem_id=f"{self.id_part}_generate", variant='primary', tooltip="Right click generate forever menu")
 
-            def interrupt_function():
-                if not shared.state.stopping_generation and shared.state.job_count > 1 and shared.opts.interrupt_after_current:
-                    shared.state.stop_generating()
-                    gr.Info("Generation will stop after finishing this image, click again to stop immediately.")
-                else:
-                    shared.state.interrupt()
-
             self.skip.click(fn=shared.state.skip)
-            self.interrupt.click(fn=interrupt_function, js='function(){ showSubmitInterruptingPlaceholder("' + self.id_part + '"); }')
-            self.interrupting.click(fn=interrupt_function)
+            self.interrupt.click(fn=shared.state.interrupt, js='function(){ showSubmitInterruptingPlaceholder("' + self.id_part + '"); }')
 
     def create_tools_row(self):
         paste_symbol = '\u2199\ufe0f'  # ↙
-        # clear_prompt_symbol = '\U0001f5d1\ufe0f'  # 🗑️
 
         self.paste = ToolButton(value=paste_symbol, elem_id="paste", tooltip="Read generation parameters from prompt or last generation if prompt is empty into user interface.")
-        # self.clear_prompt_button = ToolButton(value=clear_prompt_symbol, elem_id=f"{self.id_part}_clear_prompt", tooltip="Clear prompt")
 
         if self.id_part == "img2img":
-            self.button_interrogate = ToolButton('📎', tooltip='Interrogate CLIP - use CLIP neural network to create a text describing the image, and put it into the prompt field', elem_id="interrogate")
-            self.button_deepbooru = ToolButton('📦', tooltip='Interrogate DeepBooru - use DeepBooru neural network to create a text describing the image, and put it into the prompt field', elem_id="deepbooru")
+            self.button_deepbooru = ToolButton('📦', tooltip='Interrogate DeepBooru - use DeepBooru neural network to describe the image, and put it into the Prompt field', elem_id="deepbooru")
 
         if not shared.opts.disable_token_counters:
             self.token_counter = gr.HTML(value="<span>1/75</span>", elem_id=f"{self.id_part}_token_counter", elem_classes=["token-counter"])
             self.token_button = gr.Button(visible=False, elem_id=f"{self.id_part}_token_button")
             self.negative_token_counter = gr.HTML(value="<span>1/75</span>", elem_id=f"{self.id_part}_negative_token_counter", elem_classes=["token-counter"])
             self.negative_token_button = gr.Button(visible=False, elem_id=f"{self.id_part}_negative_token_button")
-
-        # self.clear_prompt_button.click(
-            # fn=lambda *x: x,
-            # js="confirm_clear_prompt",
-            # inputs=[self.prompt, self.negative_prompt],
-            # outputs=[self.prompt, self.negative_prompt],
-            # show_progress=False
-        # )
-
-        # self.clear_prompt_button.click(
-            # fn=lambda: ['',''],
-            # inputs=None,
-            # outputs=[self.prompt, self.negative_prompt],
-            # show_progress=False
-        # )
 
 
     def create_styles_ui(self):

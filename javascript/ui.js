@@ -112,18 +112,22 @@ function get_img2img_tab_index() {
 }
 
 
-function setSubmitButtonsVisibility(tabname, showInterrupt, showSkip, showInterrupting) {
-    gradioApp().getElementById(tabname + '_interrupt').style.display = showInterrupt ? "block" : "none";
-    gradioApp().getElementById(tabname + '_skip').style.display = showSkip ? "block" : "none";
-    gradioApp().getElementById(tabname + '_interrupting').style.display = showInterrupting ? "block" : "none";
-}
-
 function showSubmitButtons(tabname, show) {
-    setSubmitButtonsVisibility(tabname, !show, !show, false);
+	interrupt = gradioApp().getElementById(tabname + '_interrupt')
+	skip = gradioApp().getElementById(tabname + '_skip')
+	if (show) {
+		interrupt.style.display = "none";
+		skip.style.display = "none";
+	}
+	else {
+		interrupt.innerText = "Interrupt";
+		interrupt.style.display = "block";
+		skip.style.display = "block";
+	}
 }
 
 function showSubmitInterruptingPlaceholder(tabname) {
-    setSubmitButtonsVisibility(tabname, false, true, true);
+    gradioApp().getElementById(tabname + '_interrupt').innerText = "Interrupting ...";
 }
 
 function submit() {
@@ -258,6 +262,8 @@ onUiLoaded(function() {
 
     json_elem.parentElement.style.display = "none";
 });
+
+
 
 
 function ask_for_style_name(_, prompt_text, negative_prompt_text) {

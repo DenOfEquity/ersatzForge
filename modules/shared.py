@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from backend import memory_management
 
 if TYPE_CHECKING:
-    from modules import shared_state, styles, interrogate, shared_total_tqdm, memmon
+    from modules import shared_state, styles, shared_total_tqdm, memmon
 
 cmd_opts = shared_cmd_options.cmd_opts
 parser = shared_cmd_options.parser
@@ -37,8 +37,6 @@ loaded_hypernetworks = []
 state: 'shared_state.State' = None
 
 prompt_styles: 'styles.StyleDatabase' = None
-
-interrogator: 'interrogate.InterrogateModels' = None
 
 face_restorers = []
 

@@ -649,9 +649,7 @@ class Api:
 
         # Override object param
         with self.queue_lock:
-            if interrogatereq.model == "clip":
-                processed = shared.interrogator.interrogate(img)
-            elif interrogatereq.model == "deepdanbooru":
+            if interrogatereq.model == "deepdanbooru":
                 processed = deepbooru.model.tag(img)
             else:
                 raise HTTPException(status_code=404, detail="Model not found")
