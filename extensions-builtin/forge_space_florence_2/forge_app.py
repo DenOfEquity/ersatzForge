@@ -1,6 +1,5 @@
-import spaces
 import gradio as gr
-from transformers import AutoProcessor, AutoModelForCausalLM
+from transformers import AutoProcessor, Florence2ForConditionalGeneration
 import os
 
 import copy
@@ -16,7 +15,7 @@ import torch
 
 from modules import shared, devices
 
-models_list = ['microsoft/Florence-2-large', 'microsoft/Florence-2-base', 'MiaoshouAI/Florence-2-large-PromptGen-v2.0']
+models_list = ['florence-community/Florence-2-base', 'florence-community/Florence-2-large']#, 'MiaoshouAI/Florence-2-large-PromptGen-v2.0', 'MiaoshouAI/Florence-2-base-PromptGen-v2.0']
 
 loadedModel = None
 model = None
@@ -24,8 +23,6 @@ processor = None
 
 device = devices.device
 dtype = torch.float32 if devices.has_xpu() or devices.has_mps() else torch.float16
-
-DESCRIPTION = "# [Florence-2](https://huggingface.co/microsoft/Florence-2-large)"
 
 colormap = ['blue','orange','green','purple','brown','pink','gray','olive','cyan','red',
             'lime','indigo','violet','aqua','magenta','coral','gold','tan','skyblue']
@@ -36,20 +33,21 @@ def fig_to_pil(fig):
     buf.seek(0)
     return Image.open(buf)
 
-@spaces.GPU()
-def run_example(task_prompt, image, text_input=None, model_id='microsoft/Florence-2-large'):
+def run_example(task_prompt, image, text_input=None, model_id='florence-community/Florence-2-large'):
     global loadedModel, model, processor
 
     if loadedModel != model_id:
-        model = AutoModelForCausalLM.from_pretrained(model_id, trust_remote_code=True).to(device).to(dtype).eval()
-        processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+        model = Florence2ForConditionalGeneration.from_pretrained(model_id, dtype=dtype).to(device)
+        processor = AutoProcessor.from_pretrained(model_id)
         loadedModel = model_id
+    else:
+        model.to(device)
 
     if text_input is None:
         prompt = task_prompt
     else:
         prompt = task_prompt + text_input
-    inputs = processor(text=prompt, images=image, return_tensors="pt").to(device).to(dtype)
+    inputs = processor(text=prompt, images=image, return_tensors="pt", use_fast=False).to(device).to(dtype)
     generated_ids = model.generate(
         input_ids=inputs["input_ids"],
         pixel_values=inputs["pixel_values"],
@@ -64,6 +62,10 @@ def run_example(task_prompt, image, text_input=None, model_id='microsoft/Florenc
         task=task_prompt,
         image_size=(image.width, image.height)
     )
+
+    model.to('cpu')
+    devices.torch_gc()
+
     return parsed_answer
 
 def plot_bbox(image, data):
@@ -78,7 +80,6 @@ def plot_bbox(image, data):
     return fig
 
 def draw_polygons(image, prediction, fill_mask=False):
-
     draw = ImageDraw.Draw(image)
     scale = 1
     for polygons, label in zip(prediction['polygons'], prediction['labels']):
@@ -121,19 +122,19 @@ def draw_ocr_bboxes(image, prediction):
     return image
 
 
-def process_image(image, task_prompt, text_input=None, model_id='microsoft/Florence-2-large'):
+def process_image(image, task_prompt, text_input=None, model_id='florence-community/Florence-2-large'):
     if task_prompt == 'Caption':
         task_prompt = '<CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results, None
+        return results.get(task_prompt), None
     elif task_prompt == 'Detailed Caption':
         task_prompt = '<DETAILED_CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results, None
+        return results.get(task_prompt), None
     elif task_prompt == 'More Detailed Caption':
         task_prompt = '<MORE_DETAILED_CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results, None
+        return results.get(task_prompt), None
     elif task_prompt == 'Caption + Grounding':
         task_prompt = '<CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
@@ -239,14 +240,16 @@ def process_image(image, task_prompt, text_input=None, model_id='microsoft/Flore
         return "", None  # Return empty string and None for unknown task prompts
 
 
-@spaces.GPU()
-def run_example_batch(directory, task_prompt, model_id='microsoft/Florence-2-large', save_caption=False, prefix=""):
+
+def run_example_batch(directory, task_prompt, model_id='florence-community/Florence-2-large', save_caption=False, prefix=""):
     global loadedModel, model, processor
 
     if loadedModel != model_id:
-        model = AutoModelForCausalLM.from_pretrained(model_id, trust_remote_code=True).to(device).to(dtype).eval()
-        processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+        model = Florence2ForConditionalGeneration.from_pretrained(model_id, dtype=dtype).to(device)
+        processor = AutoProcessor.from_pretrained(model_id)
         loadedModel = model_id
+    else:
+        model.to(device)
 
     match task_prompt:
         case 'More Detailed Caption':
@@ -270,7 +273,7 @@ def run_example_batch(directory, task_prompt, model_id='microsoft/Florence-2-lar
         image = Image.open(file)
 
         if image:
-            inputs = processor(text=prompt, images=image, return_tensors="pt").to(device).to(dtype)
+            inputs = processor(text=prompt, images=image, return_tensors="pt", use_fast=False).to(device).to(dtype)
             generated_ids = model.generate(
                 input_ids=inputs["input_ids"],
                 pixel_values=inputs["pixel_values"],
@@ -293,6 +296,9 @@ def run_example_batch(directory, task_prompt, model_id='microsoft/Florence-2-lar
                 caption_file = file + ".txt"
                 with open(caption_file, 'w') as f:
                     f.write(caption_text)
+
+    model.to('cpu')
+    devices.torch_gc()
 
     return results
 
@@ -331,7 +337,7 @@ cascaded_task_list =[
 
 
 def update_task_dropdown(model, choice=None):
-    if model == models_list[2]:
+    if 'MiaoshouAI' in model:
         return gr.Dropdown(choices=miao_task_list, value='Caption')
     if choice == 'Cascaded task':
         return gr.Dropdown(choices=cascaded_task_list, value='Caption + Grounding')
@@ -345,7 +351,7 @@ def unload():
 
 
 with gr.Blocks(analytics_enabled=False, css=css, title="Florence-2") as demo:
-    gr.Markdown(DESCRIPTION)
+    gr.Markdown("# [Florence-2](https://huggingface.co/microsoft/Florence-2-large)")
     with gr.Tab(label="Florence-2 Image Captioning"):
         with gr.Row():
             with gr.Column():
@@ -356,7 +362,7 @@ with gr.Blocks(analytics_enabled=False, css=css, title="Florence-2") as demo:
                 text_input = gr.Textbox(label="Text input (optional)")
                 submit_btn = gr.Button(value="Submit")
             with gr.Column():
-                output_text = gr.Textbox(label="Output Text")
+                output_text = gr.Textbox(label="Output Text", show_copy_button=True)
                 output_img = gr.Image(label="Output Image")
 
         model_selector.change(fn=update_task_dropdown, inputs=[model_selector, task_type], outputs=task_prompt)
@@ -374,7 +380,7 @@ with gr.Blocks(analytics_enabled=False, css=css, title="Florence-2") as demo:
                 prefix_input = gr.Textbox(label="Prefix to add to captions (optional)")
                 batch_btn = gr.Button(value="Submit")
             with gr.Column():
-                output_text = gr.Textbox(label="Output captions")
+                output_text = gr.Textbox(label="Output captions", show_copy_button=True)
 
         model_selector.change(fn=update_task_dropdown, inputs=[model_selector], outputs=task_prompt)
 
