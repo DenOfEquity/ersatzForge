@@ -746,7 +746,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "Tiling": p.tiling if p.tiling != "None" and (shared.sd_model.is_sd1 or shared.sd_model.is_sd2 or shared.sd_model.is_sdxl) else None,
         **p.extra_generation_params,
         "ELLA": opts.use_ELLA if ("ELLA" in opts.use_ELLA and shared.sd_model.is_sd1) else None,
-        "Espilon scaling": opts.epsilon_scaling if opts.epsilon_scaling != 1.0 else None,
+        "Epsilon scaling": opts.epsilon_scaling if opts.epsilon_scaling != 1.0 else None,
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
     })
     if noise_source_type == 'Perlin':
