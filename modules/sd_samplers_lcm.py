@@ -56,10 +56,10 @@ def sample_lcm(model, x, sigmas, extra_args=None, callback=None, disable=None, n
         if previous is not None:
             x += (denoised - previous) * (sigmas[i] / sigmas[0])
 
-        if order == 5: previous4 = previous3
-        if order >= 4: previous3 = previous2
-        if order >= 3: previous2 = previous1
-        if order >= 2: previous1 = x
+        if order == 5 and i > 3: previous4 = previous3.clone()
+        if order >= 4 and i > 2: previous3 = previous2.clone()
+        if order >= 3 and i > 1: previous2 = previous1.clone()
+        if order >= 2 and i > 0: previous1 = x.clone()
 
         if sigmas[i + 1] > 0:
             x.addcmul_(sigmas[i + 1], noise_sampler(sigmas[i], sigmas[i + 1]))
