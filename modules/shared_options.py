@@ -148,7 +148,9 @@ options_templates.update(options_section(('sd', "Stable Diffusion", "sd"), {
     "tiling": OptionInfo("None", "Tiling", gr.Radio, {"choices": ["None", "X", "Y", "X and Y"]}, infotext='Tiling').info("produce a tileable picture"),
     "hires_fix_refiner_pass": OptionInfo("second pass", "Hires fix: which pass to enable refiner for", gr.Radio, {"choices": ["first pass", "second pass", "both passes"]}, infotext="Hires refiner"),
     "use_ELLA": OptionInfo("CLIP (normal)", "Use ELLA for SD1.5", gr.Radio, {"choices": ["CLIP (normal)", "ELLA only", "ELLA (per step) only", "CLIP + ELLA", "CLIP + ELLA (per step)"]}, infotext="ELLA").info("ELLA text encoder and ELLA model will be automatically downloaded. Info: https://github.com/TencentQQGYLab/ELLA"),
-    "epsilon_scaling": OptionInfo(1.0, "Epsilon scaling factor", gr.Slider, {"minimum": 0.9, "maximum": 1.1, "step": 0.001}, infotext="Epsilon scaling").info("'Elucidating the Exposure Bias in Diffusion Models' https://openreview.net/pdf?id=xEJMoj1SpX"),
+    "epsilon_scaling": OptionInfo(1.0, "Epsilon scaling factor", gr.Slider, {"minimum": 0.8, "maximum": 1.2, "step": 0.001}, infotext="Epsilon scaling").info("'Elucidating the Exposure Bias in Diffusion Models' https://openreview.net/pdf?id=xEJMoj1SpX"),
+    "epsilon_modulation": OptionInfo(False, "Epsilon modulation", infotext="Epsilon modulation").info("reduces effect of Epsilon scaling on later steps (sigma / sigma_max)"),
+    "prediction_scaling": OptionInfo(1.0, "Prediction scaling factor", gr.Slider, {"minimum": 0.8, "maximum": 1.2, "step": 0.001}, infotext="Prediction scaling").info("Scales model output, with modulation by sigma"),
 }))
 
 options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), {
