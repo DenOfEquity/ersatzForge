@@ -11,6 +11,7 @@ from backend import memory_management
 from backend.sampling.condition import Condition, compile_conditions, compile_weighted_conditions
 from backend.operations import cleanup_cache
 from backend import utils
+from backend.modules.k_prediction import Prediction
 
 from modules.shared import opts
 
@@ -289,6 +290,15 @@ def sampling_function_inner(model, x, timestep, uncond, cond, cond_scale, model_
 
     cond_pred, uncond_pred = calc_cond_uncond_batch(model, cond, uncond_, x, timestep, model_options)
 
+    if opts.prediction_scaling != 1.0:
+        if isinstance(model.predictor, Prediction):
+            t_0 = opts.sigma_max or model.predictor.sigmas[-1]
+        else:
+            t_0 = model.predictor.sigmas[-1]
+        scale = 1.0 - (1.0 - opts.prediction_scaling) * ((timestep / t_0) ** 0.5)
+        cond_pred *= scale  
+        uncond_pred *= scale  
+
     if "sampler_cfg_function" in model_options:
         args = {"cond": x - cond_pred, "uncond": x - uncond_pred, "cond_scale": cond_scale, "timestep": timestep, "input": x, "sigma": timestep,
                 "cond_denoised": cond_pred, "uncond_denoised": uncond_pred, "model": model, "model_options": model_options}
@@ -300,7 +310,15 @@ def sampling_function_inner(model, x, timestep, uncond, cond, cond_scale, model_
 
     if opts.epsilon_scaling != 1.0:
         diff = x - cfg_result
-        diff /= opts.epsilon_scaling
+        if opts.epsilon_modulation:
+            if isinstance(model.predictor, Prediction):
+                t_0 = opts.sigma_max or model.predictor.sigmas[-1]
+            else:
+                t_0 = model.predictor.sigmas[-1]
+            scale = 1.0 - (1.0 - opts.epsilon_scaling) * ((timestep / t_0) ** 0.5)
+            diff /= scale        
+        else:
+            diff /= opts.epsilon_scaling
         cfg_result = x - diff
 
     for fn in model_options.get("sampler_post_cfg_function", []):
@@ -332,7 +350,7 @@ def sampling_function(self, denoiser_params, cond_scale, cond_composition):
             pos_cond = cond[0]['cross_attn'][c]
             neg_cond = uncond[0]['cross_attn'][c]
             
-            if pos_cond.shape[0] > neg_cond.shape[0]: # positive longer than negative, expand negitive with zero
+            if pos_cond.shape[0] > neg_cond.shape[0]: # positive longer than negative, expand negative with zero
                 new_cond = torch.zeros_like(pos_cond)
                 new_cond[:neg_cond.shape[0], :] = neg_cond
                 neg_cond = new_cond
