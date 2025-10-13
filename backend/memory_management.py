@@ -504,7 +504,7 @@ class LoadedModel:
             extra_memory = 0
             this_online_lora = dynamic_args['online_lora'] and (len(self.model.lora_patches) > 0)
             if this_online_lora:
-                extra_memory += (1024 * 1024 * 1024 * 1)
+                extra_memory += (1024 * 1024 * 1024 * 1.125)
 
             if getattr(self.real_model, 'gguf_baked', False):    # reserve a little more for GGUF quants
                 extra_memory += (1024 * 1024 * 1024 * 0.5)
@@ -682,7 +682,7 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
                 matched = True
                 this_online_lora = dynamic_args['online_lora'] and (len(x.lora_patches) > 0)
                 if this_online_lora:
-                    extra_memory += (1024 * 1024 * 1024 * 1)
+                    extra_memory += (1024 * 1024 * 1024 * 1.125)
                 if getattr(current_loaded_models[i].real_model, 'gguf_baked', False):
                     extra_memory += (1024 * 1024 * 1024 * 0.5)
                 break                
@@ -708,7 +708,8 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
         current_loaded_models.append(loaded_model)
 
     moving_time = time.perf_counter() - execution_start_time
-    print(f'Moving model(s) has taken {moving_time:.2f} seconds')
+    if moving_time > 0.1:
+        print(f'Moving model(s) has taken {moving_time:.2f} seconds')
 
     return
 
