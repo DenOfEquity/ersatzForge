@@ -25,11 +25,12 @@ from backend.diffusion_engine.sdxl import StableDiffusionXL, StableDiffusionXLRe
 from backend.diffusion_engine.sd35 import StableDiffusion3
 from backend.diffusion_engine.flux import Flux
 from backend.diffusion_engine.chroma import Chroma
+from backend.diffusion_engine.chromaDCT import ChromaDCT
 from backend.diffusion_engine.cosmos import Cosmos
 from backend.diffusion_engine.wan import Wan
 
 
-possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, Chroma, Flux, Cosmos, Wan]
+possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux, Cosmos, Wan]
 
 
 logging.getLogger("diffusers").setLevel(logging.ERROR)
@@ -183,7 +184,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             return model
 
-        if cls_name in ['UNet2DConditionModel', 'FluxTransformer2DModel', 'SD3Transformer2DModel', 'ChromaTransformer2DModel', 'CosmosTransformer3DModel', "WanTransformer3DModel"]:
+        if cls_name in ['UNet2DConditionModel', 'FluxTransformer2DModel', 'SD3Transformer2DModel', 'ChromaTransformer2DModel', 'ChromaDCT', 'CosmosTransformer3DModel', "WanTransformer3DModel"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have model state dict!'
 
             model_loader = None
@@ -192,6 +193,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             elif cls_name == 'FluxTransformer2DModel':
                 from backend.nn.flux import IntegratedFluxTransformer2DModel
                 model_loader = lambda c: IntegratedFluxTransformer2DModel(**c)
+            elif cls_name == 'ChromaDCT':
+                from backend.nn.chromaDCT import IntegratedChromaDCTTransformer2DModel
+                model_loader = lambda c: IntegratedChromaDCTTransformer2DModel(**c)
             elif cls_name == 'ChromaTransformer2DModel':
                 from backend.nn.chroma import IntegratedChromaTransformer2DModel
                 model_loader = lambda c: IntegratedChromaTransformer2DModel(**c)

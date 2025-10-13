@@ -73,6 +73,7 @@ class Flux(ForgeDiffusionEngine):
             emphasis_name=dynamic_args['emphasis_name'],
         )
 
+        self.is_flux = True
         self.forge_objects = ForgeObjects(unet=unet, clip=clip, vae=vae, clipvision=None)
         self.forge_objects_original = self.forge_objects.shallow_copy()
         self.forge_objects_after_applying_lora = self.forge_objects.shallow_copy()

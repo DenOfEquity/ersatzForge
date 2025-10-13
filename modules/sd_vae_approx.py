@@ -40,7 +40,7 @@ def download_model(model_path, model_url):
 
 
 def model():
-    if not shared.sd_model.is_webui_legacy_model():
+    if shared.sd_model.is_flux or shared.sd_model.is_chromaDCT or shared.sd_model.is_wan or shared.sd_model.is_cosmos_predict2:
         return None
 
     if shared.sd_model.is_sd3:

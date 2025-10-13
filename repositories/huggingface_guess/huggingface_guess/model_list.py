@@ -721,6 +721,15 @@ class Chroma(FluxSchnell):
         return result
 
 
+class ChromaDCT(Chroma):
+    huggingface_repo = 'ChromaDCT'
+
+    unet_config = {
+        "image_model": "chromaDCT",
+        "in_channels": 3,
+    }
+
+
 class CosmosT2IPredict2(BASE):
     huggingface_repo = 'Cosmos'
     unet_config = {
@@ -836,4 +845,4 @@ class WAN22_T2V(BASE):
 
 
 
-models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V]#, WAN21_I2V]
+models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V]#, WAN21_I2V]

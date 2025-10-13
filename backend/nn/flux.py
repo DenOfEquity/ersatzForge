@@ -111,29 +111,19 @@ class MLPEmbedder(nn.Module):
         return self.out_layer(x)
 
 
-if hasattr(torch, 'rms_norm'):
-    functional_rms_norm = torch.rms_norm
-else:
-    def functional_rms_norm(x, normalized_shape, weight, eps):
-        if x.dtype in [torch.bfloat16, torch.float32]:
-            n = torch.rsqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + eps) * weight
-        else:
-            n = torch.rsqrt(torch.mean(x.to(torch.float32) ** 2, dim=-1, keepdim=True) + eps).to(x.dtype) * weight
-        return x * n
-
-
-class RMSNorm(nn.Module):
-    def __init__(self, dim):
+class RMSNorm(torch.nn.Module):
+    def __init__(self, dim: int):
         super().__init__()
-        self.weight = None  # to trigger module_profile
         self.scale = nn.Parameter(torch.ones(dim))
-        self.eps = 1e-6
-        self.normalized_shape = [dim]
 
     def forward(self, x):
-        if self.scale.dtype != x.dtype:
-            self.scale = tensor2parameter(self.scale.to(dtype=x.dtype))
-        return functional_rms_norm(x, self.normalized_shape, self.scale, self.eps)
+        self.scale.data = self.scale.data.to(x.device, x.dtype)
+
+        if x.dtype in [torch.bfloat16, torch.float32]:
+            n = torch.rsqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + 1e-6) * self.scale
+        else:
+            n = torch.rsqrt(torch.mean(x.to(torch.float32) ** 2, dim=-1, keepdim=True) + 1e-6).to(x.dtype) * self.scale
+        return x.mul(n)
 
 
 class QKNorm(nn.Module):
@@ -387,8 +377,8 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         if self.guidance_embed:
             if guidance is None:
                 raise ValueError("Didn't get guidance strength for guidance distilled model.")
-            vec = vec + self.guidance_in(timestep_embedding(guidance, 256).to(img.dtype))
-        vec = vec + self.vector_in(y)
+            vec.add_(self.guidance_in(timestep_embedding(guidance, 256).to(img.dtype)))
+        vec.add_(self.vector_in(y))
         txt = self.txt_in(txt)
         del y, guidance
 

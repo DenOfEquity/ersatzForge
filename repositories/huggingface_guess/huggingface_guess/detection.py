@@ -215,7 +215,13 @@ def detect_unet_config(state_dict, key_prefix):
             unet_config["image_model"] = "hydit1"
         return unet_config
 
-    if '{}double_blocks.0.img_attn.norm.key_norm.scale'.format(key_prefix) in state_dict_keys:  # Flux
+    if '{}nerf_image_embedder.embedder.0.bias'.format(key_prefix) in state_dict_keys: #ChromaDCT
+        dit_config = {}
+        dit_config["image_model"] = "chromaDCT"
+        dit_config["in_channels"] = 3
+        return dit_config
+
+    if '{}double_blocks.0.img_attn.norm.key_norm.scale'.format(key_prefix) in state_dict_keys:  # Flux / Chroma
         dit_config = {}
         dit_config["image_model"] = "flux"
         

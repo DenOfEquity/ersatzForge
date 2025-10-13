@@ -2,7 +2,7 @@ import torch
 
 from backend import memory_management, attention
 from backend.modules.k_prediction import k_prediction_from_diffusers_scheduler
-
+from backend.nn.chromaDCT import IntegratedChromaDCTTransformer2DModel
 
 class KModel(torch.nn.Module):
     def __init__(self, model, diffusers_scheduler, k_predictor=None, config=None):
@@ -51,5 +51,9 @@ class KModel(torch.nn.Module):
             dtype_size = 4
 
         scaler = 1.65    #may need to be higher for some attention functions?
+        mem_required = input_shape[0] * input_shape[1] * input_shape[2] * input_shape[3] * dtype_size * scaler * 1024
 
-        return input_shape[0] * input_shape[1] * input_shape[2] * input_shape[3] * dtype_size * scaler * 1024
+        if isinstance(self.diffusion_model, IntegratedChromaDCTTransformer2DModel):
+            mem_required /= 3
+
+        return mem_required

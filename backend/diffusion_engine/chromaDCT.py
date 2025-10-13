@@ -11,8 +11,8 @@ from backend.modules.k_prediction import PredictionFlux
 from backend import memory_management
 
 
-class Chroma(ForgeDiffusionEngine):
-    matched_guesses = [model_list.Chroma]
+class ChromaDCT(ForgeDiffusionEngine):
+    matched_guesses = [model_list.ChromaDCT]
 
     def __init__(self, estimated_config, huggingface_components):
         super().__init__(estimated_config, huggingface_components)
@@ -27,7 +27,10 @@ class Chroma(ForgeDiffusionEngine):
             }
         )
 
-        vae = VAE(model=huggingface_components['vae'])
+        vae = VAE(no_init=True) # dummy VAE object, never called but stores attributes
+        vae.latent_channels = 3 # like this one, needed for noise generation
+        vae.scale_factor_spatial = 1
+
         k_predictor = PredictionFlux(
             mu=1.0
         )
@@ -46,7 +49,8 @@ class Chroma(ForgeDiffusionEngine):
             end_with_pad=True
         )
 
-        self.is_flux = True # no need for specific is_chroma?
+        self.is_chromaDCT = True
+
         self.forge_objects = ForgeObjects(unet=unet, clip=clip, vae=vae, clipvision=None)
         self.forge_objects_original = self.forge_objects.shallow_copy()
         self.forge_objects_after_applying_lora = self.forge_objects.shallow_copy()
@@ -59,7 +63,6 @@ class Chroma(ForgeDiffusionEngine):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
         cond_t5 = self.text_processing_engine_t5(prompt)
         cond = dict(crossattn=cond_t5)
-        cond['guidance'] = torch.FloatTensor([0] * len(prompt))
         return cond
 
     @torch.inference_mode()
@@ -69,12 +72,8 @@ class Chroma(ForgeDiffusionEngine):
 
     @torch.inference_mode()
     def encode_first_stage(self, x):
-        sample = self.forge_objects.vae.encode(x.movedim(1, -1) * 0.5 + 0.5)
-        sample = self.forge_objects.vae.first_stage_model.process_in(sample)
-        return sample.to(x)
+        return x
 
     @torch.inference_mode()
     def decode_first_stage(self, x):
-        sample = self.forge_objects.vae.first_stage_model.process_out(x)
-        sample = self.forge_objects.vae.decode(sample).movedim(-1, 1) * 2.0 - 1.0
-        return sample.to(x)
+        return x.clamp(-1.0, 1.0)

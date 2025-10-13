@@ -108,7 +108,7 @@ def download_model(model_path, model_url):
 def decoder_model():
     if shared.sd_model.is_sd3:
         model_name = "taesd3_decoder.pth"
-    elif not shared.sd_model.is_webui_legacy_model():   #   ideally would have 'is_flux'
+    elif shared.sd_model.is_flux:
         model_name = "taef1_decoder.pth"
     elif shared.sd_model.is_sdxl:
         model_name = "taesdxl_decoder.pth"
@@ -137,7 +137,7 @@ def decoder_model():
 def encoder_model():
     if shared.sd_model.is_sd3:
         model_name = "taesd3_encoder.pth"
-    elif not shared.sd_model.is_webui_legacy_model():   #   ideally would have 'is_flux'
+    elif shared.sd_model.is_flux:
         model_name = "taef1_encoder.pth"
     elif shared.sd_model.is_sdxl:
         model_name = "taesdxl_encoder.pth"

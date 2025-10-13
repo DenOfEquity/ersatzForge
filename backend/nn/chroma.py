@@ -131,9 +131,7 @@ class SingleStreamBlock(nn.Module):
         scratchA[:, :, :3072] = attention_function(q, k, v, q.shape[1], skip_reshape=True)
         scratchA[:, :, 3072:] = self.mlp_act(mlp)
 
-        output = self.linear2(scratchA)
-
-        x.addcmul_(gate, output)
+        x.addcmul_(gate, self.linear2(scratchA))
 
         x = fp16_fix(x)
         return x
@@ -208,8 +206,8 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         nb_single_block = len(self.single_blocks)
         
         mod_index_length = nb_double_block*12 + nb_single_block*3 + 2
-        distill_timestep = timestep_embedding(timesteps, 16).to(device=device, dtype=dtype) # this was timesteps.detach().clone()
-        distill_guidance = timestep_embedding(guidance, 16).to(device=device, dtype=dtype) # this was guidance.detach().clone()
+        distill_timestep = timestep_embedding(timesteps, 16).to(device=device, dtype=dtype)
+        distill_guidance = timestep_embedding(guidance, 16).to(device=device, dtype=dtype)
         modulation_index = timestep_embedding(torch.arange(mod_index_length), 32).to(device=device, dtype=dtype)
         modulation_index = modulation_index.unsqueeze(0).repeat(img.shape[0], 1, 1)
         timestep_guidance = torch.cat([distill_timestep, distill_guidance], dim=1).unsqueeze(1).repeat(1, mod_index_length, 1)

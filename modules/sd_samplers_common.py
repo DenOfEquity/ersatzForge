@@ -40,7 +40,12 @@ def samples_to_images_tensor(sample, approximation=None, model=None):
         if approximation == 0:
             approximation = 1
 
-    if approximation == 2:
+    if model is None:
+        model = shared.sd_model
+
+    if model.is_chromaDCT:
+        x_sample = model.decode_first_stage(sample)
+    elif approximation == 2:
         x_sample = sd_vae_approx.cheap_approximation(sample)
     elif approximation == 1:
         m = sd_vae_approx.model()
@@ -56,8 +61,6 @@ def samples_to_images_tensor(sample, approximation=None, model=None):
             x_sample = m(sample.to(devices.device, devices.dtype_vae)).detach()
             x_sample = x_sample * 2 - 1
     else:
-        if model is None:
-            model = shared.sd_model
         x_sample = model.decode_first_stage(sample)
 
     return x_sample
