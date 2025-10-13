@@ -81,19 +81,19 @@ class BlockCache(scripts.Script):
 
         if enabled:
             if method == "First Block Cache":
-                if (p.sd_model.is_sd1 == True) or (p.sd_model.is_sd2 == True) or (p.sd_model.is_sdxl == True):
-                    IntegratedUNet2DConditionModel.forward = patched_forward_unet_fbc
-                elif p.sd_model.is_sd3 == True:
+                if p.sd_model.is_sd3:
                     MMDiTX.forward = patched_forward_mmditx_fbc
-                elif not p.sd_model.is_webui_legacy_model():
+                elif p.sd_model.is_webui_legacy_model():
+                    IntegratedUNet2DConditionModel.forward = patched_forward_unet_fbc
+                elif p.sd_model.is_flux:
                     IntegratedFluxTransformer2DModel.inner_forward = patched_inner_forward_flux_fbc
                     IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_fbc
             else:
-                if (p.sd_model.is_sd1 == True) or (p.sd_model.is_sd2 == True) or (p.sd_model.is_sdxl == True):
-                    IntegratedUNet2DConditionModel.forward = patched_forward_unet_tc
-                elif p.sd_model.is_sd3 == True:
+                if p.sd_model.is_sd3:
                     MMDiTX.forward = patched_forward_mmditx_tc
-                elif not p.sd_model.is_webui_legacy_model():
+                elif p.sd_model.is_webui_legacy_model():
+                    IntegratedUNet2DConditionModel.forward = patched_forward_unet_tc
+                elif p.sd_model.is_flux:
                     IntegratedFluxTransformer2DModel.inner_forward = patched_inner_forward_flux_tc
                     IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_tc
 
@@ -262,9 +262,7 @@ def patched_forward_mmditx_fbc(
     BlockCache.skipped[index] = 0
 
     x = self.final_layer(x, c)  # (N, T, patch_size ** 2 * out_channels)
-
     x = self.unpatchify(x, hw=hw)  # (N, out_channels, H, W)
-
     return x
 
 
@@ -677,7 +675,6 @@ def patched_forward_mmditx_tc(
                 1,
             )
 
-        # x = self.forward_core_with_concat(x, c, context, skip_layers, control)
         for i, block in enumerate(self.joint_blocks):
             if i in skip_layers:
                 continue
