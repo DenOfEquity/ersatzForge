@@ -492,6 +492,7 @@ class LoadedModel:
 
         need_cpu_swap = False
         if vram_set_state == VRAMState.NO_VRAM:
+            gpu_memory_available = 0
             need_cpu_swap = True
         elif 'Autoencoder' in self.model.model.__class__.__name__ or 'CLIPVisionModelWithProjection' in self.model.model.__class__.__name__:
             # VAE must be fully on one device
