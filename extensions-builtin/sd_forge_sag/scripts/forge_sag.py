@@ -69,8 +69,7 @@ def create_blur_map(x0, attn, sigma=3.0, threshold=1.0):
     w = math.ceil(lw / ratio)
 
     if h * w != mask.size(1):
-        kohya_shrink_shape = getattr(shared, 'kohya_shrink_shape', None)
-        if kohya_shrink_shape:
+        if kohya_shrink_shape := getattr(shared, 'kohya_shrink_shape', None):
             w = kohya_shrink_shape[0]   #    works with all block numbers for kohya hrfix
             h = kohya_shrink_shape[1]
 
@@ -174,25 +173,33 @@ class SAGForForge(scripts.Script):
     def ui(self, *args, **kwargs):
         with InputAccordion(False, label=self.title()) as enabled:
             scale = gr.Slider(label='Scale', minimum=-2.0, maximum=5.0, step=0.01, value=0.5)
-            blur_sigma = gr.Slider(label='Blur Sigma', minimum=0.0, maximum=10.0, step=0.01, value=2.0)
-            threshold = gr.Slider(label='Blur mask threshold', minimum=0.0, maximum=4.0, step=0.01, value=1.0)
+            with gr.Row():
+                blur_sigma = gr.Slider(label='Blur Sigma', minimum=0.0, maximum=10.0, step=0.01, value=2.0)
+                threshold = gr.Slider(label='Blur mask threshold', minimum=0.0, maximum=4.0, step=0.01, value=1.0)
+            passes = gr.Radio(label='HiRes-Fix option', choices=['Both', 'Low res only', 'High res only'], value='Both')
 
         self.infotext_fields = [
             (enabled, lambda d: d.get("sag_enabled", False)),
             (scale,         "sag_scale"),
             (blur_sigma,    "sag_blur_sigma"),
             (threshold,     "sag_threshold"),
+            (passes,        "sag_passes"),
         ]
 
-        return enabled, scale, blur_sigma, threshold
+        return enabled, scale, blur_sigma, threshold, passes
 
     def process_before_every_sampling(self, p, *script_args, **kwargs):
-        enabled, scale, blur_sigma, threshold = script_args
+        enabled, scale, blur_sigma, threshold, passes = script_args
+
+        if passes == 'Low res only' and p.is_hr_pass:
+            return
+        if passes == 'High res only' and not p.is_hr_pass:
+            return
 
         if enabled:
-            #   not for FLux
-            if not shared.sd_model.is_webui_legacy_model():     #   ideally would be is_flux
-                print("Self Attention Guidance is not compatible with Flux")
+            #   not for FLux/Chroma(DCT)/Wan/Cosmos
+            if not shared.sd_model.is_webui_legacy_model() or shared.sd_model.is_sd3:
+                print("Self Attention Guidance is not compatible with this model")
                 return
             #   Self Attention Guidance errors if CFG is 1
             if not p.is_hr_pass and p.cfg_scale <= 1:
@@ -209,7 +216,7 @@ class SAGForForge(scripts.Script):
         return
 
     def process(self, p, *script_args, **kwargs):
-        enabled, scale, blur_sigma, threshold = script_args
+        enabled, scale, blur_sigma, threshold, passes = script_args
 
         if enabled:
             p.extra_generation_params.update(dict(
@@ -218,5 +225,9 @@ class SAGForForge(scripts.Script):
                 sag_blur_sigma  = blur_sigma,
                 sag_threshold   = threshold,
             ))
+            if passes != 'Both':
+                p.extra_generation_params.update(dict(
+                    sag_passes  = passes,
+                ))
 
         return

@@ -24,7 +24,7 @@ class PerturbedAttentionGuidanceForForge(scripts.Script):
             with gr.Row():
                 start_step = gr.Slider(label='Start step', minimum=0.0, maximum=1.0, step=0.01, value=0.15)
                 end_step = gr.Slider(label='End step', minimum=0.0, maximum=1.0, step=0.01, value=0.6)
-
+            passes = gr.Radio(label='HiRes-Fix option', choices=['Both', 'Low res only', 'High res only'], value='Both')
 
         self.infotext_fields = [
             (enabled, lambda d: d.get("pagi_enabled", False)),
@@ -32,12 +32,18 @@ class PerturbedAttentionGuidanceForForge(scripts.Script):
             (attenuation,   "pagi_attenuation"),
             (start_step,    "pagi_start_step"),
             (end_step,      "pagi_end_step"),
+            (passes,        "pagi_passes"),
         ]
 
-        return enabled, scale, attenuation, start_step, end_step
+        return enabled, scale, attenuation, start_step, end_step, passes
 
     def process_before_every_sampling(self, p, *script_args, **kwargs):
-        enabled, scale, attenuation, start_step, end_step = script_args
+        enabled, scale, attenuation, start_step, end_step, passes = script_args
+
+        if passes == 'Low res only' and p.is_hr_pass:
+            return
+        if passes == 'High res only' and not p.is_hr_pass:
+            return
 
         if enabled:
             PerturbedAttentionGuidanceForForge.scale = scale
@@ -78,7 +84,7 @@ class PerturbedAttentionGuidanceForForge(scripts.Script):
         return
 
     def process(self, p, *script_args, **kwargs):
-        enabled, scale, attenuation, start_step, end_step = script_args
+        enabled, scale, attenuation, start_step, end_step, passes = script_args
 
         if enabled:
             p.extra_generation_params.update(dict(
@@ -88,5 +94,9 @@ class PerturbedAttentionGuidanceForForge(scripts.Script):
                 pagi_start_step  = start_step,
                 pagi_end_step    = end_step,
             ))
+            if passes != 'Both':
+                p.extra_generation_params.update(dict(
+                    pagi_passes  = passes,
+                ))
 
         return
