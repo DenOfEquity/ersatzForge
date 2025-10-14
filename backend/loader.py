@@ -701,6 +701,10 @@ def forge_loader(sd, additional_state_dicts=None):
         else:
             huggingface_components['scheduler'].config.prediction_type = prediction_types.get(estimated_config.model_type.name, huggingface_components['scheduler'].config.prediction_type)
 
+    # SDXL flow models
+    flow_names = ['bigaspv25', 'nyaflow']  # use lowercase, could be a Setting for a list of matching names but not enough models to bother
+    backend.args.dynamic_args.update({'SDXL_flow' : True if any([name in sd.lower() for name in flow_names]) else False})
+
     for M in possible_models:
         if any(isinstance(estimated_config, x) for x in M.matched_guesses):
             return M(estimated_config=estimated_config, huggingface_components=huggingface_components)

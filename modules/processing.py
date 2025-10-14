@@ -28,6 +28,7 @@ from modules_forge.utils import apply_circular_forge
 from modules_forge import main_entry
 from backend import memory_management
 from backend.modules.k_prediction import rescale_zero_terminal_snr_sigmas
+from backend.args import dynamic_args
 
 from modules import latent_upscale_nn
 
@@ -434,6 +435,8 @@ class StableDiffusionProcessing:
         caches is a list with items described above.
         """
 
+        shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
+
         if opts.use_old_scheduling:
             old_schedules = prompt_parser.get_learned_conditioning_prompt_schedules(required_prompts, steps, hires_steps, False)
             new_schedules = prompt_parser.get_learned_conditioning_prompt_schedules(required_prompts, steps, hires_steps, True)
@@ -451,7 +454,6 @@ class StableDiffusionProcessing:
         cache = caches[0]
 
         with devices.autocast():
-            shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
 
             cache[1] = function(shared.sd_model, required_prompts, steps, hires_steps, opts.use_old_scheduling)
 
@@ -480,7 +482,7 @@ class StableDiffusionProcessing:
 
         if self.cfg_scale == 1:
             self.uc = None
-            print('Skipping unconditional conditioning when CFG = 1. Negative Prompts are ignored.')
+            # print('Skipping unconditional conditioning when CFG = 1. Negative Prompts are ignored.')
         else:
             self.uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, negative_prompts, total_steps, [self.cached_uc], self.extra_network_data)
 
@@ -749,6 +751,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "Epsilon scaling": opts.epsilon_scaling if opts.epsilon_scaling != 1.0 else None,
         "Epsilon modulation": True if opts.epsilon_modulation and opts.epsilon_scaling != 1.0 else None,
         "Prediction scaling": opts.prediction_scaling if opts.prediction_scaling != 1.0 else None,
+        "SDXL Shift": opts.sdxl_flow_shift if dynamic_args.get('SDXL_flow', False) else None,
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
     })
     if noise_source_type == 'Perlin':
@@ -1585,7 +1588,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         if self.hr_cfg == 1:
             self.hr_uc = None
-            print('Skipping unconditional conditioning (HR pass) when CFG = 1. Negative Prompts are ignored.')
+            # print('Skipping unconditional conditioning (HR pass) when CFG = 1. Negative Prompts are ignored.')
         else:
             self.hr_uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, hr_negative_prompts, self.firstpass_steps, [self.cached_hr_uc, self.cached_uc], self.hr_extra_network_data, total_steps)
 

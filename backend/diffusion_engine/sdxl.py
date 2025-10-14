@@ -9,6 +9,7 @@ from backend.text_processing.classic_engine import ClassicTextProcessingEngine
 from backend.args import dynamic_args
 from backend import memory_management
 from backend.nn.unet import Timestep
+from backend.modules.k_prediction import PredictionDiscreteFlow
 
 import safetensors.torch as sf
 from backend import utils
@@ -35,11 +36,22 @@ class StableDiffusionXL(ForgeDiffusionEngine):
 
         vae = VAE(model=huggingface_components['vae'])
 
-        unet = UnetPatcher.from_model(
-            model=huggingface_components['unet'],
-            diffusers_scheduler=huggingface_components['scheduler'],
-            config=estimated_config
-        )
+        print (estimated_config)
+
+        if dynamic_args.get('SDXL_flow', False):  # example: bigASP2.5
+            k_predictor = PredictionDiscreteFlow(shift=opts.sdxl_flow_shift)
+            unet = UnetPatcher.from_model(
+                model=huggingface_components['unet'],
+                diffusers_scheduler= None,
+                k_predictor=k_predictor,
+                config=estimated_config
+            )
+        else:
+            unet = UnetPatcher.from_model(
+                model=huggingface_components['unet'],
+                diffusers_scheduler=huggingface_components['scheduler'],
+                config=estimated_config
+            )
 
         self.text_processing_engine_l = ClassicTextProcessingEngine(
             text_encoder=clip.cond_stage_model.clip_l,
@@ -79,6 +91,13 @@ class StableDiffusionXL(ForgeDiffusionEngine):
         self.is_sdxl = True
 
     def set_clip_skip(self, clip_skip):
+        if dynamic_args.get('SDXL_flow', False):
+            def sigma (timestep, s):
+                return s * timestep / (1 + (s - 1) * timestep)
+
+            ts = sigma((torch.arange(1, 10000 + 1, 1) / 10000), opts.sdxl_flow_shift)
+            self.forge_objects.unet.model.predictor.sigmas = ts
+
         self.text_processing_engine_l.clip_skip = clip_skip
         self.text_processing_engine_g.clip_skip = clip_skip
 
