@@ -36,8 +36,6 @@ class StableDiffusionXL(ForgeDiffusionEngine):
 
         vae = VAE(model=huggingface_components['vae'])
 
-        print (estimated_config)
-
         if dynamic_args.get('SDXL_flow', False):  # example: bigASP2.5
             k_predictor = PredictionDiscreteFlow(shift=opts.sdxl_flow_shift)
             unet = UnetPatcher.from_model(
