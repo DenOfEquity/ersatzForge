@@ -444,7 +444,8 @@ def forge_model_reload():
     model_data.sd_model.extra_generation_params = {}
     model_data.sd_model.comments = []
     model_data.sd_model.sd_checkpoint_info = checkpoint_info
-    model_data.sd_model.filename = checkpoint_info.filename
+    model_data.sd_model.sd_modules = model_data.forge_loading_parameters.get('additional_modules', [])
+    # model_data.sd_model.filename = checkpoint_info.filename # not used anywhere?
     model_data.sd_model.sd_model_hash = checkpoint_info.calculate_shorthash()
     timer.record("calculate hash")
 

@@ -156,8 +156,7 @@ class StableDiffusionProcessing:
     script_args_value: list = field(default=None, init=False)
     scripts_setup_complete: bool = field(default=False, init=False)
 
-    cached_uc = [None, None, None]
-    cached_c = [None, None, None]
+    cond_cache = []
 
     comments: dict = None
     sampler: sd_samplers_common.Sampler | None = field(default=None, init=False)
@@ -200,10 +199,7 @@ class StableDiffusionProcessing:
     # pixels_after_sampling = []     # what is this?
 
     def clear_prompt_cache(self):
-        self.cached_c = [None, None, None]
-        self.cached_uc = [None, None, None]
-        StableDiffusionProcessing.cached_c = [None, None, None]
-        StableDiffusionProcessing.cached_uc = [None, None, None]
+        self.cond_cache = []
 
     def __post_init__(self):
         if self.sampler_index is not None:
@@ -228,8 +224,7 @@ class StableDiffusionProcessing:
             self.seed_resize_from_h = 0
             self.seed_resize_from_w = 0
 
-        self.cached_uc = StableDiffusionProcessing.cached_uc
-        self.cached_c = StableDiffusionProcessing.cached_c
+        # self.cond_cache = StableDiffusionProcessing.cond_cache
 
         self.extra_result_images = []
         # self.latents_after_sampling = []
@@ -370,8 +365,7 @@ class StableDiffusionProcessing:
         self.c = None
         self.uc = None
         if not opts.persistent_cond_cache:
-            StableDiffusionProcessing.cached_c = [None, None]
-            StableDiffusionProcessing.cached_uc = [None, None]
+            self.cond_cache = []
 
     def get_token_merging_ratio(self, for_hr=False):
         if for_hr:
@@ -413,6 +407,7 @@ class StableDiffusionProcessing:
             use_old_scheduling,
             opts.CLIP_stop_at_last_layers,
             shared.sd_model.sd_checkpoint_info,
+            shared.sd_model.sd_modules,
             extra_network_data,
             opts.sdxl_crop_left,
             opts.sdxl_crop_top,
@@ -422,7 +417,7 @@ class StableDiffusionProcessing:
             opts.use_ELLA
         )
 
-    def get_conds_with_caching(self, function, required_prompts, steps, caches, extra_network_data, hires_steps=None):
+    def get_conds_with_caching(self, function, required_prompts, steps, extra_network_data, hires_steps=None):
         """
         Returns the result of calling function(shared.sd_model, required_prompts, steps)
         using a cache to store the result if the same arguments have been used before.
@@ -432,7 +427,7 @@ class StableDiffusionProcessing:
         have been used before. The second element is where the previously
         computed result is stored.
 
-        caches is a list with items described above.
+        self.cond_cache is a list with items described above.
         """
 
         shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
@@ -445,31 +440,27 @@ class StableDiffusionProcessing:
 
         cached_params = self.cached_params(required_prompts, steps, extra_network_data, hires_steps, opts.use_old_scheduling)
 
-        for cache in caches:
-            if cache[0] is not None and cached_params == cache[0]:
-                if len(cache) > 2:
-                    shared.sd_model.extra_generation_params.update(cache[2])
+        for cache in self.cond_cache:
+            if cached_params == cache[0]:
+                shared.sd_model.extra_generation_params.update(cache[2])
                 return cache[1]
 
-        cache = caches[0]
-
+        new_cache = [cached_params, None, None]
         with devices.autocast():
-
-            cache[1] = function(shared.sd_model, required_prompts, steps, hires_steps, opts.use_old_scheduling)
+            new_cache[1] = function(shared.sd_model, required_prompts, steps, hires_steps, opts.use_old_scheduling)
 
             import backend.text_processing.emphasis
 
             last_extra_generation_params = backend.text_processing.emphasis.last_extra_generation_params.copy()
-
             shared.sd_model.extra_generation_params.update(last_extra_generation_params)
-
-            if len(cache) > 2:
-                cache[2] = last_extra_generation_params
-
+            new_cache[2] = last_extra_generation_params
             backend.text_processing.emphasis.last_extra_generation_params = {}
 
-        cache[0] = cached_params
-        return cache[1]
+        self.cond_cache.append(new_cache)
+        if len(self.cond_cache) > 4:
+            self.cond_cache.pop(0)
+
+        return new_cache[1]
 
     def setup_conds(self):
         prompts = prompt_parser.SdConditioning(self.prompts, width=self.width, height=self.height, distilled_cfg_scale=self.distilled_cfg_scale)
@@ -484,9 +475,9 @@ class StableDiffusionProcessing:
             self.uc = None
             # print('Skipping unconditional conditioning when CFG = 1. Negative Prompts are ignored.')
         else:
-            self.uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, negative_prompts, total_steps, [self.cached_uc], self.extra_network_data)
+            self.uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, negative_prompts, total_steps, self.extra_network_data)
 
-        self.c = self.get_conds_with_caching(prompt_parser.get_multicond_learned_conditioning, prompts, total_steps, [self.cached_c], self.extra_network_data)
+        self.c = self.get_conds_with_caching(prompt_parser.get_multicond_learned_conditioning, prompts, total_steps, self.extra_network_data)
 
     def get_conds(self):
         return self.c, self.uc
@@ -709,6 +700,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         generation_params['2M SDE variant'] = opts.dpmpp_2m_sde_mode
     elif p.sampler_name == 'LCM':
         generation_params['LCM order'] = opts.lcm_order
+        generation_params['LCM noise'] = opts.lcm_noise if opts.lcm_noise < 1.0 else None
     elif p.sampler_name == 'UniPC':
         generation_params['UniPC variant'] = opts.uni_pc_variant
         generation_params['UniPC order'] = opts.uni_pc_order
@@ -796,7 +788,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
 
 need_global_unload = False
 
-def manage_model_and_prompt_cache(p: StableDiffusionProcessing):
+def manage_model(p: StableDiffusionProcessing):
     global need_global_unload
 
     p.sd_model = None # will be re-set by loader
@@ -816,9 +808,6 @@ def manage_model_and_prompt_cache(p: StableDiffusionProcessing):
 
     if need_global_unload and not just_reloaded:
         memory_management.unload_all_models()
-
-    if need_global_unload:
-        p.clear_prompt_cache()
 
     need_global_unload = False
 
@@ -844,7 +833,7 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
             # avoid model load from hiresfix quickbutton, as it could be redundant
             pass
         else:
-            manage_model_and_prompt_cache(p)
+            manage_model(p)
 
         # backwards compatibility, fix sampler and scheduler if invalid
         sd_samplers.fix_p_invalid_sampler_and_scheduler(p)
@@ -1202,9 +1191,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
     hr_distilled_cfg: float = 3.5
     force_task_id: str = None
 
-    cached_hr_uc = [None, None, None]
-    cached_hr_c = [None, None, None]
-
     hr_checkpoint_info: dict = field(default=None, init=False)
     hr_upscale_to_x: int = field(default=0, init=False)
     hr_upscale_to_y: int = field(default=0, init=False)
@@ -1228,9 +1214,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             self.hr_upscale_to_y = self.height
             self.width = self.firstphase_width
             self.height = self.firstphase_height
-
-        self.cached_hr_uc = StableDiffusionProcessingTxt2Img.cached_hr_uc
-        self.cached_hr_c = StableDiffusionProcessingTxt2Img.cached_hr_c
 
     def calculate_target_resolution(self):
         if self.hr_resize_x == 0 and self.hr_resize_y == 0:
@@ -1542,9 +1525,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         super().close()
         self.hr_c = None
         self.hr_uc = None
-        if not opts.persistent_cond_cache:
-            StableDiffusionProcessingTxt2Img.cached_hr_uc = [None, None]
-            StableDiffusionProcessingTxt2Img.cached_hr_c = [None, None]
 
     def setup_prompts(self):
         super().setup_prompts()
@@ -1590,9 +1570,9 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             self.hr_uc = None
             # print('Skipping unconditional conditioning (HR pass) when CFG = 1. Negative Prompts are ignored.')
         else:
-            self.hr_uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, hr_negative_prompts, self.firstpass_steps, [self.cached_hr_uc, self.cached_uc], self.hr_extra_network_data, total_steps)
+            self.hr_uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, hr_negative_prompts, self.firstpass_steps, self.hr_extra_network_data, total_steps)
 
-        self.hr_c = self.get_conds_with_caching(prompt_parser.get_multicond_learned_conditioning, hr_prompts, self.firstpass_steps, [self.cached_hr_c, self.cached_c], self.hr_extra_network_data, total_steps)
+        self.hr_c = self.get_conds_with_caching(prompt_parser.get_multicond_learned_conditioning, hr_prompts, self.firstpass_steps, self.hr_extra_network_data, total_steps)
 
 
     def setup_conds(self):
