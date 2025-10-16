@@ -22,12 +22,14 @@ class LCMCompVisDenoiser(DiscreteEpsDDPMDenoiser):
         self.predictor = model.forge_objects.unet.model.predictor
 
 
+@torch.no_grad()
 def sample_lcm(model, x, sigmas, extra_args=None, callback=None, disable=None, noise_sampler=None):
     extra_args = {} if extra_args is None else extra_args
     noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
     s_in = x.new_ones([x.shape[0]])
 
     order = shared.opts.lcm_order
+    scale = shared.opts.lcm_noise
 
     previous1 = None
     previous2 = None
@@ -62,7 +64,10 @@ def sample_lcm(model, x, sigmas, extra_args=None, callback=None, disable=None, n
         if order >= 2 and i > 0: previous1 = x.clone()
 
         if sigmas[i + 1] > 0:
-            x.addcmul_(sigmas[i + 1], noise_sampler(sigmas[i], sigmas[i + 1]))
+            noise_scaling = sigmas[i + 1]
+            if scale < 1.0 and noise_scaling.item() > 1.0:
+                noise_scaling **= scale
+            x.addcmul_(noise_scaling, noise_sampler(sigmas[i], sigmas[i + 1]))
     return x
 
 

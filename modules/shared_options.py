@@ -355,6 +355,7 @@ options_templates.update(options_section(('sampler-params', "Sampler parameters"
     'dpmpp_2m_sde_mode': OptionInfo("midpoint", "DPM++ 2M SDE variant", gr.Radio, {"choices": ["heun", "midpoint"]}, infotext="2M SDE variant"),
 
     'lcm_order': OptionInfo(1, "LCM order", gr.Slider, {"minimum": 1, "maximum": 5, "step": 1}, infotext='LCM order').info("limited by number of sampling steps"),
+    'lcm_noise': OptionInfo(1.0, "LCM noise scaling", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext='LCM noise').info("applies to sigmas > 1.0; this is a power scaling, reducing the noise added at the end of each sampling step"),
 
     'uni_pc_variant': OptionInfo("bh1", "UniPC variant", gr.Radio, {"choices": ["bh1", "bh2", "vary_coeff"]}, infotext='UniPC variant'),
     'uni_pc_skip_type': OptionInfo("time_uniform", "UniPC skip type", gr.Radio, {"choices": ["time_uniform", "time_quadratic", "logSNR"]}, infotext='UniPC skip type'),
