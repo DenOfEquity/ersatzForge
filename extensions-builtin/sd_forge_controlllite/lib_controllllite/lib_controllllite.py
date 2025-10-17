@@ -205,7 +205,9 @@ class LLLiteModule(torch.nn.Module):
                     self.current_step = 0  # reset
 
         if self.cond_emb is None:
+            self.conditioning1.to(x.device, dtype=x.dtype)
             cx = self.conditioning1(self.cond_image.to(x.device, dtype=x.dtype))
+            self.conditioning1.cpu()
             if not self.is_conv2d:
                 # reshape / b,c,h,w -> b,h*w,c
                 n, c, h, w = cx.shape
@@ -221,6 +223,10 @@ class LLLiteModule(torch.nn.Module):
             else:
                 cx = cx.repeat(x.shape[0] // cx.shape[0], 1, 1)
 
+        self.down.to(x.device, dtype=x.dtype)
+        self.mid.to(x.device, dtype=x.dtype)
+        self.up.to(x.device, dtype=x.dtype)
+
         try:
             cx = torch.cat([cx, self.down(x)], dim=1 if self.is_conv2d else 2)
         except:
@@ -231,6 +237,11 @@ class LLLiteModule(torch.nn.Module):
 
         cx = self.mid(cx)
         cx = self.up(cx)
+
+        self.down.cpu()
+        self.mid.cpu()
+        self.up.cpu()
+
         return cx * self.multiplier
 
 
