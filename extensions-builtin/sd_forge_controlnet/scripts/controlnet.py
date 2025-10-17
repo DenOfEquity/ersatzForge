@@ -25,7 +25,7 @@ from lib_controlnet.api import controlnet_api
 
 import numpy as np
 import hashlib
-# import functools
+import functools
 
 from PIL import Image
 from modules_forge.shared import try_load_supported_control_model
@@ -35,7 +35,7 @@ from modules_forge.supported_controlnet import ControlModelPatcher
 global_state.update_controlnet_filenames()
 
 
-# @functools.lru_cache(maxsize=shared.opts.data.get("control_net_model_cache_size", 5))
+@functools.lru_cache(maxsize=1)
 def cached_controlnet_loader(filename):
     return try_load_supported_control_model(filename)
 
