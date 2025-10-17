@@ -398,24 +398,22 @@ class StableDiffusionProcessing:
     def cached_params(self, required_prompts, steps, extra_network_data, hires_steps=None, use_old_scheduling=False):
         """Returns parameters that invalidate the cond cache if changed"""
 
-        return (
-            required_prompts,
+        return hash((
+            str(required_prompts),
             self.distilled_cfg_scale,
             self.hr_distilled_cfg,
             steps,
             hires_steps,
             use_old_scheduling,
             opts.CLIP_stop_at_last_layers,
-            shared.sd_model.sd_checkpoint_info,
-            shared.sd_model.sd_modules,
-            extra_network_data,
+            str(shared.sd_model.sd_checkpoint_info),
+            str(opts.forge_additional_modules),
+            str(extra_network_data),
             opts.sdxl_crop_left,
             opts.sdxl_crop_top,
-            # self.width,
-            # self.height,
             opts.emphasis,
             opts.use_ELLA
-        )
+        ))
 
     def get_conds_with_caching(self, function, required_prompts, steps, extra_network_data, hires_steps=None):
         """

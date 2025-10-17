@@ -406,7 +406,7 @@ def apply_token_merging(sd_model, token_merging_ratio):
 
 @torch.inference_mode()
 def forge_model_reload():
-    current_hash = str(model_data.forge_loading_parameters)
+    current_hash = hash(str(model_data.forge_loading_parameters))
 
     if model_data.forge_hash == current_hash and model_data.sd_model is not None:
         return model_data.sd_model, False
@@ -444,7 +444,6 @@ def forge_model_reload():
     model_data.sd_model.extra_generation_params = {}
     model_data.sd_model.comments = []
     model_data.sd_model.sd_checkpoint_info = checkpoint_info
-    model_data.sd_model.sd_modules = model_data.forge_loading_parameters.get('additional_modules', [])
     # model_data.sd_model.filename = checkpoint_info.filename # not used anywhere?
     model_data.sd_model.sd_model_hash = checkpoint_info.calculate_shorthash()
     timer.record("calculate hash")
