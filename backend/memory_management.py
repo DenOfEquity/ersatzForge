@@ -461,7 +461,7 @@ class LoadedModel:
         self.inclusive_memory = 0
         self.exclusive_memory = 0
 
-    def model_load(self, memory_for_inference=0):
+    def model_load(self, memory_for_inference=0, keep_loaded=[]):
         global vram_state
         patch_model_to = None
 
@@ -496,7 +496,7 @@ class LoadedModel:
             need_cpu_swap = True
         elif 'Autoencoder' in self.model.model.__class__.__name__ or 'CLIPVisionModelWithProjection' in self.model.model.__class__.__name__:
             # VAE must be fully on one device
-            free_memory(memory_for_inference, self.device, keep_loaded=[self])
+            free_memory(memory_for_inference, self.device, keep_loaded=keep_loaded)
             need_cpu_swap = False
         elif vram_set_state in [VRAMState.VERY_LOW_VRAM, VRAMState.LOW_VRAM, VRAMState.NORMAL_VRAM]:
             model_require = self.exclusive_memory
@@ -518,17 +518,17 @@ class LoadedModel:
             else:
                 total_required_memory = memory_for_inference + extra_memory + self.exclusive_memory + self.inclusive_memory
 
-            free_memory(total_required_memory, self.device, keep_loaded=[self])
+            free_memory(total_required_memory, self.device, keep_loaded=keep_loaded)
             gpu_memory_available = get_free_memory(torch_dev) - memory_for_inference - extra_memory + previously_loaded
             if need_cpu_swap == False:
                 need_cpu_swap = (gpu_memory_available < model_require + previously_loaded)
         else:
-            free_memory(memory_for_inference, self.device, keep_loaded=[self])
+            free_memory(memory_for_inference, self.device, keep_loaded=keep_loaded)
 
 
         if not need_cpu_swap:
             self.real_model = self.model.forge_patch_model(self.device)
-            print(f'loaded to {str(self.device)}.')
+            print(f"Loaded to {str(self.device)}. ", end="")
         else:
             gpu_modules, gpu_modules_only_extras, cpu_modules = build_module_profile(self.real_model, gpu_memory_available)
             pin_memory = PIN_SHARED_MEMORY and is_device_cpu(self.model.offload_device)
@@ -567,7 +567,7 @@ class LoadedModel:
 
             swap_flag = 'Shared' if PIN_SHARED_MEMORY else 'CPU'
             method_flag = 'asynchronous' if stream.should_use_stream() else 'blocked'
-            print(f"{swap_flag} Swap Loaded ({method_flag} method): {swap_counter / (1024 * 1024):.2f} MB, GPU Loaded: {mem_counter / (1024 * 1024):.2f} MB")
+            print(f"{swap_flag} Swap Loaded ({method_flag} method): {swap_counter / (1024 * 1024):.2f} MB, GPU Loaded: {mem_counter / (1024 * 1024):.2f} MB. ", end="")
 
             self.model_accelerated = True
 
@@ -615,37 +615,37 @@ def unload_model_clones(model):
 
 
 def free_memory(memory_required, device, keep_loaded=[]):
-    for i in range(len(current_loaded_models) - 1, -1, -1):
-        if sys.getrefcount(current_loaded_models[i].model) <= 2: # one reference is the list, another is the check
-            # current_loaded_models[i].model_unload()     # offloads, including patches
-            current_loaded_models[i].model = None
-            current_loaded_models[i].real_model = None
-            current_loaded_models.pop(i)
-
     free_memory = get_free_memory(device)
-    if free_memory > memory_required:
-        return
-
-    if memory_required == 1e30:
-        print(f"[Unload] Trying to free all memory for {device} with {len(keep_loaded)} models keep loaded ... ", end="")
+    if keep_loaded == []:
+        keep_loaded_names = "None"
     else:
-        print(f"[Unload] Trying to free {memory_required / (1024 * 1024):.2f} MB for {device} with {len(keep_loaded)} models keep loaded ... ", end="")
-
+        keep_loaded_names = ", ".join([x.model.model.__class__.__name__ for x in keep_loaded])
     unloaded_model = False
-    offload_everything = ALWAYS_VRAM_OFFLOAD or vram_state == VRAMState.NO_VRAM
-    for i in range(len(current_loaded_models) - 1, -1, -1):
-        if not offload_everything:
-            free_memory = get_free_memory(device)
-            print(f"Current free memory is {free_memory / (1024 * 1024):.2f} MB ... ", end="")
-            if free_memory > memory_required:
-                break
-
-        shift_model = current_loaded_models[i]
-        if shift_model not in keep_loaded:
-            print(f"Unload model {current_loaded_models[i].model.model.__class__.__name__} ", end="")
-            current_loaded_models.pop(i).model_unload()
-            unloaded_model = True
-    print('Done.')
+    offload_everything = memory_required == 1e30 or ALWAYS_VRAM_OFFLOAD or vram_state == VRAMState.NO_VRAM
+    if offload_everything:
+        print(f"[Keep loaded: {keep_loaded_names}] Trying to free all memory for {device} ... ", end="")
+        i = len(current_loaded_models) - 1
+        while i >= 0:
+            if current_loaded_models[i] not in keep_loaded:
+                print(f"unload {current_loaded_models[i].model.model.__class__.__name__} ", end="")
+                current_loaded_models.pop(i).model_unload()
+                unloaded_model = True
+            i -= 1
+        free_memory = get_free_memory(device)
+        print(f"Current free memory is {free_memory / (1024 * 1024):.2f} MB ... Done. ", end="")
+    elif free_memory < memory_required:
+        print(f"[Keep loaded: {keep_loaded_names}] Trying to free {memory_required / (1024 * 1024):.2f} MB for {device} ... ", end="")
+        i = len(current_loaded_models) - 1
+        while i >= 0 and free_memory < memory_required:
+            if current_loaded_models[i] not in keep_loaded:
+                print(f"Current free memory is {free_memory / (1024 * 1024):.2f} MB - unload {current_loaded_models[i].model.model.__class__.__name__} ... ", end="")
+                current_loaded_models.pop(i).model_unload()
+                unloaded_model = True
+                free_memory = get_free_memory(device)
+            i -= 1
+        print("Done. ", end="")
+    else:
+        return
 
     if unloaded_model:
         soft_empty_cache()
@@ -677,9 +677,10 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
         # LoRA changes - must offload/reload; may be possible to patch/refresh inline but didn't seem to work well
         matched = False
         for i in range(len(current_loaded_models)):
-            if (x.is_clone(current_loaded_models[i].model) and getattr(x, 'lora_patches') == getattr(current_loaded_models[i].model, 'lora_patches')) \
+            # if (x.is_clone(current_loaded_models[i].model) and getattr(x, 'lora_patches') == getattr(current_loaded_models[i].model, 'lora_patches')) \
+            if (loaded_model.model.is_clone(current_loaded_models[i].model) and getattr(loaded_model.model, 'lora_patches') == getattr(current_loaded_models[i].model, 'lora_patches')) \
                     or loaded_model == current_loaded_models[i]:
-                models_already_loaded.append(loaded_model)
+                models_already_loaded.append(current_loaded_models[i])
                 matched = True
                 this_online_lora = dynamic_args['online_lora'] and (len(x.lora_patches) > 0)
                 if this_online_lora:
@@ -705,8 +706,9 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
 
     for loaded_model in models_to_load:
         unload_model_clones(loaded_model.model)
-        loaded_model.model_load(memory_for_inference)
-        current_loaded_models.append(loaded_model)
+        if loaded_model.device != torch.device("cpu"):
+            loaded_model.model_load(memory_for_inference, models_to_load+models_already_loaded)
+            current_loaded_models.append(loaded_model)
 
     moving_time = time.perf_counter() - execution_start_time
     if moving_time > 0.1:
@@ -717,18 +719,6 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
 
 def load_model_gpu(model):
     return load_models_gpu([model])
-
-
-def cleanup_models():
-    to_delete = []
-    for i in range(len(current_loaded_models)):
-        if sys.getrefcount(current_loaded_models[i].model) <= 2:
-            to_delete = [i] + to_delete
-
-    for i in to_delete:
-        x = current_loaded_models.pop(i)
-        x.model_unload()
-        del x
 
 
 def dtype_size(dtype):
@@ -812,6 +802,13 @@ def text_encoder_offload_device():
         return get_torch_device()
     else:
         return torch.device("cpu")
+
+
+# def text_encoder_device():
+    # if args.always_cpu:
+        # return torch.device("cpu")
+    # else:
+        # return get_torch_device()
 
 
 def text_encoder_device():
@@ -1239,3 +1236,4 @@ def soft_empty_cache(force=False):
 
 def unload_all_models():
     free_memory(1e30, get_torch_device())
+    print ("")
