@@ -37,7 +37,7 @@ class PatchModelAddDownscale:
         else:
             m.set_model_input_block_patch(input_block_patch)
         m.set_model_output_block_patch(output_block_patch)
-        return (m,)
+        return m
 
 
 opPatchModelAddDownscale = PatchModelAddDownscale()
@@ -83,13 +83,17 @@ class KohyaHRFixForForge(scripts.Script):
 
     def process_before_every_sampling(self, p, *script_args, **kwargs):
         enabled, block_number, downscale_factor, start_percent, end_percent, downscale_after_skip, downscale_method, upscale_method, phase2 = script_args
-        block_number = int(block_number)
+
+        shared.kohya_shrink_shape = None
+        shared.kohya_shrink_shape_out = None
 
         if enabled:
             if p.is_hr_pass:
                 return
             if not (p.sd_model.is_sd1 or p.sd_model.is_sd2 or p.sd_model.is_sdxl):
                 return
+
+            block_number = int(block_number)
 
             #auto calc downscale factor based on model and width/height?
             if downscale_factor == 0.0:
@@ -108,7 +112,7 @@ class KohyaHRFixForForge(scripts.Script):
 
             unet = p.sd_model.forge_objects.unet
 
-            unet = opPatchModelAddDownscale.patch(unet, block_number, downscale_factor, start_percent, end_percent, downscale_after_skip, downscale_method, upscale_method, phase2)[0]
+            unet = opPatchModelAddDownscale.patch(unet, block_number, downscale_factor, start_percent, end_percent, downscale_after_skip, downscale_method, upscale_method, phase2)
 
             p.sd_model.forge_objects.unet = unet
         return
