@@ -1,6 +1,6 @@
-import math
 import torch
 
+from modules import shared
 
 def extra_options_to_module_prefix(extra_options):
     # extra_options = {'transformer_index': 2, 'block_index': 8, 'original_shape': [2, 4, 128, 128], 'block': ('input', 7), 'n_heads': 20, 'dim_head': 64}
@@ -25,10 +25,8 @@ def extra_options_to_module_prefix(extra_options):
     return module_pfx
 
 
-def load_control_net_lllite_patch(ctrl_sd, cond_image, multiplier, num_steps, start_percent, end_percent, model_dtype):
-    # calculate start and end step
-    start_step = math.floor(num_steps * start_percent) if start_percent > 0 else 0
-    end_step = math.floor(num_steps * end_percent) if end_percent > 0 else num_steps
+def load_control_net_lllite_patch(ctrl_sd, cond_image, multiplier, start_step, end_step, model_dtype):
+    cond_image = cond_image * 2.0 - 1.0  # 0-1 -> -1-+1
 
     # split each weights for each module
     module_weights = {}
@@ -44,7 +42,6 @@ def load_control_net_lllite_patch(ctrl_sd, cond_image, multiplier, num_steps, st
     # load each module
     modules = {}
     for module_name, weights in module_weights.items():
-        # ここの自動判定を何とかしたい
         if "conditioning1.4.weight" in weights:
             depth = 3
         elif weights["conditioning1.2.weight"].shape[-1] == 4:
@@ -60,7 +57,6 @@ def load_control_net_lllite_patch(ctrl_sd, cond_image, multiplier, num_steps, st
             cond_emb_dim=weights["conditioning1.0.weight"].shape[0] * 2,
             mlp_dim=weights["down.0.weight"].shape[0],
             multiplier=multiplier,
-            num_steps=num_steps,
             start_step=start_step,
             end_step=end_step,
             dtype=model_dtype
@@ -70,12 +66,17 @@ def load_control_net_lllite_patch(ctrl_sd, cond_image, multiplier, num_steps, st
         if len(modules) == 1:
             module.is_first = True
 
-    # cond imageをセットする
-    cond_image = cond_image.permute(0, 3, 1, 2)  # b,h,w,3 -> b,3,h,w
-    cond_image = cond_image * 2.0 - 1.0  # 0-1 -> -1-+1
 
-    for module in modules.values():
-        module.set_cond_image(cond_image)
+    with torch.inference_mode():
+        for module in modules.values():
+            module.current_step = 0
+            cx = module.conditioning1(cond_image)
+            module.cond_size = (cx.shape[-1], cx.shape[-2]) # w, h
+            if not module.is_conv2d:
+                n, c, h, w = cx.shape
+                cx = cx.view(n, c, h * w).permute(0, 2, 1)
+            module.cond_emb = cx
+
 
     class control_net_lllite_patch:
         def __init__(self, modules):
@@ -121,7 +122,6 @@ class LLLiteModule(torch.nn.Module):
         cond_emb_dim: int,
         mlp_dim: int,
         multiplier: int,
-        num_steps: int,
         start_step: int,
         end_step: int,
         dtype: torch.dtype = torch.float32
@@ -130,7 +130,6 @@ class LLLiteModule(torch.nn.Module):
         self.name = name
         self.is_conv2d = is_conv2d
         self.multiplier = multiplier
-        self.num_steps = num_steps
         self.start_step = start_step
         self.end_step = end_step
         self.is_first = False
@@ -178,42 +177,23 @@ class LLLiteModule(torch.nn.Module):
             )
 
         self.depth = depth
-        self.cond_image = None
         self.cond_emb = None
+        self.cond_size = None
         self.current_step = 0
         self.to(dtype=dtype)
 
-    # @torch.inference_mode()
-    def set_cond_image(self, cond_image):
-        self.cond_image = cond_image
-        self.cond_emb = None
-        self.current_step = 0
-
+    @torch.inference_mode()
     def forward(self, x):
-        if self.num_steps > 0:
-            if self.current_step < self.start_step:
-                self.current_step += 1
-                return torch.zeros_like(x)
-            elif self.current_step >= self.end_step:
-                self.current_step += 1
-                if self.current_step >= self.num_steps:
-                    self.current_step = 0  # reset
-                return torch.zeros_like(x)
-            else:
-                self.current_step += 1
-                if self.current_step >= self.num_steps:
-                    self.current_step = 0  # reset
+        if self.current_step < self.start_step:
+            self.current_step += 1
+            return torch.zeros_like(x)
+        elif self.current_step >= self.end_step:
+            self.current_step += 1
+            return torch.zeros_like(x)
+        else:
+            self.current_step += 1
 
-        if self.cond_emb is None:
-            self.conditioning1.to(x.device, dtype=x.dtype)
-            cx = self.conditioning1(self.cond_image.to(x.device, dtype=x.dtype))
-            self.conditioning1.cpu()
-            if not self.is_conv2d:
-                # reshape / b,c,h,w -> b,h*w,c
-                n, c, h, w = cx.shape
-                cx = cx.view(n, c, h * w).permute(0, 2, 1)
-            self.cond_emb = cx
-
+        self.cond_emb = self.cond_emb.to(x.device, dtype=x.dtype)
         cx = self.cond_emb
 
         # uncond/condでxはバッチサイズが2倍
@@ -223,24 +203,35 @@ class LLLiteModule(torch.nn.Module):
             else:
                 cx = cx.repeat(x.shape[0] // cx.shape[0], 1, 1)
 
-        self.down.to(x.device, dtype=x.dtype)
-        self.mid.to(x.device, dtype=x.dtype)
-        self.up.to(x.device, dtype=x.dtype)
+        self.down.to(x.device)
+        self.mid.to(x.device)
+        self.up.to(x.device)
 
+        dx = self.down(x)
         try:
-            cx = torch.cat([cx, self.down(x)], dim=1 if self.is_conv2d else 2)
-        except:
-            # for Kohya HighRes fix
-            resize_cx = torch.nn.functional.interpolate(cx.unsqueeze(0), (x.shape[1], cx.shape[2])).squeeze(dim=0)
-            cx = torch.cat([resize_cx, self.down(x)], dim=1 if self.is_conv2d else 2)
-            del resize_cx
+            cx = torch.cat([cx, dx], dim=1 if self.is_conv2d else 2)
+        except:  # for Kohya HighRes fix, nearest resize seems necessary for lineart
+            kohya_shrink_shape = getattr(shared, 'kohya_shrink_shape', None)
+            if kohya_shrink_shape is not None:
+                rw = kohya_shrink_shape[0]
+                rh = kohya_shrink_shape[1]
+            else:   # control-lite expects dimensions x32
+                raise ValueError("[ControlLLLite] Image size and Conditioning size do not match.")
+            
+            if self.is_conv2d:
+                resize_cx = torch.nn.functional.interpolate(cx, (rh, rw), mode='nearest-exact')
+                cx = torch.cat([resize_cx, dx], dim=1)
+                del resize_cx
+            else:
+                b, hw, c = cx.shape
+                ow, oh = self.cond_size
+                resize_cx = torch.nn.functional.interpolate(cx.movedim(1,-1).view(b, c, oh, ow), (rh, rw), mode='nearest-exact')
+                resize_cx = resize_cx.view(b, c, rh*rw).movedim(1, -1)
+                cx = torch.cat([resize_cx, dx], dim=2)
+                del resize_cx
 
         cx = self.mid(cx)
         cx = self.up(cx)
-
-        self.down.cpu()
-        self.mid.cpu()
-        self.up.cpu()
 
         return cx * self.multiplier
 
@@ -267,14 +258,18 @@ class LLLiteLoader:
     FUNCTION = "load_lllite"
     CATEGORY = "loaders"
 
-    def load_lllite(self, model, state_dict, cond_image, strength, steps, start_percent, end_percent):
-        # cond_image is b,h,w,3, 0-1
+    def load_lllite(self, model, state_dict, cond_image, strength, start_step, end_step):
+        # cond_image is b,3,h,w, 0-1, on cpu
+
+        h, w = cond_image.shape[2:]
+        if (h % 32) or (w % 32):
+            print ("[ControlLLLite] Image width and height must be multiples of 32.")
+            return model
 
         model_lllite = model.clone()
-        patch = load_control_net_lllite_patch(state_dict, cond_image, strength, steps, start_percent, end_percent,
-                                              model.model.diffusion_model.computation_dtype)
+        patch = load_control_net_lllite_patch(state_dict, cond_image, strength, start_step, end_step, model.model.diffusion_model.computation_dtype)
         if patch is not None:
             model_lllite.set_model_attn1_patch(patch)
             model_lllite.set_model_attn2_patch(patch)
 
-        return (model_lllite,)
+        return model_lllite

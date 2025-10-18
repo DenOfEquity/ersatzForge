@@ -21,15 +21,21 @@ class ControlLLLitePatcher(ControlModelPatcher):
     def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
         unet = process.sd_model.forge_objects.unet
 
+        if mask is not None:
+            cond *= mask
+
+        num_steps = process.steps
+        start_step = int(num_steps * self.start_percent)
+        end_step = int(num_steps * self.end_percent)
+
         unet = opLLLiteLoader(
             model=unet,
             state_dict=self.state_dict,
-            cond_image=cond.movedim(1, -1),
+            cond_image=cond,
             strength=self.strength,
-            steps=process.steps,
-            start_percent=self.start_percent,
-            end_percent=self.end_percent
-        )[0]
+            start_step=start_step,
+            end_step=end_step,
+        )
 
         process.sd_model.forge_objects.unet = unet
         return
