@@ -64,8 +64,7 @@ def upscale(samples, latent_ver, scale_factor):
     )
 
     model.load_state_dict(load_file(weights))
-    lt = model(samples.cpu())
+    lt = model(samples.to(torch.float32).cpu())
     del model
 
-    return lt
-
+    return lt.to(samples.device, dtype=samples.dtype)
