@@ -163,13 +163,15 @@ replace_torchsde_browinan()
 
 
 def apply_refiner(cfg_denoiser, x):
+    if refiner_applied := getattr(cfg_denoiser, 'refiner_applied', False):
+        return True
+    
     completed_ratio = cfg_denoiser.step / cfg_denoiser.total_steps
     refiner_switch_at = cfg_denoiser.p.refiner_switch_at
-    refiner_checkpoint_info = cfg_denoiser.p.refiner_checkpoint_info
-
     if refiner_switch_at is not None and completed_ratio < refiner_switch_at:
-        return False
+            return False
 
+    refiner_checkpoint_info = cfg_denoiser.p.refiner_checkpoint_info
     if refiner_checkpoint_info is None or shared.sd_model.sd_checkpoint_info == refiner_checkpoint_info:
         return False
 
@@ -185,13 +187,15 @@ def apply_refiner(cfg_denoiser, x):
         if opts.hires_fix_refiner_pass != "second pass":
             cfg_denoiser.p.extra_generation_params['Hires refiner'] = opts.hires_fix_refiner_pass
 
+    cfg_denoiser.p.extra_generation_params['Refiner'] = refiner_checkpoint_info.name
+    cfg_denoiser.p.extra_generation_params['Refiner switch at'] = refiner_switch_at
+
+    cfg_denoiser.refiner_applied = True
+
     if cfg_denoiser.p.is_hr_pass:
         use_cfg = (cfg_denoiser.p.hr_cfg > 1)
     else:
         use_cfg = (cfg_denoiser.p.cfg_scale > 1)
-
-    cfg_denoiser.p.extra_generation_params['Refiner'] = refiner_checkpoint_info.name
-    cfg_denoiser.p.extra_generation_params['Refiner switch at'] = refiner_switch_at
 
     sampling_cleanup(sd_models.model_data.get_sd_model().forge_objects.unet)
 
@@ -201,7 +205,7 @@ def apply_refiner(cfg_denoiser, x):
     if checkpoint_changed:
         try:
             main_entry.refresh_model_loading_parameters()
-            sd_models.forge_model_reload()
+            cfg_denoiser.p.sd_model, _ = sd_models.forge_model_reload()
         finally:
             main_entry.checkpoint_change(fp_checkpoint, save=False, refresh=True)
 
@@ -210,7 +214,6 @@ def apply_refiner(cfg_denoiser, x):
 
     if cfg_denoiser.p.scripts is not None:
         cfg_denoiser.p.scripts.process_before_every_sampling(cfg_denoiser.p, x=x)
-
 
     cfg_denoiser.p.setup_conds()
     cfg_denoiser.update_inner_model()

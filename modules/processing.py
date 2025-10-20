@@ -284,18 +284,18 @@ class StableDiffusionProcessing:
     def depth2img_image_conditioning(self, source_image):
         raise NotImplementedError('NotImplementedError: depth2img_image_conditioning')
 
-    def edit_image_conditioning(self, source_image):
-        conditioning_image = shared.sd_model.encode_first_stage(source_image).mode()
+    # def edit_image_conditioning(self, source_image):
+        # conditioning_image = shared.sd_model.encode_first_stage(source_image).mode()
 
-        return conditioning_image
+        # return conditioning_image
 
-    def unclip_image_conditioning(self, source_image):
-        c_adm = self.sd_model.embedder(source_image)
-        if self.sd_model.noise_augmentor is not None:
-            noise_level = 0 # TODO: Allow other noise levels?
-            c_adm, noise_level_emb = self.sd_model.noise_augmentor(c_adm, noise_level=repeat(torch.tensor([noise_level]).to(c_adm.device), '1 -> b', b=c_adm.shape[0]))
-            c_adm = torch.cat((c_adm, noise_level_emb), 1)
-        return c_adm
+    # def unclip_image_conditioning(self, source_image):
+        # c_adm = self.sd_model.embedder(source_image)
+        # if self.sd_model.noise_augmentor is not None:
+            # noise_level = 0 # TODO: Allow other noise levels?
+            # c_adm, noise_level_emb = self.sd_model.noise_augmentor(c_adm, noise_level=repeat(torch.tensor([noise_level]).to(c_adm.device), '1 -> b', b=c_adm.shape[0]))
+            # c_adm = torch.cat((c_adm, noise_level_emb), 1)
+        # return c_adm
 
     def inpainting_image_conditioning(self, source_image, latent_image, image_mask=None, round_image_mask=True):
         self.is_using_inpainting_conditioning = True
@@ -347,9 +347,6 @@ class StableDiffusionProcessing:
 
         # if self.sampler.conditioning_key == "crossattn-adm":
         #     return self.unclip_image_conditioning(source_image)
-        #
-        # if self.sampler.model_wrap.inner_model.is_sdxl_inpaint:
-        #     return self.inpainting_image_conditioning(source_image, latent_image, image_mask=image_mask)
 
         # Dummy zero conditioning if we're not using inpainting or depth model.
         return latent_image.new_zeros(latent_image.shape[0], 5, 1, 1)
@@ -395,7 +392,7 @@ class StableDiffusionProcessing:
         self.main_prompt = self.all_prompts[0]
         self.main_negative_prompt = self.all_negative_prompts[0]
 
-    def cached_params(self, required_prompts, steps, extra_network_data, hires_steps=None, use_old_scheduling=False):
+    def cached_params(self, required_prompts, steps, extra_network_data, is_negative, hires_steps=None, use_old_scheduling=False):
         """Returns parameters that invalidate the cond cache if changed"""
 
         return hash((
@@ -412,10 +409,11 @@ class StableDiffusionProcessing:
             opts.sdxl_crop_left,
             opts.sdxl_crop_top,
             opts.emphasis,
-            opts.use_ELLA
+            opts.use_ELLA,
+            is_negative
         ))
 
-    def get_conds_with_caching(self, function, required_prompts, steps, extra_network_data, hires_steps=None):
+    def get_conds_with_caching(self, function, required_prompts, steps, extra_network_data, hires_steps=None, is_negative=False):
         """
         Returns the result of calling function(shared.sd_model, required_prompts, steps)
         using a cache to store the result if the same arguments have been used before.
@@ -428,15 +426,13 @@ class StableDiffusionProcessing:
         self.cond_cache is a list with items described above.
         """
 
-        shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
-
         if opts.use_old_scheduling:
             old_schedules = prompt_parser.get_learned_conditioning_prompt_schedules(required_prompts, steps, hires_steps, False)
             new_schedules = prompt_parser.get_learned_conditioning_prompt_schedules(required_prompts, steps, hires_steps, True)
             if old_schedules != new_schedules:
                 self.extra_generation_params["Old prompt editing timelines"] = True
 
-        cached_params = self.cached_params(required_prompts, steps, extra_network_data, hires_steps, opts.use_old_scheduling)
+        cached_params = self.cached_params(required_prompts, steps, extra_network_data, is_negative, hires_steps, opts.use_old_scheduling)
 
         for cache in self.cond_cache:
             if cached_params == cache[0]:
@@ -469,11 +465,13 @@ class StableDiffusionProcessing:
         self.step_multiplier = total_steps // self.steps
         self.firstpass_steps = total_steps
 
+        shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
+
         if self.cfg_scale == 1:
             self.uc = None
             # print('Skipping unconditional conditioning when CFG = 1. Negative Prompts are ignored.')
         else:
-            self.uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, negative_prompts, total_steps, self.extra_network_data)
+            self.uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, negative_prompts, total_steps, self.extra_network_data, is_negative=True)
 
         self.c = self.get_conds_with_caching(prompt_parser.get_multicond_learned_conditioning, prompts, total_steps, self.extra_network_data)
 
@@ -792,8 +790,7 @@ def manage_model(p: StableDiffusionProcessing):
     p.sd_model = None # will be re-set by loader
     p.sd_model, just_reloaded = sd_models.forge_model_reload()
 
-    # set up 'opt_f', not all models use 8x8 latent downscale
-    # could be better in forge_model_reload(), but changing architecture in refiner or with latent upscale isn't supported anyway
+    # set up 'opt_f', not all models use 8x8 latent
     global opt_f
     if hasattr(shared.sd_model.forge_objects.vae, "downscale_ratio"):
         opt_f = int(shared.sd_model.forge_objects.vae.downscale_ratio)
@@ -806,7 +803,6 @@ def manage_model(p: StableDiffusionProcessing):
 
     if need_global_unload and not just_reloaded:
         memory_management.unload_all_models()
-
     need_global_unload = False
 
 
@@ -843,7 +839,7 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
         # restore original options
         if p.override_settings_restore_afterwards:
             set_config(stored_opts, save_config=False)
-        p.sd_model = None
+
         gc.collect()
 
     return res
@@ -922,7 +918,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
             if not getattr(p, 'txt2img_upscale', False) or p.hr_checkpoint_name is None:
                 # hiresfix quickbutton may not need reload of firstpass model
-                sd_models.forge_model_reload()  # model can be changed for example by refiner, hiresfix
+                manage_model(p)
 
             p.sd_model.forge_objects = p.sd_model.forge_objects_original.shallow_copy()
 
@@ -1388,7 +1384,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         if reload:
             try:
                 main_entry.refresh_model_loading_parameters()
-                sd_models.forge_model_reload()
+                manage_model(self)
             finally:
                 main_entry.modules_change(fp_additional_modules, save=False, refresh=False)
                 main_entry.checkpoint_change(fp_checkpoint, save=False, refresh=False)
@@ -1564,11 +1560,13 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         steps = self.hr_second_pass_steps or self.steps
         total_steps = sampler_config.total_steps(steps) if sampler_config else steps
 
+        shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
+
         if self.hr_cfg == 1:
             self.hr_uc = None
             # print('Skipping unconditional conditioning (HR pass) when CFG = 1. Negative Prompts are ignored.')
         else:
-            self.hr_uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, hr_negative_prompts, self.firstpass_steps, self.hr_extra_network_data, total_steps)
+            self.hr_uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, hr_negative_prompts, self.firstpass_steps, self.hr_extra_network_data, total_steps, is_negative=True)
 
         self.hr_c = self.get_conds_with_caching(prompt_parser.get_multicond_learned_conditioning, hr_prompts, self.firstpass_steps, self.hr_extra_network_data, total_steps)
 

@@ -86,9 +86,23 @@ class CFGDenoiser(torch.nn.Module):
             x = x * (((real_sigma ** 2.0 + real_sigma_data ** 2.0) ** 0.5)[:, None, None, None])
             sigma = real_sigma
 
+
+        this_inpaint = self.p.sd_model.is_inpaint
         if sd_samplers_common.apply_refiner(self, x):
             cond = self.sampler.sampler_extra_args['cond']
             uncond = self.sampler.sampler_extra_args['uncond']
+            if 'image_cond' in self.sampler.sampler_extra_args:
+                image_cond = self.sampler.sampler_extra_args['image_cond']
+
+            next_inpaint = self.p.sd_model.is_inpaint
+            if this_inpaint and not next_inpaint:
+                image_cond = torch.zeros((x.shape[0], 5, 1, 1), device=x.device, dtype=x.dtype)
+                self.sampler.sampler_extra_args['image_cond'] = image_cond
+            elif not this_inpaint and next_inpaint:
+                image_cond = torch.zeros((x.shape[0], 4, x.shape[2], x.shape[3]), device=x.device, dtype=x.dtype)
+                image_cond = torch.nn.functional.pad(image_cond, (0, 0, 0, 0, 1, 0), value=1.0)
+                self.sampler.sampler_extra_args['image_cond'] = image_cond
+
 
         cond_composition, cond = prompt_parser.reconstruct_multicond_batch(cond, self.step)
         uncond = prompt_parser.reconstruct_cond_batch(uncond, self.step) if uncond is not None else None

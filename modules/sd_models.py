@@ -455,5 +455,7 @@ def forge_model_reload():
     print(f"Model loaded in {timer.summary()}.")
 
     model_data.forge_hash = current_hash
+    
+    shared.sd_model = model_data.sd_model
 
     return model_data.sd_model, True
