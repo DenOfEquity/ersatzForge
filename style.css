@@ -322,15 +322,6 @@ input[type="checkbox"].input-accordion-checkbox{
     gap: 0.4em;
 }
 
-.interrogate-col{
-    min-width: 0 !important;
-    max-width: fit-content;
-    gap: 0.5em;
-}
-.interrogate-col > button{
-    flex: 1;
-}
-
 .generate-box{
     position: relative;
 }

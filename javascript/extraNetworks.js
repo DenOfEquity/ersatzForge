@@ -81,7 +81,7 @@ function setupExtraNetworksForTab(tabname) {
                 else if (UIpreset == 'sd3') {
                     if (sdversion != 'SdVersion.SD3')   visible = false;
                 }
-                else if (UIpreset == 'flux') {
+                else if (UIpreset == 'flux' || UIpreset == 'chroma') {
                     if (sdversion != 'SdVersion.Flux')  visible = false;
                 }
                 

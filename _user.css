@@ -30,7 +30,6 @@
 
 #quicksettings > div.module_selection div.wrap-inner {
   max-width: 18em;
-  text-overflow: ellipsis;
   white-space: nowrap;
   overflow-x: auto;
   flex-wrap: nowrap;

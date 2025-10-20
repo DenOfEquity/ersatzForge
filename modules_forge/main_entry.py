@@ -48,7 +48,7 @@ def bind_to_opts(comp, k, save=False, callback=None):
             callback()
         return
 
-    comp.change(on_change, inputs=[comp], queue=False, show_progress=False)
+    comp.change(on_change, inputs=[comp], show_progress=False)
     return
 
 
@@ -120,8 +120,8 @@ def make_checkpoint_manager_ui():
         if len(sd_models.checkpoints_list) > 0:
             shared.opts.set('sd_model_checkpoint', next(iter(sd_models.checkpoints_list.values())).name)
 
-    ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value=lambda: shared.opts.forge_preset, 
-                                  choices=['sd', 'xl', 'sd3', 'flux', 'all'], scale=0, filterable=False)
+    ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value='-', 
+                                  choices=['sd', 'xl', 'sd3', 'flux', 'chroma', 'all'], scale=0, filterable=False)#lambda: shared.opts.forge_preset,
 
     ui_checkpoint = gr.Dropdown(
         value=lambda: shared.opts.sd_model_checkpoint,
@@ -151,7 +151,6 @@ def make_checkpoint_manager_ui():
         inputs=None,
         outputs=[ui_checkpoint, ui_vae, ui_txt2img_hr_checkpoint, ui_txt2img_hr_vae],
         show_progress=False,
-        queue=False
     )
 
     ui_forge_unet_storage_dtype_options = gr.Dropdown(label="Diffusion in Low Bits", value=lambda: shared.opts.forge_unet_storage_dtype, choices=list(forge_unet_storage_dtype_options.keys()), filterable=False)
@@ -163,16 +162,16 @@ def make_checkpoint_manager_ui():
 
     mem_comps = [ui_forge_inference_memory, ui_forge_swap]
 
-    ui_forge_inference_memory.change(ui_refresh_memory_management_settings, inputs=mem_comps, queue=False, show_progress=False)
-    ui_forge_swap.change(ui_refresh_memory_management_settings, inputs=mem_comps, queue=False, show_progress=False)
+    ui_forge_inference_memory.change(ui_refresh_memory_management_settings, inputs=mem_comps, show_progress=False)
+    ui_forge_swap.change(ui_refresh_memory_management_settings, inputs=mem_comps, show_progress=False)
 
-    Context.root_block.load(ui_refresh_memory_management_settings, inputs=mem_comps, queue=False, show_progress=False)
+    Context.root_block.load(ui_refresh_memory_management_settings, inputs=mem_comps, show_progress=False)
 
     ui_clip_skip = gr.Number(label="Clip skip", value=lambda: shared.opts.CLIP_stop_at_last_layers, minimum=1, maximum=12, step=1, scale=0)
     bind_to_opts(ui_clip_skip, 'CLIP_stop_at_last_layers', save=True)
 
     ui_checkpoint.change(checkpoint_change_ui, inputs=[ui_checkpoint, ui_vae], outputs=[ui_vae], show_progress=False)
-    ui_vae.change(modules_change, inputs=[ui_vae], queue=False, show_progress=False)
+    ui_vae.change(modules_change, inputs=[ui_vae], show_progress=False)
 
     return
 
@@ -196,11 +195,11 @@ def refresh_memory_management_settings(async_loading="Queue", pin_shared_memory=
     memory_management.extra_inference_memory = inference_memory * 1024 * 1024  # Convert MB to bytes
     memory_management.PIN_SHARED_MEMORY = pin_shared_memory == 'Shared'
 
-    log_dict = dict(
-        stream=stream.should_use_stream(),
-        inference_memory=memory_management.extra_inference_memory / (1024 * 1024),
-        pin_shared_memory=memory_management.PIN_SHARED_MEMORY
-    )
+    # log_dict = dict(
+        # stream=stream.should_use_stream(),
+        # inference_memory=memory_management.extra_inference_memory / (1024 * 1024),
+        # pin_shared_memory=memory_management.PIN_SHARED_MEMORY
+    # )
 
     # print(f'Environment vars changed: {log_dict}')
 
@@ -236,7 +235,6 @@ def refresh_model_loading_parameters():
 
     print(f'Model selected: {sd_models.model_data.forge_loading_parameters}')
     print(f'Using online LoRAs in FP16: {lora_fp16}')
-    processing.need_global_unload = True
 
     return
 
@@ -282,7 +280,6 @@ def checkpoint_change(ckpt_name:str, save=True, refresh=True):
     if new_ckpt_info == current_ckpt_info:
         return False
 
-# TODO: check are save and refresh always the same? search repo
     shared.opts.set('sd_model_checkpoint', ckpt_name)
 
     if save:
@@ -359,10 +356,11 @@ def forge_main_entry():
         ui_txt2img_hr_distilled_cfg,
     ]
 
-    ui_forge_preset.change(on_preset_change, inputs=[ui_forge_preset], outputs=output_targets, queue=False, show_progress=False).then(
-                          js="clickLoraRefresh", fn=None, queue=False, show_progress=False)
+    ui_forge_preset.change(on_preset_change, inputs=[ui_forge_preset], outputs=output_targets, show_progress=False).then(
+                          js="clickLoraRefresh", fn=None, show_progress=False)
 
-    Context.root_block.load(on_preset_change, inputs=None, outputs=output_targets, queue=True, show_progress=False)
+# not setting on startup
+#    Context.root_block.load(on_preset_change, inputs=None, outputs=output_targets, show_progress=False)
 
     refresh_model_loading_parameters()
     return
@@ -425,24 +423,25 @@ def on_preset_change(preset=None):
         model_mem = getattr(shared.opts, f"{preset}_GPU_MB", 0)
         if model_mem < 0 or model_mem > total_vram:
             model_mem = 0
+        p = "flux" if preset == "chroma" else preset
         return [
-            gr.update(value=getattr(shared.opts, f"{preset}_vae_te", [""])),
-            gr.update(visible=(preset != "flux")),                                                          # ui_clip_skip
-            gr.update(value=getattr(shared.opts, f"{preset}_unet_dtype", "Automatic")),
+            gr.update(value=getattr(shared.opts, f"{p}_vae_te", [""])),
+            gr.update(visible=(p != "flux")),                                                          # ui_clip_skip
+            gr.update(value=getattr(shared.opts, f"{p}_unet_dtype", "Automatic")),
             gr.update(value=model_mem),
-            gr.update(value=getattr(shared.opts, f"{preset}_t2i_width", 512)),
-            gr.update(value=getattr(shared.opts, f"{preset}_i2i_width", 512)),
-            gr.update(value=getattr(shared.opts, f"{preset}_t2i_height", 640)),
-            gr.update(value=getattr(shared.opts, f"{preset}_i2i_height", 512)),
-            gr.update(value=getattr(shared.opts, f"{preset}_t2i_cfg", 1)),
-            gr.update(value=getattr(shared.opts, f"{preset}_i2i_cfg", 1)),
+            gr.update(value=getattr(shared.opts, f"{p}_t2i_width", 512)),
+            gr.update(value=getattr(shared.opts, f"{p}_i2i_width", 512)),
+            gr.update(value=getattr(shared.opts, f"{p}_t2i_height", 640)),
+            gr.update(value=getattr(shared.opts, f"{p}_i2i_height", 512)),
+            gr.update(value=getattr(shared.opts, f"{p}_t2i_cfg", 1)),
+            gr.update(value=getattr(shared.opts, f"{p}_i2i_cfg", 1)),
             gr.update(visible=(preset == "flux"), value=getattr(shared.opts, "flux_t2i_d_cfg", 3.5)),       # ui_txt2img_distilled_cfg
             gr.update(visible=(preset == "flux"), value=getattr(shared.opts, "flux_i2i_d_cfg", 3.5)),       # ui_img2img_distilled_cfg
-            gr.update(value=getattr(shared.opts, f"{preset}_t2i_sampler", "Euler")),
-            gr.update(value=getattr(shared.opts, f"{preset}_i2i_sampler", "Euler")),
-            gr.update(value=getattr(shared.opts, f"{preset}_t2i_scheduler", "Simple")),
-            gr.update(value=getattr(shared.opts, f"{preset}_i2i_scheduler", "Simple")),
-            gr.update(value=getattr(shared.opts, f"{preset}_t2i_hr_cfg", 1.0)),
+            gr.update(value=getattr(shared.opts, f"{p}_t2i_sampler", "Euler")),
+            gr.update(value=getattr(shared.opts, f"{p}_i2i_sampler", "Euler")),
+            gr.update(value=getattr(shared.opts, f"{p}_t2i_scheduler", "Simple")),
+            gr.update(value=getattr(shared.opts, f"{p}_i2i_scheduler", "Simple")),
+            gr.update(value=getattr(shared.opts, f"{p}_t2i_hr_cfg", 1.0)),
             gr.update(visible=(preset == "flux"), value=getattr(shared.opts, "flux_t2i_hr_d_cfg", 3.5)),    # ui_txt2img_hr_distilled_cfg
         ]
 
