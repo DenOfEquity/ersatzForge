@@ -99,7 +99,8 @@ class CFGDenoiser(torch.nn.Module):
                 image_cond = torch.zeros((x.shape[0], 5, 1, 1), device=x.device, dtype=x.dtype)
                 self.sampler.sampler_extra_args['image_cond'] = image_cond
             elif not this_inpaint and next_inpaint:
-                image_cond = torch.zeros((x.shape[0], 4, x.shape[2], x.shape[3]), device=x.device, dtype=x.dtype)
+                image_conditioning = torch.ones(x.shape[0], 3, x.shape[2] * 8, x.shape[3] * 8, device=x.device) * 0.5
+                image_cond = sd_samplers_common.images_tensor_to_samples(image_conditioning, sd_samplers_common.approximation_indexes.get(shared.opts.sd_vae_encode_method))
                 image_cond = torch.nn.functional.pad(image_cond, (0, 0, 0, 0, 1, 0), value=1.0)
                 self.sampler.sampler_extra_args['image_cond'] = image_cond
 
@@ -158,3 +159,4 @@ class CFGDenoiser(torch.nn.Module):
             return eps
 
         return denoised.to(device=original_x_device, dtype=original_x_dtype)
+
