@@ -165,7 +165,7 @@ class SD20(BASE):
     latent_format = latent.SD15
     memory_usage_factor = 1.0
 
-    def model_type(self, state_dict, prefix=""):
+    def model_type(self, state_dict, prefix="model.diffusion_model."):
         if self.unet_config["in_channels"] == 4:  # SD2.0 inpainting models are not v prediction
             k = "{}output_blocks.11.1.transformer_blocks.0.norm1.bias".format(prefix)
             out = state_dict.get(k, None)
