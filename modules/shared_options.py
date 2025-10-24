@@ -161,6 +161,11 @@ options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), 
     "sdxl_flow_shift": OptionInfo(3.0, "Flow Shift for SDXL flow match models. Relevant models are detected by name.", gr.Slider, {"minimum": 0.01, "maximum": 12.0, "step": 0.01}, infotext="SDXL Shift"),
 }))
 
+options_templates.update(options_section(('flux', "Flux", "sd"), {
+    "use_dynamicPE": OptionInfo(False, "Dynamic Position Extrapolation").info("allows generating at higher resolutions before repetitions / distortions / multi-images appear in the output. This Setting applies when the model is loaded. https://noamissachar.github.io/DyPE/"),
+    "dynamicPE_base": OptionInfo(1024, "Base resolution for dynamic PE", gr.Slider, {"minimum": 512, "maximum": 1536, "step": 64}).info("the resolution the model is trained at: 1024 would be reasonable for Flux; slightly higher (1280) seems effective too. This Setting applies when the model is loaded."),
+}))
+
 options_templates.update(options_section(('vae', "VAE", "sd"), {
     "sd_vae_explanation": OptionHTML("""
 <abbr title='Variational autoencoder'>VAE</abbr> is a neural network that transforms a standard <abbr title='red/green/blue'>RGB</abbr>

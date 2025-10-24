@@ -10,6 +10,8 @@ from backend.attention import attention_function
 
 from .flux import timestep_embedding, EmbedND, MLPEmbedder, RMSNorm, QKNorm, SelfAttention, FluxPosEmbed
 
+from modules import shared
+
 
 class Approximator(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, hidden_dim: int, n_layers = 4):
@@ -166,8 +168,10 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_heads
 
-        self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
-        # self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=1024)
+        if shared.opts.use_dynamicPE:
+            self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=shared.opts.dynamicPE_base)
+        else:
+            self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
 
         self.pe_embedder.force_gpu = True   # hint for memory management
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=True)
@@ -198,7 +202,7 @@ class IntegratedChromaTransformer2DModel(nn.Module):
 
         self.final_layer = LastLayer(self.hidden_size, 1, self.out_channels)
         
-    def inner_forward(self, img, img_ids, txt, txt_ids, timesteps, guidance=None):
+    def inner_forward(self, img, img_ids, txt, txt_ids, timestep, guidance=None):
         if img.ndim != 3 or txt.ndim != 3:
             raise ValueError("Input img and txt tensors must have 3 dimensions.")
         img = self.img_in(img)
@@ -208,7 +212,7 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         nb_single_block = len(self.single_blocks)
         
         mod_index_length = nb_double_block*12 + nb_single_block*3 + 2
-        distill_timestep = timestep_embedding(timesteps, 16).to(device=device, dtype=dtype)
+        distill_timestep = timestep_embedding(timestep, 16).to(device=device, dtype=dtype)
         distill_guidance = timestep_embedding(guidance, 16).to(device=device, dtype=dtype)
         modulation_index = timestep_embedding(torch.arange(mod_index_length), 32).to(device=device, dtype=dtype)
         modulation_index = modulation_index.unsqueeze(0).repeat(img.shape[0], 1, 1)
@@ -221,17 +225,18 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         txt = self.txt_in(txt)
         ids = torch.cat((txt_ids, img_ids), dim=1)
 
-        pe = self.pe_embedder(ids)
+        if shared.opts.use_dynamicPE:
+            self.pe_embedder.set_timestep(timestep.item())
+            pes = []
+            for i in range(ids.shape[0]):
+                pe = self.pe_embedder(ids[i])
 
-        # pes = []
-        # for i in range(ids.shape[0]):
-            # pe = self.pe_embedder(ids[i])
-
-            # out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
-            # out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
-            # pes.append(out.unsqueeze(1))
-        # pe = torch.cat(pes, dim=0)
-
+                out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
+                out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
+                pes.append(out.unsqueeze(1))
+            pe = torch.cat(pes, dim=0)
+        else:
+            pe = self.pe_embedder(ids)
         
         scratchQ = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)   # preallocated for combined q|k|v_img|txt
         scratchK = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)   # reduces VRAM usage by ~200MB

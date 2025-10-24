@@ -11,6 +11,8 @@ from einops import rearrange, repeat
 from backend.attention import attention_function
 from backend.utils import fp16_fix
 
+from modules import shared
+
 
 def attention(q, k, v, pe):
     _shape = q.shape # k.shape is always the same
@@ -97,8 +99,8 @@ class EmbedND(nn.Module):
         del ids, n_axes
         return emb.unsqueeze(1)
 
-# dynamic PE
-#options that seems relevant is dynamic YaRN - non-dynamic is bad, NTK less good
+# dynamic PE  - https://github.com/guyyariv/DyPE - MIT license
+# minor adjustments only to cat of cos and sin and rearranging pe result to match this FLux implementation
 import numpy as np
 def find_correction_factor(num_rotations, dim, base, max_position_embeddings):
     return (dim * math.log(max_position_embeddings/(num_rotations * 2 * math.pi)))/(2 * math.log(base)) #Inverse dim formula to find number of rotations
@@ -569,8 +571,10 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_heads
 
-        self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
-        # self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, )
+        if shared.opts.use_dynamicPE:
+            self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=shared.opts.dynamicPE_base)
+        else:
+            self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
 
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=True)
         self.time_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
@@ -599,7 +603,7 @@ class IntegratedFluxTransformer2DModel(nn.Module):
 
         self.final_layer = LastLayer(self.hidden_size, 1, self.out_channels)
 
-    def inner_forward(self, img, img_ids, txt, txt_ids, timesteps, y, guidance=None):
+    def inner_forward(self, img, img_ids, txt, txt_ids, timestep, y, guidance=None):
         if img.ndim != 3 or txt.ndim != 3:
             raise ValueError("Input img and txt tensors must have 3 dimensions.")
 
@@ -607,7 +611,7 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         dtype = img.dtype
 
         img = self.img_in(img)
-        vec = self.time_in(timestep_embedding(timesteps, 256).to(img.dtype))
+        vec = self.time_in(timestep_embedding(timestep, 256).to(img.dtype))
 
         if self.guidance_embed:
             if guidance is None:
@@ -619,16 +623,19 @@ class IntegratedFluxTransformer2DModel(nn.Module):
 
         ids = torch.cat((txt_ids, img_ids), dim=1)
         del txt_ids, img_ids
-        pe = self.pe_embedder(ids)
         
-        # pes = []
-        # for i in range(ids.shape[0]):
-            # pe = self.pe_embedder(ids[i])
+        if shared.opts.use_dynamicPE:
+            self.pe_embedder.set_timestep(timestep.item())
+            pes = []
+            for i in range(ids.shape[0]):
+                pe = self.pe_embedder(ids[i])
 
-            # out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
-            # out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
-            # pes.append(out.unsqueeze(1))
-        # pe = torch.cat(pes, dim=0)
+                out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
+                out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
+                pes.append(out.unsqueeze(1))
+            pe = torch.cat(pes, dim=0)
+        else:
+            pe = self.pe_embedder(ids)
 
         del ids
 

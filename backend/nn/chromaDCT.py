@@ -12,6 +12,8 @@ from .flux import rope, apply_rope
 from .flux import RMSNorm, QKNorm, EmbedND, MLPEmbedder, SelfAttention, timestep_embedding, FluxPosEmbed
 from .chroma import Approximator, DoubleStreamBlock, SingleStreamBlock
 
+from modules import shared
+
 
 class NerfEmbedder(nn.Module):
     """
@@ -213,8 +215,10 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
         self.hidden_size = 3072
         self.num_heads = 24
         pe_dim = self.hidden_size // self.num_heads
-        self.pe_embedder = EmbedND(theta=10000, axes_dim=[16, 56, 56])
-        # self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, )
+        if shared.opts.use_dynamicPE:
+            self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=shared.opts.dynamicPE_base)
+        else:
+            self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
 
         # patchify ops
         self.img_in_patch = nn.Conv2d(3, 3072, kernel_size=16, stride=16, bias=True)
@@ -266,7 +270,7 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
         img_ids: Tensor,
         txt: Tensor,
         txt_ids: Tensor,
-        timesteps: Tensor,
+        timestep: Tensor,
         guidance: Tensor,
     ) -> Tensor:
         if img.ndim != 4:
@@ -292,7 +296,7 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
 
         txt = self.txt_in(txt)
 
-        distill_timestep = timestep_embedding(timesteps, self.approximator_in_dim//4)
+        distill_timestep = timestep_embedding(timestep, self.approximator_in_dim//4)
         distill_guidance = timestep_embedding(guidance, self.approximator_in_dim//4)
         timestep_guidance = (
             torch.cat([distill_timestep, distill_guidance], dim=1)
@@ -300,7 +304,7 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
             .repeat(1, self.mod_index_length, 1)
         )
 
-        modulation_index = timestep_embedding(self.mod_index.to(timesteps.device), self.approximator_in_dim//2)
+        modulation_index = timestep_embedding(self.mod_index.to(timestep.device), self.approximator_in_dim//2)
         # we need to broadcast the modulation index here so each batch has all of the index
         modulation_index = modulation_index.unsqueeze(0).repeat(img.shape[0], 1, 1)
         # and we need to broadcast timestep and guidance along too
@@ -309,16 +313,19 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
         mod_vectors = self.distilled_guidance_layer(input_vec)
 
         ids = torch.cat((txt_ids, img_ids), dim=1)
-        pe = self.pe_embedder(ids)
 
-        # pes = []
-        # for i in range(ids.shape[0]):
-            # pe = self.pe_embedder(ids[i])
+        if shared.opts.use_dynamicPE:
+            self.pe_embedder.set_timestep(timestep.item())
+            pes = []
+            for i in range(ids.shape[0]):
+                pe = self.pe_embedder(ids[i])
 
-            # out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
-            # out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
-            # pes.append(out.unsqueeze(1))
-        # pe = torch.cat(pes, dim=0)
+                out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
+                out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
+                pes.append(out.unsqueeze(1))
+            pe = torch.cat(pes, dim=0)
+        else:
+            pe = self.pe_embedder(ids)
 
         max_len = txt.shape[1]
 
@@ -420,7 +427,7 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
             img_ids=img_ids, 
             txt=context,
             txt_ids=txt_ids,
-            timesteps=timestep,
+            timestep=timestep,
             guidance=guidance,
         )
         
