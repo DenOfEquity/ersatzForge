@@ -217,8 +217,10 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
         pe_dim = self.hidden_size // self.num_heads
         if shared.opts.use_dynamicPE:
             self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=shared.opts.dynamicPE_base)
+            self.use_dynamicPE = True
         else:
             self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
+            self.use_dynamicPE = False
 
         # patchify ops
         self.img_in_patch = nn.Conv2d(3, 3072, kernel_size=16, stride=16, bias=True)
@@ -314,7 +316,7 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
 
         ids = torch.cat((txt_ids, img_ids), dim=1)
 
-        if shared.opts.use_dynamicPE:
+        if self.use_dynamicPE:
             self.pe_embedder.set_timestep(timestep.item())
             pes = []
             for i in range(ids.shape[0]):

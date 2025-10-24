@@ -573,8 +573,10 @@ class IntegratedFluxTransformer2DModel(nn.Module):
 
         if shared.opts.use_dynamicPE:
             self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=shared.opts.dynamicPE_base)
+            self.use_dynamicPE = True
         else:
             self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
+            self.use_dynamicPE = False
 
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=True)
         self.time_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
@@ -624,7 +626,7 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         ids = torch.cat((txt_ids, img_ids), dim=1)
         del txt_ids, img_ids
         
-        if shared.opts.use_dynamicPE:
+        if self.use_dynamicPE:
             self.pe_embedder.set_timestep(timestep.item())
             pes = []
             for i in range(ids.shape[0]):

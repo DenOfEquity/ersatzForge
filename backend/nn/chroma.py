@@ -170,8 +170,10 @@ class IntegratedChromaTransformer2DModel(nn.Module):
 
         if shared.opts.use_dynamicPE:
             self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=shared.opts.dynamicPE_base)
+            self.use_dynamicPE = True
         else:
             self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
+            self.use_dynamicPE = False
 
         self.pe_embedder.force_gpu = True   # hint for memory management
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=True)
@@ -225,7 +227,7 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         txt = self.txt_in(txt)
         ids = torch.cat((txt_ids, img_ids), dim=1)
 
-        if shared.opts.use_dynamicPE:
+        if self.use_dynamicPE:
             self.pe_embedder.set_timestep(timestep.item())
             pes = []
             for i in range(ids.shape[0]):
