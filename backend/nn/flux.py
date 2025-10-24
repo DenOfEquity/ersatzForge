@@ -9,7 +9,7 @@ import torch
 from torch import nn
 from einops import rearrange, repeat
 from backend.attention import attention_function
-from backend.utils import fp16_fix, tensor2parameter
+from backend.utils import fp16_fix
 
 
 def attention(q, k, v, pe):
@@ -65,10 +65,10 @@ def timestep_embedding(t, dim, max_period=10000, time_factor=1000.0):
 
     # TODO: Once A trainer for flux get popular, make timestep_embedding consistent to that trainer
 
-    # Do not block CUDA steam, but having about 1e-4 differences with Flux official codes:
+    # Do not block CUDA stream, but having about 1e-4 differences with Flux official codes:
     freqs = torch.exp(-math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32, device=t.device) / half)
 
-    # Block CUDA steam, but consistent with official codes:
+    # Block CUDA stream, but consistent with official codes:
     # freqs = torch.exp(-math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half).to(t.device)
 
     args = t[:, None].to(torch.float32) * freqs[None]
@@ -83,9 +83,8 @@ def timestep_embedding(t, dim, max_period=10000, time_factor=1000.0):
 
 
 class EmbedND(nn.Module):
-    def __init__(self, dim, theta, axes_dim):
+    def __init__(self, theta, axes_dim):
         super().__init__()
-        self.dim = dim
         self.theta = theta
         self.axes_dim = axes_dim
 
@@ -97,6 +96,241 @@ class EmbedND(nn.Module):
         )
         del ids, n_axes
         return emb.unsqueeze(1)
+
+# dynamic PE
+#options that seems relevant is dynamic YaRN - non-dynamic is bad, NTK less good
+import numpy as np
+def find_correction_factor(num_rotations, dim, base, max_position_embeddings):
+    return (dim * math.log(max_position_embeddings/(num_rotations * 2 * math.pi)))/(2 * math.log(base)) #Inverse dim formula to find number of rotations
+
+
+def find_correction_range(low_ratio, high_ratio, dim, base, ori_max_pe_len):
+    """
+    Find the correction range for NTK-by-parts interpolation.
+    """
+    low = np.floor(find_correction_factor(low_ratio, dim, base, ori_max_pe_len))
+    high = np.ceil(find_correction_factor(high_ratio, dim, base, ori_max_pe_len))
+    return max(low, 0), min(high, dim-1) #Clamp values just in case
+
+
+def linear_ramp_mask(min, max, dim):
+    if min == max:
+        max += 0.001 #Prevent singularity
+
+    linear_func = (torch.arange(dim, dtype=torch.float32) - min) / (max - min)
+    ramp_func = torch.clamp(linear_func, 0, 1)
+    return ramp_func
+
+
+def find_newbase_ntk(dim, base, scale):
+    """
+    Calculate the new base for NTK-aware scaling.
+    """
+    return base * (scale ** (dim / (dim - 2)))
+
+from typing import Union, List
+def get_1d_rotary_pos_embed(
+        dim: int,
+        pos: Union[np.ndarray, int],
+        theta: float = 10000.0,
+        linear_factor=1.0,
+        ntk_factor=1.0,
+        freqs_dtype=torch.float32,
+        yarn=False,
+        max_pe_len=None,
+        ori_max_pe_len=64,
+        dype=False,
+        current_timestep=1.0,
+):
+    """
+    Precompute the frequency tensor for complex exponentials with RoPE.
+    Supports YARN interpolation for vision transformers.
+
+    Args:
+        dim (`int`):
+            Dimension of the frequency tensor.
+        pos (`np.ndarray` or `int`):
+            Position indices for the frequency tensor. [S] or scalar.
+        theta (`float`, *optional*, defaults to 10000.0):
+            Scaling factor for frequency computation.
+        linear_factor (`float`, *optional*, defaults to 1.0):
+            Scaling factor for linear interpolation.
+        ntk_factor (`float`, *optional*, defaults to 1.0):
+            Scaling factor for NTK-Aware RoPE.
+        freqs_dtype (`torch.float32` or `torch.float64`, *optional*, defaults to `torch.float32`):
+            Data type of the frequency tensor.
+        yarn (`bool`, *optional*, defaults to False):
+            If True, use YARN interpolation combining NTK, linear, and base methods.
+        max_pe_len (`int`, *optional*):
+            Maximum position encoding length (current patches for vision models).
+        ori_max_pe_len (`int`, *optional*, defaults to 64):
+            Original maximum position encoding length (base patches for vision models).
+        dype (`bool`, *optional*, defaults to False):
+            If True, enable DyPE (Dynamic Position Encoding) with timestep-aware scaling.
+        current_timestep (`float`, *optional*, defaults to 1.0):
+            Current timestep for DyPE, normalized to [0, 1] where 1 is pure noise.
+
+    Returns:
+        `torch.Tensor`: Precomputed frequency tensor with complex exponentials. [S, D/2]
+            returns tuple of (cos, sin) tensors.
+    """
+    assert dim % 2 == 0
+
+    if isinstance(pos, int):
+        pos = torch.arange(pos)
+    if isinstance(pos, np.ndarray):
+        pos = torch.from_numpy(pos)
+
+    device = pos.device
+
+    if yarn and max_pe_len is not None and max_pe_len > ori_max_pe_len:
+        if not isinstance(max_pe_len, torch.Tensor):
+            max_pe_len = torch.tensor(max_pe_len, dtype=freqs_dtype, device=device)
+
+        scale = torch.clamp_min(max_pe_len / ori_max_pe_len, 1.0)
+
+        beta_0 = 1.25
+        beta_1 = 0.75
+        gamma_0 = 16
+        gamma_1 = 2
+
+        freqs_base = 1.0 / (theta ** (torch.arange(0, dim, 2, dtype=freqs_dtype, device=device) / dim))
+
+        freqs_linear = 1.0 / torch.einsum(
+            '..., f -> ... f',
+            scale,
+            (theta ** (torch.arange(0, dim, 2, dtype=freqs_dtype, device=device) / dim))
+        )
+
+        new_base = find_newbase_ntk(dim, theta, scale)
+        if new_base.dim() > 0:
+            new_base = new_base.view(-1, 1)
+        freqs_ntk = 1.0 / torch.pow(
+            new_base,
+            (torch.arange(0, dim, 2, dtype=freqs_dtype, device=device) / dim)
+        )
+        if freqs_ntk.dim() > 1:
+            freqs_ntk = freqs_ntk.squeeze()
+
+        if dype:
+            beta_0 = beta_0 ** (2.0 * (current_timestep ** 2.0))
+            beta_1 = beta_1 ** (2.0 * (current_timestep ** 2.0))
+
+        low, high = find_correction_range(beta_0, beta_1, dim, theta, ori_max_pe_len)
+        low = max(0, low)
+        high = min(dim // 2, high)
+
+        freqs_mask = (1 - linear_ramp_mask(low, high, dim // 2).to(device).to(freqs_dtype))
+        freqs = freqs_linear * (1 - freqs_mask) + freqs_ntk * freqs_mask
+
+        if dype:
+            gamma_0 = gamma_0 ** (2.0 * (current_timestep ** 2.0))
+            gamma_1 = gamma_1 ** (2.0 * (current_timestep ** 2.0))
+
+        low, high = find_correction_range(gamma_0, gamma_1, dim, theta, ori_max_pe_len)
+        low = max(0, low)
+        high = min(dim // 2, high)
+
+        freqs_mask = (1 - linear_ramp_mask(low, high, dim // 2).to(device).to(freqs_dtype))
+        freqs = freqs * (1 - freqs_mask) + freqs_base * freqs_mask
+
+    else:
+        theta_ntk = theta * ntk_factor
+        freqs = 1.0 / (theta_ntk ** (torch.arange(0, dim, 2, dtype=freqs_dtype, device=device) / dim)) / linear_factor
+
+    freqs = torch.outer(pos.squeeze(0), freqs)
+
+    is_npu = freqs.device.type == "npu"
+    if is_npu:
+        freqs = freqs.to(torch.float32)
+
+    freqs_cos = freqs.cos().to(torch.float32)
+    freqs_sin = freqs.sin().to(torch.float32)
+
+    if yarn and max_pe_len is not None and max_pe_len > ori_max_pe_len:
+        mscale = torch.where(scale <= 1., torch.tensor(1.0), 0.1 * torch.log(scale) + 1.0).to(scale)
+        freqs_cos = freqs_cos * mscale
+        freqs_sin = freqs_sin * mscale
+
+    return freqs_cos, freqs_sin
+
+
+class FluxPosEmbed(nn.Module):
+    def __init__(
+            self,
+            theta: int,
+            axes_dim: List[int],
+            base_resolution: int = 1024,
+            method: str = 'yarn',
+            dype: bool = True,
+    ):
+        super().__init__()
+        self.theta = theta
+        self.axes_dim = axes_dim
+        self.base_resolution = base_resolution
+        self.patch_size = 16
+        self.base_patches = self.base_resolution // self.patch_size
+        self.method = method
+        self.dype = dype if method != 'base' else False
+        self.current_timestep = 1.0
+
+    def set_timestep(self, timestep: float):
+        """Set current timestep for DyPE. Timestep normalized to [0, 1] where 1 is pure noise."""
+        self.current_timestep = timestep
+
+    def forward(self, ids: torch.Tensor) -> torch.Tensor:
+        n_axes = ids.shape[-1]
+        cos_out = []
+        sin_out = []
+        pos = ids.float()
+        is_mps = ids.device.type == "mps"
+        is_npu = ids.device.type == "npu"
+        freqs_dtype = torch.float32 if (is_mps or is_npu) else torch.float64
+
+        for i in range(n_axes):
+            common_kwargs = {
+                'dim': self.axes_dim[i],
+                'pos': pos[:, i],
+                'theta': self.theta,
+                'freqs_dtype': freqs_dtype,
+            }
+
+            if i > 0:
+                max_pos = pos[:, i].max().item()
+                current_patches = max_pos + 1
+
+                if self.method == 'yarn' and current_patches > self.base_patches:
+                    max_pe_len = torch.tensor(current_patches, dtype=freqs_dtype, device=pos.device)
+                    cos, sin = get_1d_rotary_pos_embed(
+                        **common_kwargs,
+                        yarn=True,
+                        max_pe_len=max_pe_len,
+                        ori_max_pe_len=self.base_patches,
+                        dype=self.dype,
+                        current_timestep=self.current_timestep,
+                    )
+
+                elif self.method == 'ntk' and current_patches > self.base_patches:
+                    base_ntk = (current_patches / self.base_patches) ** (
+                            self.axes_dim[i] / (self.axes_dim[i] - 2)
+                    )
+                    ntk_factor = base_ntk ** (2.0 * (self.current_timestep ** 2.0)) if self.dype else base_ntk
+                    ntk_factor = max(1.0, ntk_factor)
+
+                    cos, sin = get_1d_rotary_pos_embed(**common_kwargs, ntk_factor=ntk_factor)
+
+                else:
+                    cos, sin = get_1d_rotary_pos_embed(**common_kwargs)
+            else:
+                cos, sin = get_1d_rotary_pos_embed(**common_kwargs)
+
+            cos_out.append(cos)
+            sin_out.append(sin)
+
+        freqs_cos = torch.cat(cos_out, dim=-1).to(ids.device)
+        freqs_sin = torch.cat(sin_out, dim=-1).to(ids.device)
+        return freqs_cos, freqs_sin
+## end dynamic PE
 
 
 class MLPEmbedder(nn.Module):
@@ -311,7 +545,6 @@ class LastLayer(nn.Module):
     def forward(self, x, vec):
         shift, scale = self.adaLN_modulation(vec).chunk(2, dim=1)
         del vec
-        # x = torch.addcmul(shift[:, None, :], (1 + scale[:, None, :]), self.norm_final(x))
         x = torch.addcmul(shift[:, None, :], scale.add_(1)[:, None, :], self.norm_final(x))
         del scale, shift
         x = self.linear(x)
@@ -336,7 +569,9 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_heads
 
-        self.pe_embedder = EmbedND(dim=pe_dim, theta=theta, axes_dim=axes_dim)
+        # self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
+        self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, )
+
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=True)
         self.time_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
         self.vector_in = MLPEmbedder(vec_in_dim, self.hidden_size)
@@ -384,7 +619,17 @@ class IntegratedFluxTransformer2DModel(nn.Module):
 
         ids = torch.cat((txt_ids, img_ids), dim=1)
         del txt_ids, img_ids
-        pe = self.pe_embedder(ids)
+        # pe = self.pe_embedder(ids)
+        
+        pes = []
+        for i in range(ids.shape[0]):
+            pe = self.pe_embedder(ids[i])
+
+            out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
+            out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
+            pes.append(out.unsqueeze(1))
+        pe = torch.cat(pes, dim=0)
+
         del ids
 
         scratchQ = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)   # preallocated for combined q|k|v_img|txt
