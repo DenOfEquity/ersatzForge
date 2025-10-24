@@ -569,8 +569,8 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_heads
 
-        # self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
-        self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, )
+        self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
+        # self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, )
 
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=True)
         self.time_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
@@ -619,16 +619,16 @@ class IntegratedFluxTransformer2DModel(nn.Module):
 
         ids = torch.cat((txt_ids, img_ids), dim=1)
         del txt_ids, img_ids
-        # pe = self.pe_embedder(ids)
+        pe = self.pe_embedder(ids)
         
-        pes = []
-        for i in range(ids.shape[0]):
-            pe = self.pe_embedder(ids[i])
+        # pes = []
+        # for i in range(ids.shape[0]):
+            # pe = self.pe_embedder(ids[i])
 
-            out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
-            out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
-            pes.append(out.unsqueeze(1))
-        pe = torch.cat(pes, dim=0)
+            # out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
+            # out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
+            # pes.append(out.unsqueeze(1))
+        # pe = torch.cat(pes, dim=0)
 
         del ids
 

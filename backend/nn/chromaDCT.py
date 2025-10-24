@@ -6,9 +6,10 @@ from torch import Tensor, nn
 import math
 
 from einops import rearrange
+from functools import lru_cache
 
 from .flux import rope, apply_rope
-from .flux import RMSNorm, QKNorm, EmbedND, MLPEmbedder, SelfAttention, timestep_embedding
+from .flux import RMSNorm, QKNorm, EmbedND, MLPEmbedder, SelfAttention, timestep_embedding, FluxPosEmbed
 from .chroma import Approximator, DoubleStreamBlock, SingleStreamBlock
 
 
@@ -40,6 +41,7 @@ class NerfEmbedder(nn.Module):
         # positional encodings to the final output dimension.
         self.embedder = nn.Sequential(nn.Linear(in_channels + max_freqs**2, hidden_size_input))
 
+    @lru_cache(maxsize=4)
     def fetch_pos(self, patch_size, device, dtype):
         """
         Generates and caches 2D DCT-like positional embeddings for a given patch size.
@@ -175,21 +177,6 @@ class NerfGLUBlock(nn.Module):
         return x
 
 
-
-class NerfFinalLayer(nn.Module):
-    def __init__(self, hidden_size, out_channels):
-        super().__init__()
-        self.norm = RMSNorm(hidden_size)
-        self.linear = nn.Linear(hidden_size, out_channels)
-        nn.init.zeros_(self.linear.weight)
-        nn.init.zeros_(self.linear.bias)
-
-    def forward(self, x):
-        x = self.norm(x)
-        x = self.linear(x)
-        return x
-
-
 class NerfFinalLayerConv(nn.Module):
     def __init__(self, hidden_size, out_channels):
         super().__init__()
@@ -214,29 +201,6 @@ class NerfFinalLayerConv(nn.Module):
         return x
 
 
-# chroma_params = ChromaParams(
-    # in_channels=3,
-    # context_in_dim=4096,
-    # hidden_size=3072,
-    # mlp_ratio=4.0,
-    # num_heads=24,
-    # depth=19,
-    # depth_single_blocks=38,
-    # axes_dim=[16, 56, 56],
-    # theta=10_000,
-    # qkv_bias=True,
-    # guidance_embed=True,
-    # approximator_in_dim=64,
-    # approximator_depth=5,
-    # approximator_hidden_size=5120,
-    # patch_size=16,
-    # nerf_hidden_size=64,
-    # nerf_mlp_ratio=4,
-    # nerf_depth=4,
-    # nerf_max_freqs=8,
-# )
-
-
 class IntegratedChromaDCTTransformer2DModel(nn.Module):
     def __init__(self, **config):
         super().__init__()
@@ -249,7 +213,9 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
         self.hidden_size = 3072
         self.num_heads = 24
         pe_dim = self.hidden_size // self.num_heads
-        self.pe_embedder = EmbedND(dim=pe_dim, theta=10000, axes_dim=[16, 56, 56])
+        self.pe_embedder = EmbedND(theta=10000, axes_dim=[16, 56, 56])
+        # self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, )
+
         # patchify ops
         self.img_in_patch = nn.Conv2d(3, 3072, kernel_size=16, stride=16, bias=True)
         nn.init.zeros_(self.img_in_patch.weight)
@@ -302,7 +268,6 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
         txt_ids: Tensor,
         timesteps: Tensor,
         guidance: Tensor,
-        attn_padding: int = 1,
     ) -> Tensor:
         if img.ndim != 4:
             raise ValueError("Input img tensor must be in [B, C, H, W] format.")
@@ -318,7 +283,6 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
         # Store the raw pixel values of each patch for the NeRF head later.
         # unfold creates patches: [B, C * P * P, NumPatches]
         nerf_pixels = nn.functional.unfold(img, kernel_size=self.patch_size, stride=self.patch_size)
-        nerf_pixels = nerf_pixels.transpose(1, 2) # -> [B, NumPatches, C * P * P]
         
         # patchify ops
         img = self.img_in_patch(img) # -> [B, Hidden, H/P, W/P]
@@ -328,26 +292,33 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
 
         txt = self.txt_in(txt)
 
-        with torch.no_grad():
-            distill_timestep = timestep_embedding(timesteps, self.approximator_in_dim//4)
-            distil_guidance = timestep_embedding(guidance, self.approximator_in_dim//4)
-            mod_index_device = self.mod_index.to(timesteps.device)
-            modulation_index = timestep_embedding(mod_index_device, self.approximator_in_dim//2)
-            # we need to broadcast the modulation index here so each batch has all of the index
-            modulation_index = modulation_index.unsqueeze(0).repeat(img.shape[0], 1, 1)
-            # and we need to broadcast timestep and guidance along too
-            timestep_guidance = (
-                torch.cat([distill_timestep, distil_guidance], dim=1)
-                .unsqueeze(1)
-                .repeat(1, self.mod_index_length, 1)
-            )
-            # then and only then we could concatenate it together
-            input_vec = torch.cat([timestep_guidance, modulation_index], dim=-1)
-            input_vec = input_vec.to(dtype)
-            mod_vectors = self.distilled_guidance_layer(input_vec)
+        distill_timestep = timestep_embedding(timesteps, self.approximator_in_dim//4)
+        distill_guidance = timestep_embedding(guidance, self.approximator_in_dim//4)
+        timestep_guidance = (
+            torch.cat([distill_timestep, distill_guidance], dim=1)
+            .unsqueeze(1)
+            .repeat(1, self.mod_index_length, 1)
+        )
+
+        modulation_index = timestep_embedding(self.mod_index.to(timesteps.device), self.approximator_in_dim//2)
+        # we need to broadcast the modulation index here so each batch has all of the index
+        modulation_index = modulation_index.unsqueeze(0).repeat(img.shape[0], 1, 1)
+        # and we need to broadcast timestep and guidance along too
+        # then and only then we could concatenate it together
+        input_vec = torch.cat([timestep_guidance, modulation_index], dim=-1).to(dtype)
+        mod_vectors = self.distilled_guidance_layer(input_vec)
 
         ids = torch.cat((txt_ids, img_ids), dim=1)
         pe = self.pe_embedder(ids)
+
+        # pes = []
+        # for i in range(ids.shape[0]):
+            # pe = self.pe_embedder(ids[i])
+
+            # out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
+            # out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
+            # pes.append(out.unsqueeze(1))
+        # pe = torch.cat(pes, dim=0)
 
         max_len = txt.shape[1]
 
@@ -375,13 +346,9 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
             idx += 3
         del scratchA
 
-        img = img[:, txt.shape[1] :, ...]
-
-        # aliasing
-        nerf_hidden = img
-        # reshape for per-patch processing
-        nerf_hidden = nerf_hidden.reshape(B * num_patches, self.hidden_size)
-        nerf_pixels = nerf_pixels.reshape(B * num_patches, C, self.patch_size**2).transpose(1, 2)
+        # aliasing, reshape for per-patch processing
+        nerf_hidden = img[:, txt.shape[1] :, ...].reshape(B * num_patches, self.hidden_size)
+        nerf_pixels = rearrange(nerf_pixels, "b (c p) n -> (b n) p c", b=B, c=C, n=num_patches, p=self.patch_size**2) #transpose, reshape, transpose
 
         # get DCT-encoded pixel embeddings [pixel-dct]
         img_dct = self.nerf_image_embedder(nerf_pixels)
@@ -395,10 +362,8 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
         img_dct = self.nerf_final_layer_conv.norm(img_dct)
         
         # Reassemble the patches into the final image.
-        img_dct = img_dct.transpose(1, 2) # -> [B*NumPatches, C, P*P]
-        # Reshape to combine with batch dimension for fold
-        img_dct = img_dct.reshape(B, num_patches, -1) # -> [B, NumPatches, C*P*P]
-        img_dct = img_dct.transpose(1, 2) # -> [B, C*P*P, NumPatches]
+        img_dct = rearrange(img_dct, "(b n) p c -> b (c p) n", b=B, n=num_patches, p=self.patch_size**2) #transpose, reshape, transpose
+
         img_dct = nn.functional.fold(
             img_dct,
             output_size=(H, W),
@@ -457,7 +422,6 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
             txt_ids=txt_ids,
             timesteps=timestep,
             guidance=guidance,
-            attn_padding=1
         )
         
         return result

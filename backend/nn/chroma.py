@@ -8,7 +8,7 @@ from einops import rearrange, repeat
 from backend.utils import fp16_fix
 from backend.attention import attention_function
 
-from .flux import timestep_embedding, EmbedND, MLPEmbedder, RMSNorm, QKNorm, SelfAttention
+from .flux import timestep_embedding, EmbedND, MLPEmbedder, RMSNorm, QKNorm, SelfAttention, FluxPosEmbed
 
 
 class Approximator(nn.Module):
@@ -166,7 +166,9 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_heads
 
-        self.pe_embedder = EmbedND(dim=pe_dim, theta=theta, axes_dim=axes_dim)
+        self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
+        # self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=1024)
+
         self.pe_embedder.force_gpu = True   # hint for memory management
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=True)
         setattr(self.img_in, 'force_gpu', True)
@@ -220,6 +222,16 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         ids = torch.cat((txt_ids, img_ids), dim=1)
 
         pe = self.pe_embedder(ids)
+
+        # pes = []
+        # for i in range(ids.shape[0]):
+            # pe = self.pe_embedder(ids[i])
+
+            # out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
+            # out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
+            # pes.append(out.unsqueeze(1))
+        # pe = torch.cat(pes, dim=0)
+
         
         scratchQ = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)   # preallocated for combined q|k|v_img|txt
         scratchK = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)   # reduces VRAM usage by ~200MB
