@@ -308,6 +308,18 @@ def sampling_function_inner(model, x, timestep, uncond, cond, cond_scale, model_
     else:
         cfg_result = uncond_pred + (cond_pred - uncond_pred) * cond_scale
 
+    if opts.cfg_normalization > 0.0:
+        cond_norm = torch.norm(cond_pred, dim=-1, keepdim=True)
+        cfg_norm = torch.norm(cfg_result, dim=-1, keepdim=True)
+        x_rescaled = cfg_result * (cond_norm / cfg_norm)
+        cfg_result = torch.lerp (cfg_result, x_rescaled, opts.cfg_normalization)
+
+    if opts.cfg_rescale > 0.0:
+        cond_std = torch.std(cond_pred, dim=(1,2,3), keepdim=True)
+        cfg_std = torch.std(cfg_result, dim=(1,2,3), keepdim=True)
+        x_rescaled = cfg_result * (cond_std / cfg_std)
+        cfg_result = torch.lerp (cfg_result, x_rescaled, opts.cfg_rescale)
+
     if opts.epsilon_scaling != 1.0:
         diff = x - cfg_result
         if opts.epsilon_modulation:
