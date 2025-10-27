@@ -151,6 +151,8 @@ options_templates.update(options_section(('sd', "Stable Diffusion", "sd"), {
     "epsilon_scaling": OptionInfo(1.0, "Epsilon scaling factor", gr.Slider, {"minimum": 0.8, "maximum": 1.2, "step": 0.001}, infotext="Epsilon scaling").info("'Elucidating the Exposure Bias in Diffusion Models' https://openreview.net/pdf?id=xEJMoj1SpX"),
     "epsilon_modulation": OptionInfo(False, "Epsilon modulation", infotext="Epsilon modulation").info("reduces effect of Epsilon scaling on later steps (sigma / sigma_max)"),
     "prediction_scaling": OptionInfo(1.0, "Prediction scaling factor", gr.Slider, {"minimum": 0.8, "maximum": 1.2, "step": 0.001}, infotext="Prediction scaling").info("Scales model output, with modulation by sigma"),
+    "cfg_normalization": OptionInfo(0.0, "CFG normalization strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="CFG normalization").info("beneficial for Lumina2, LCM/DMD models"),
+    "cfg_rescale": OptionInfo(0.0, "CFG rescale strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="CFG rescale"),
 }))
 
 options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), {

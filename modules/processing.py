@@ -739,6 +739,8 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "Epsilon scaling": opts.epsilon_scaling if opts.epsilon_scaling != 1.0 else None,
         "Epsilon modulation": True if opts.epsilon_modulation and opts.epsilon_scaling != 1.0 else None,
         "Prediction scaling": opts.prediction_scaling if opts.prediction_scaling != 1.0 else None,
+        "CFG normalization": opts.cfg_normalization if opts.cfg_normalization > 0.0 else None,
+        "CFG rescale": opts.cfg_rescale if opts.cfg_rescale > 0.0 else None,
         "SDXL Shift": opts.sdxl_flow_shift if dynamic_args.get('SDXL_flow', False) else None,
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
     })
@@ -1583,7 +1585,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         self.hr_uc = None
         self.hr_c = None
 
-        if self.enable_hr and self.hr_checkpoint_info is None:
+        if self.enable_hr and self.hr_checkpoint_info is None: #? same checkpoint
             if opts.hires_fix_use_firstpass_conds:
                 self.calculate_hr_conds()
             else:
@@ -1592,7 +1594,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
                 self.calculate_hr_conds()
 
-                with devices.autocast():
+                with devices.autocast(): ##? why this?
                     extra_networks.activate(self, self.extra_network_data)
 
     def get_conds(self):
