@@ -677,8 +677,7 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
         # LoRA changes - must offload/reload; may be possible to patch/refresh inline but didn't seem to work well
         matched = False
         for i in range(len(current_loaded_models)):
-            # if (x.is_clone(current_loaded_models[i].model) and getattr(x, 'lora_patches') == getattr(current_loaded_models[i].model, 'lora_patches')) \
-            if (loaded_model.model.is_clone(current_loaded_models[i].model) and getattr(loaded_model.model, 'lora_patches') == getattr(current_loaded_models[i].model, 'lora_patches')) \
+            if (x.is_clone(current_loaded_models[i].model) and getattr(x, 'lora_patches') == getattr(current_loaded_models[i].model, 'lora_patches')) \
                     or loaded_model == current_loaded_models[i]:
                 models_already_loaded.append(current_loaded_models[i])
                 matched = True
