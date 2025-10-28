@@ -125,22 +125,23 @@ class T5TextProcessingEngine:
                 chunks, token_count = self.tokenize_line(line)
                 line_z_values = []
 
-                #   pad all chunks to length of longest chunk
-                max_tokens = 0
-                for chunk in chunks:
-                    max_tokens = max (len(chunk.tokens), max_tokens)
-
                 for chunk in chunks:
                     tokens = chunk.tokens
                     multipliers = chunk.multipliers
                     
-                    remaining_count = max_tokens - len(tokens)
-                    if remaining_count > 0:
-                        tokens += [self.id_pad] * remaining_count
-                        multipliers += [1.0] * remaining_count
-
                     z = self.process_tokens([tokens], [multipliers])[0]
                     line_z_values.append(z)
+
+                count_z = len(line_z_values) - 1 # number of chunks to shorten, starting from first
+                if count_z:
+                    for i in range(count_z):
+                        if self.end_with_pad:
+                            line_z_values[i] = line_z_values[i][:-2]
+                        else:
+                            line_z_values[i] = line_z_values[i][:-1]
+
+                    line_z_values = [torch.cat(line_z_values, dim=0, )]
+
                 cache[line] = line_z_values
 
             zs.extend(line_z_values)
