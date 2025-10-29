@@ -1,2 +1,0 @@
-extract 'tokenizer.zip' into both subdirectories
-(Github protests about size of files when trying to upload)
