@@ -362,7 +362,7 @@ class WanModel(nn.Module):
         self.head = Head(dim, out_dim, patch_size, eps)
 
         d = dim // num_heads
-        self.rope_embedder = EmbedND(dim=d, theta=10000.0, axes_dim=[d - 4 * (d // 6), 2 * (d // 6), 2 * (d // 6)])
+        self.rope_embedder = EmbedND(theta=10000.0, axes_dim=[d - 4 * (d // 6), 2 * (d // 6), 2 * (d // 6)])
 
         if model_type == "i2v":
             self.img_emb = MLPProj(1280, dim, flf_pos_embed_token_number=flf_pos_embed_token_number)
@@ -480,3 +480,4 @@ class WanModel(nn.Module):
 
         result = self.forward_orig(x, timestep, context, clip_fea=clip_fea, freqs=freqs, transformer_options=transformer_options, **kwargs)[:, :, :t, :h, :w]
         return result.squeeze(2)
+
