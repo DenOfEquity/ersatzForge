@@ -1,7 +1,7 @@
 a backup of my local (experimental, opinionated) changes to Forge2 webUI
 
 * auto selection of VAE and text encoders per model / UI setting
-* Chroma (based on https://github.com/croquelois/forgeChroma)
+* Chroma (based on https://github.com/croquelois/forgeChroma) and Chroma Radiance (based on https://github.com/maybleMyers/chromaforge)
 * extended Checkpoint Merger, including UI for nArn0's embedding convertor (based on https://github.com/nArn0/sdxl-embedding-converter)
 * Hypernetworks
 * various other tweaks: UI, embedding filtering, code consolidation and tidying, dead code removal, performance improvements (for me)
@@ -16,7 +16,9 @@ a backup of my local (experimental, opinionated) changes to Forge2 webUI
 * lama and MAT inpainting models usable in img2img, both as processing options and as infill options
 * PuLID (sdxl) (based on https://github.com/cubiq/PuLID_ComfyUI/)
 * nVidia Cosmos predict2 t2i (only tested 2B model)
-* Wan 2.2 14B T2V and 5B, 1 frame generation only (extract .zip files in backend/huggingface/Wan-AI)
+* Wan 2.2 14B (based on Haoming02's implementation in [ForgeNeo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo)) and 5B, 1 frame generation only
 * ELLA (https://github.com/TencentQQGYLab/ELLA), models downloaded automatically, enable in Settings
 * extra samplers: SA-Solver, ER-SDE, Adaptive-ODE (params in Settings), Fixed-ODE
 * assorted extra functionality in built-in extensions, controlnet preprocessors
+* built-in latent manipulations such as Epsilon Scaling, CFG rescale, CFG normalization (see Settings)
+* dyPE high resolution generation for Flux (based on https://github.com/guyyariv/DyPE), works as far as I can test on my limited hardware
