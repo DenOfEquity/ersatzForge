@@ -68,6 +68,7 @@ class ForgeDiffusionEngine:
         self.is_wan = False
         self.is_flux = False # also Chroma
         self.is_chromaDCT = False
+        self.is_lumina2 = False
 
         return
 

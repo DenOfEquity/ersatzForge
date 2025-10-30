@@ -594,5 +594,32 @@ class WAN22_T2V(BASE):
         return {"umt5xxl": "text_encoder"}
 
 
+class Lumina2(BASE):
+    huggingface_repo = "Lumina2"
 
-models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V]#, WAN21_I2V]
+    unet_config = {
+        "image_model": "lumina2",
+    }
+
+    sampling_settings = {
+        "multiplier": 1.0,
+        "shift": 6.0,
+    }
+
+    memory_usage_factor = 1.2
+
+    unet_extra_config = {}
+    latent_format = latent.Flux
+
+    supported_inference_dtypes = [torch.bfloat16, torch.float32]
+
+    vae_key_prefix = ["vae."]
+    text_encoder_key_prefix = ["text_encoders."]
+
+    unet_target = "transformer"
+
+    def clip_target(self, state_dict={}):
+        return {"gemma2_2b": "text_encoder"}
+
+
+models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2]#, WAN21_I2V]
