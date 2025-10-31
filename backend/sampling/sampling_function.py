@@ -402,14 +402,12 @@ def sampling_function(self, denoiser_params, cond_scale, cond_composition):
     return denoised, cond_pred, uncond_pred
 
 
-def sampling_prepare(unet, x, use_cfg=False):
+def sampling_prepare(unet, x):
     B, C, H, W = x.shape
 
     memory_estimation_function = unet.model_options.get('memory_peak_estimation_modifier', unet.memory_required)
 
-    unet_inference_memory = memory_estimation_function([B, C, H, W])
-    if use_cfg:
-        unet_inference_memory *= 2
+    unet_inference_memory = memory_estimation_function([1, C, H, W])
 
     additional_inference_memory = unet.extra_preserved_memory_during_sampling
     additional_model_patchers = unet.extra_model_patchers_during_sampling

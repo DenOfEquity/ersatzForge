@@ -1,12 +1,10 @@
 import torch
 import inspect
-import sys
-from modules import devices, sd_samplers_common, sd_samplers_timesteps_impl
+
+from modules import devices, sd_samplers_common, sd_samplers_timesteps_impl, shared
 from modules.sd_samplers_cfg_denoiser import CFGDenoiser
 from modules.script_callbacks import ExtraNoiseParams, extra_noise_callback
 
-from modules.shared import opts
-import modules.shared as shared
 from backend.sampling.sampling_function import sampling_prepare, sampling_cleanup
 
 
@@ -61,7 +59,7 @@ class CompVisSampler(sd_samplers_common.Sampler):
 
     def get_timesteps(self, p, steps):
         discard_next_to_last_sigma = self.config is not None and self.config.options.get('discard_next_to_last_sigma', False)
-        if opts.always_discard_next_to_last_sigma and not discard_next_to_last_sigma:
+        if shared.opts.always_discard_next_to_last_sigma and not discard_next_to_last_sigma:
             discard_next_to_last_sigma = True
             p.extra_generation_params["Discard penultimate sigma"] = True
 
@@ -77,13 +75,8 @@ class CompVisSampler(sd_samplers_common.Sampler):
         return timesteps
 
     def sample_img2img(self, p, x, noise, conditioning, unconditional_conditioning, steps=None, image_conditioning=None):
-        if p.is_hr_pass:
-            use_cfg = (p.hr_cfg > 1)
-        else:
-            use_cfg = (p.cfg_scale > 1)
-
         unet_patcher = self.model_wrap.inner_model.forge_objects.unet
-        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x, use_cfg=use_cfg)
+        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x)
 
         self.model_wrap.inner_model.alphas_cumprod = self.model_wrap.inner_model.alphas_cumprod.to(x.device)
 
@@ -98,8 +91,8 @@ class CompVisSampler(sd_samplers_common.Sampler):
 
         xi = x.to(noise) * sqrt_alpha_cumprod + noise * sqrt_one_minus_alpha_cumprod
 
-        if opts.img2img_extra_noise > 0:
-            extra_noise_factor = min(opts.img2img_extra_noise, p.denoising_strength * 0.5)
+        if shared.opts.img2img_extra_noise > 0:
+            extra_noise_factor = min(shared.opts.img2img_extra_noise, p.denoising_strength * 0.5)
             p.extra_generation_params["Extra noise"] = extra_noise_factor
             extra_noise_params = ExtraNoiseParams(noise, x, xi)
             extra_noise_callback(extra_noise_params)
@@ -131,17 +124,12 @@ class CompVisSampler(sd_samplers_common.Sampler):
         return samples
 
     def sample(self, p, x, conditioning, unconditional_conditioning, steps=None, image_conditioning=None):
-        if p.is_hr_pass:
-            use_cfg = (p.hr_cfg > 1)
-        else:
-            use_cfg = (p.cfg_scale > 1)
-
         unet_patcher = self.model_wrap.inner_model.forge_objects.unet
-        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x, use_cfg=use_cfg)
+        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x)
 
         self.model_wrap.inner_model.alphas_cumprod = self.model_wrap.inner_model.alphas_cumprod.to(x.device)
 
-        steps = (steps or p.steps)
+        steps = steps or p.steps
         timesteps = self.get_timesteps(p, steps).to(x.device)
 
         extra_params_kwargs = self.initialize(p)
@@ -163,7 +151,3 @@ class CompVisSampler(sd_samplers_common.Sampler):
         sampling_cleanup(unet_patcher)
 
         return samples
-
-
-sys.modules['modules.sd_samplers_compvis'] = sys.modules[__name__]
-VanillaStableDiffusionSampler = CompVisSampler  # temp. compatibility with older extensions

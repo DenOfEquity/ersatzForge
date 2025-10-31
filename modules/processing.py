@@ -451,7 +451,7 @@ class StableDiffusionProcessing:
             backend.text_processing.emphasis.last_extra_generation_params = {}
 
         self.cond_cache.append(new_cache)
-        if len(self.cond_cache) > 4:
+        if len(self.cond_cache) > 4: # increase?
             self.cond_cache.pop(0)
 
         return new_cache[1]
@@ -974,12 +974,9 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             if p.n_iter > 1:
                 shared.state.job = f"Batch {n+1} out of {p.n_iter}"
 
-            # TODO: This currently seems broken. It should be fixed or removed.
-            sd_models.apply_alpha_schedule_override(p.sd_model, p)
-
             sigmas_backup = None
-            if (opts.sd_noise_schedule == "Zero Terminal SNR" or (hasattr(p.sd_model.model_config, 'ztsnr') and p.sd_model.model_config.ztsnr)) and p is not None:
-                p.extra_generation_params['Noise Schedule'] = opts.sd_noise_schedule
+            if opts.sd_noise_schedule == "Zero Terminal SNR" or getattr(p.sd_model.model_config, 'ztsnr', False):
+                p.extra_generation_params["Noise Schedule"] = "Zero Terminal SNR"
                 sigmas_backup = p.sd_model.forge_objects.unet.model.predictor.sigmas
                 p.sd_model.forge_objects.unet.model.predictor.set_sigmas(rescale_zero_terminal_snr_sigmas(p.sd_model.forge_objects.unet.model.predictor.sigmas))
 

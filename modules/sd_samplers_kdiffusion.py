@@ -149,16 +149,10 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
         return sigmas.cpu()
 
     def sample_img2img(self, p, x, noise, conditioning, unconditional_conditioning, steps=None, image_conditioning=None):
-        if p.is_hr_pass:
-            use_cfg = (p.hr_cfg > 1)
-        else:
-            use_cfg = (p.cfg_scale > 1)
-
         unet_patcher = self.model_wrap.inner_model.forge_objects.unet
-        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x, use_cfg=use_cfg)
+        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x)
 
         steps, t_enc = sd_samplers_common.setup_img2img_steps(p, steps)
-
         sigmas = self.get_sigmas(p, steps).to(x.device)
         sigma_sched = sigmas[steps - t_enc:]
 
@@ -190,7 +184,7 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
             extra_params_kwargs['sigmas'] = sigma_sched
 
         if self.config.options.get('brownian_noise', False):
-            noise_sampler = self.create_noise_sampler(x, sigmas, p)
+            noise_sampler = self.create_noise_sampler(x, sigma_sched, p) #was sigmas
             extra_params_kwargs['noise_sampler'] = noise_sampler
 
         if self.config.options.get('solver_type', None) == 'heun':
@@ -213,13 +207,8 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
         return samples
 
     def sample(self, p, x, conditioning, unconditional_conditioning, steps=None, image_conditioning=None):
-        if p.is_hr_pass:
-            use_cfg = (p.hr_cfg > 1)
-        else:
-            use_cfg = (p.cfg_scale > 1)
-
         unet_patcher = self.model_wrap.inner_model.forge_objects.unet
-        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x, use_cfg=use_cfg)
+        sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x)
 
         steps = steps or p.steps
 

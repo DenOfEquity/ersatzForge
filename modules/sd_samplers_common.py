@@ -169,7 +169,7 @@ def apply_refiner(cfg_denoiser, x):
     completed_ratio = cfg_denoiser.step / cfg_denoiser.total_steps
     refiner_switch_at = cfg_denoiser.p.refiner_switch_at
     if refiner_switch_at is not None and completed_ratio < refiner_switch_at:
-            return False
+        return False
 
     refiner_checkpoint_info = cfg_denoiser.p.refiner_checkpoint_info
     if refiner_checkpoint_info is None or shared.sd_model.sd_checkpoint_info == refiner_checkpoint_info:
@@ -192,11 +192,6 @@ def apply_refiner(cfg_denoiser, x):
 
     cfg_denoiser.refiner_applied = True
 
-    if cfg_denoiser.p.is_hr_pass:
-        use_cfg = (cfg_denoiser.p.hr_cfg > 1)
-    else:
-        use_cfg = (cfg_denoiser.p.cfg_scale > 1)
-
     sampling_cleanup(sd_models.model_data.get_sd_model().forge_objects.unet)
 
     # load refiner model
@@ -218,7 +213,7 @@ def apply_refiner(cfg_denoiser, x):
     cfg_denoiser.p.setup_conds()
     cfg_denoiser.update_inner_model()
 
-    sampling_prepare(sd_models.model_data.get_sd_model().forge_objects.unet, x=x, use_cfg=use_cfg)
+    sampling_prepare(sd_models.model_data.get_sd_model().forge_objects.unet, x=x)
     return True
 
 

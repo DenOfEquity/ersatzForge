@@ -214,7 +214,6 @@ options_templates.update(options_section(('compatibility', "Compatibility", "sd"
     "use_old_karras_scheduler_sigmas": OptionInfo(False, "Use old karras scheduler sigmas (0.1 to 10).", infotext='Old Karras sigmas'),
     "hires_fix_use_firstpass_conds": OptionInfo(False, "For hires fix, calculate conds of second pass using extra networks of first pass."),
     "use_old_scheduling": OptionInfo(False, "Use old prompt editing timelines.", infotext="Old prompt editing timelines").info("For [red:green:N]; OLD: If N < 1, it's a fraction of steps (hires fix uses range from 0 to 1), if N >= 1, it's an absolute number of steps; NEW: If N has a decimal point in it, it's a fraction of steps (hires fix uses range from 1 to 2), otherwise it's an absolute number of steps"),
-    "use_downcasted_alpha_bar": OptionInfo(False, "Downcast model alphas_cumprod to fp16 before sampling. For reproducing old seeds.", infotext="Downcast alphas_cumprod"),
 }))
 
 options_templates.update(options_section(('interrogate', "Interrogate"), {
