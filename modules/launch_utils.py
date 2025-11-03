@@ -10,7 +10,6 @@ import importlib.metadata
 import platform
 import json
 import shlex
-from functools import lru_cache
 from typing import NamedTuple
 from pathlib import Path
 
@@ -472,3 +471,4 @@ def dump_sysinfo():
         file.write(text)
 
     return filename
+
