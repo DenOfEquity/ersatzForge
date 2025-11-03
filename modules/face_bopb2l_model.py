@@ -6,14 +6,12 @@ import os
 import torch
 import numpy
 from PIL import Image
-import importlib  
+import importlib
 
 from modules import (
-    devices,
     errors,
     face_restoration,
     face_restoration_utils,
-    modelloader,
     shared,
     codeformer_model,
 )
@@ -27,7 +25,7 @@ class FaceRestorerBOPB2L(face_restoration_utils.CommonFaceRestoration):
     def name(self):
         return "MS-BOPB2L"
 
-    def face_helper(self) -> FaceRestoreHelper:
+    def face_helper(self):
         pass
 
     def send_model_to(self, device):
