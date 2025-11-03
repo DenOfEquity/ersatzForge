@@ -26,7 +26,6 @@ from modules.shared import cmd_opts
 
 from PIL import PngImagePlugin
 from modules.upscaler_realesrgan_model import get_realesrgan_models
-from modules import devices
 from typing import Any, Union, get_origin, get_args
 import piexif
 import piexif.helper
@@ -376,7 +375,7 @@ class Api:
 
         def get_base_type(annotation):
             origin = get_origin(annotation)
-            
+
             if origin is Union:             # represents Optional
                 args = get_args(annotation) # filter out NoneType
                 non_none_args = [arg for arg in args if arg is not type(None)]
