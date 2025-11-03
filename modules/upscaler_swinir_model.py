@@ -1,16 +1,12 @@
-import logging
 import sys
 
-import torch
 from PIL import Image
 
-from modules import devices, modelloader, script_callbacks, shared, upscaler_utils
+from modules import devices, modelloader, shared, upscaler_utils
 from modules.upscaler import Upscaler, UpscalerData
 from modules_forge.utils import prepare_free_memory
 
 SWINIR_MODEL_URL = "https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth"
-
-logger = logging.getLogger(__name__)
 
 
 class UpscalerSwinIR(Upscaler):
@@ -77,7 +73,7 @@ class UpscalerSwinIR(Upscaler):
             try:
                 model_descriptor.model.compile()
             except Exception:
-                logger.warning("Failed to compile SwinIR model, fallback to JIT", exc_info=True)
+                print("[SwinIR] Failed to compile model, fallback to JIT.")
         return model_descriptor
 
     def _get_device(self):
