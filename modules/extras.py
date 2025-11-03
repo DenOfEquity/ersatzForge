@@ -4,7 +4,6 @@ import re
 import json
 
 import torch
-import numpy
 
 from modules import shared, images, sd_models, errors, paths
 from modules.ui_common import plaintext_to_html
@@ -305,11 +304,11 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
                     elif 'output_blocks' in key:
                         key_count = 13 if total_key_count == 24.0 else 10
                     elif '.out.' in key:
-                        keycount = total_key_count
+                        key_count = total_key_count
                     else:
                         continue
 
-                    if not 'middle_block' in key:
+                    if 'middle_block' not in key:
                         for i in range(11, -1, -1):
                             if f'_blocks.{i}.' in key:
                                 key_count += i
