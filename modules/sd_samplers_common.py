@@ -163,9 +163,9 @@ replace_torchsde_browinan()
 
 
 def apply_refiner(cfg_denoiser, x):
-    if refiner_applied := getattr(cfg_denoiser, 'refiner_applied', False):
+    if getattr(cfg_denoiser, 'refiner_applied', False):
         return True
-    
+
     completed_ratio = cfg_denoiser.step / cfg_denoiser.total_steps
     refiner_switch_at = cfg_denoiser.p.refiner_switch_at
     if refiner_switch_at is not None and completed_ratio < refiner_switch_at:
@@ -357,3 +357,4 @@ class Sampler:
 
     def sample_img2img(self, p, x, noise, conditioning, unconditional_conditioning, steps=None, image_conditioning=None):
         raise NotImplementedError()
+
