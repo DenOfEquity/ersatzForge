@@ -1,10 +1,9 @@
 # based on https://github.com/city96/SD-Latent-Upscaler/
 
-import os
 import torch
 import torch.nn as nn
 from safetensors.torch import load_file
-from huggingface_hub import hf_hub_download, file_exists
+from huggingface_hub import hf_hub_download
 
 
 class Upscaler(nn.Module):
@@ -68,3 +67,4 @@ def upscale(samples, latent_ver, scale_factor):
     del model
 
     return lt.to(samples.device, dtype=samples.dtype)
+
