@@ -103,7 +103,6 @@ def load_upscalers():
             used_classes[classname] = cls
 
     for cls in reversed(used_classes.values()):
-        name = cls.__name__
         scaler = cls()
         scaler.model_download_path = scaler.model_path
         data += scaler.scalers
@@ -147,7 +146,7 @@ def load_spandrel_model(
 
     import spandrel
     _init_spandrel_extra_archs()
-    
+
     prefer_half = should_use_fp16(device=device, prioritize_performance=True, manual_cast=True)
 
     model_descriptor = spandrel.ModelLoader(device=device).load_from_file(str(path))
