@@ -732,7 +732,7 @@ class ScriptRunner:
         def select_script(script_index):
             if script_index is None:
                 script_index = [0]
-            
+
             selected_script = self.selectable_scripts[script_index - 1] if script_index>0 else None
 
             return [gr.update(visible=selected_script == s) for s in self.selectable_scripts]
@@ -886,14 +886,6 @@ class ScriptRunner:
                 script.process_batch(p, *script_args, **kwargs)
             except Exception:
                 errors.report(f"Error running process_batch: {script.filename}", exc_info=True)
-
-    def process_before_every_sampling(self, p, **kwargs):
-        for script in self.alwayson_scripts:
-            try:
-                script_args = p.script_args[script.args_from:script.args_to]
-                script.process_before_every_sampling(p, *script_args, **kwargs)
-            except Exception:
-                errors.report(f"Error running process_before_every_sampling: {script.filename}", exc_info=True)
 
     def postprocess(self, p, processed):
         for script in self.ordered_scripts('postprocess'):
@@ -1068,3 +1060,4 @@ def reload_script_body_only():
 
 
 reload_scripts = load_scripts  # compatibility alias
+
