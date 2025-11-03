@@ -83,7 +83,7 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
             if max_side_length != 0 and max(*image.size)*upscale_by > max_side_length:
                 upscale_mode = 1
                 upscale_crop = False
-                upscale_to_width, upscale_to_height = limit_size_by_one_dimention(image.width*upscale_by, image.height*upscale_by, max_side_length)
+                upscale_to_width, upscale_to_height = limit_size_by_one_dimension(image.width*upscale_by, image.height*upscale_by, max_side_length)
                 upscale_by = max(upscale_to_width/image.width, upscale_to_height/image.height)
 
         cache_key = (hash(numpy.array(image.getdata()).tobytes()), upscaler.name, upscale_mode, upscale_by, upscale_to_width, upscale_to_height, upscale_crop)
@@ -151,3 +151,4 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
 
     def image_changed(self):
         upscale_cache.clear()
+
