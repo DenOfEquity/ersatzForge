@@ -3,7 +3,6 @@ import base64
 import io
 import time
 
-import gradio as gr
 from pydantic import BaseModel, Field
 
 from modules.shared import opts
@@ -136,3 +135,4 @@ def progressapi(req: ProgressRequest):
                 id_live_preview = shared.state.id_live_preview
 
     return ProgressResponse(active=active, queued=queued, completed=completed, progress=progress, eta=eta, live_preview=live_preview, id_live_preview=id_live_preview, textinfo=shared.state.textinfo)
+
