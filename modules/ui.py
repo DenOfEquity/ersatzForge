@@ -13,9 +13,8 @@ from PIL import Image, PngImagePlugin  # noqa: F401
 from modules.call_queue import wrap_gradio_gpu_call, wrap_queued_call, wrap_gradio_call, wrap_gradio_call_no_job # noqa: F401
 
 from modules import gradio_extensions, sd_schedulers  # noqa: F401
-from modules import sd_models, script_callbacks, ui_extensions, deepbooru, extra_networks, ui_common, ui_postprocessing, progress, shared_items, ui_settings, timer, sysinfo, ui_checkpoint_merger, scripts, sd_samplers, ui_extra_networks, ui_toprow, launch_utils, ui_loadsave
+from modules import sd_models, script_callbacks, ui_extensions, deepbooru, extra_networks, ui_common, ui_postprocessing, shared_items, ui_settings, timer, sysinfo, ui_checkpoint_merger, scripts, sd_samplers, ui_extra_networks, ui_toprow, launch_utils, ui_loadsave
 from modules.ui_components import FormRow, FormGroup, ToolButton, FormHTML, InputAccordion, ResizeHandleRow
-from modules.paths import script_path
 
 from modules.ui_gradio_extensions import reload_javascript
 
@@ -280,17 +279,17 @@ def create_ui():
                                     hr_distilled_cfg = gr.Slider(minimum=0.0, maximum=30.0, step=0.1, label="HiRes Distilled CFG scale", value=3.5, elem_id="txt2img_hr_distilled_cfg")
                                     hr_cfg = gr.Slider(minimum=1.0, maximum=30.0, step=0.1, label="HiRes CFG scale", value=7.0, elem_id="txt2img_hr_cfg")
 
-                                with FormRow(elem_id="txt2img_hires_fix_row3", variant="compact") as hr_checkpoint_container:
+                                with FormRow(elem_id="txt2img_hires_fix_row3", variant="compact"):
                                     hr_checkpoint_name = gr.Dropdown(label='HiRes checkpoint', elem_id="hr_checkpoint", choices=["Use same checkpoint"] + modules.sd_models.checkpoint_tiles(), value="Use same checkpoint", scale=2)
                                     hr_additional_modules = gr.Dropdown(label='HiRes additional modules', elem_id="hr_vae_te", choices=["Use same choices"] + list(main_entry.module_list.keys()), value=["Use same choices"], multiselect=True, scale=3)
 
-                                with FormRow(elem_id="txt2img_hires_fix_row3b", variant="compact") as hr_sampler_container:
+                                with FormRow(elem_id="txt2img_hires_fix_row3b", variant="compact"):
                                     sampler_names = sd_samplers.visible_sampler_names()
                                     scheduler_names = sd_schedulers.visible_scheduler_names()
                                     hr_sampler_name = gr.Dropdown(label='HiRes sampling method', elem_id="hr_sampler", choices=["Use same sampler"] + sampler_names, value="Use same sampler")
                                     hr_scheduler = gr.Dropdown(label='HiRes schedule type', elem_id="hr_scheduler", choices=["Use same scheduler"] + scheduler_names, value="Use same scheduler")
 
-                                with FormRow(elem_id="txt2img_hires_fix_row4", variant="compact") as hr_prompts_container:
+                                with FormRow(elem_id="txt2img_hires_fix_row4", variant="compact"):
                                     hr_prompt = gr.Textbox(label="HiRes prompt", elem_id="hires_prompt", show_label=False, lines=3, placeholder="HiRes prompt. Leave empty to use the same prompt as in first pass.", elem_classes=["prompt"], value='')
                                     hr_negative_prompt = gr.Textbox(label="HiRes negative prompt", elem_id="hires_neg_prompt", show_label=False, lines=3, placeholder="HiRes negative prompt. Leave empty to use the same negative prompt as in first pass.", elem_classes=["prompt"], value='')
 
@@ -809,7 +808,7 @@ def create_ui():
 def versions_html():
     python_version = ".".join([str(x) for x in sys.version_info[0:3]])
 
-    if shared.xformers_available[0] == True:
+    if shared.xformers_available[0]:
         xformers_version = shared.xformers_available[1]
     else:
         xformers_version = "N/A"
