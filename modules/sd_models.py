@@ -2,7 +2,6 @@ import collections
 import os
 import sys
 import math
-import enum
 
 import torch
 import re
@@ -15,7 +14,6 @@ from modules.timer import Timer
 from backend.loader import forge_loader
 from backend import memory_management
 from backend.args import dynamic_args
-from backend.utils import load_torch_file
 
 
 model_dir = "Stable-diffusion"
@@ -413,7 +411,7 @@ def forge_model_reload():
     print(f"Model loaded in {timer.summary()}.")
 
     model_data.forge_hash = current_hash
-    
+
     shared.sd_model = model_data.sd_model
 
     return model_data.sd_model, True
