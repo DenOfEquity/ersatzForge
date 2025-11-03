@@ -8,14 +8,11 @@ from typing import Optional, Union
 from dataclasses import dataclass
 
 from modules import shared, ui_extra_networks_user_metadata, errors, extra_networks, util
-from modules.images import read_info_from_image, save_image_with_geninfo
 import gradio as gr
 import json
 import html
 from fastapi.exceptions import HTTPException
 from PIL import Image
-
-from modules.infotext_utils import image_from_url_text
 
 
 extra_pages = []
@@ -791,3 +788,4 @@ def path_is_parent(parent_path, child_path):
 def setup_ui(ui, gallery):
     for editor in ui.user_metadata_editors:
         editor.setup_ui(gallery)
+
