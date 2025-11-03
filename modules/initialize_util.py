@@ -1,4 +1,3 @@
-import json
 import os
 import signal
 import sys
@@ -180,4 +179,5 @@ def configure_cors_middleware(app):
         cors_options["allow_origin_regex"] = cmd_opts.cors_allow_origins_regex
 
     app.user_middleware.insert(0, starlette.middleware.Middleware(CORSMiddleware, **cors_options))
+
 
