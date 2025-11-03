@@ -121,10 +121,10 @@ there are reports of issues with training tab on the latest version.
 Use --skip-version-check commandline argument to disable this check.
         """.strip())
 
-    if shared.xformers_available[0] == True:
+    if shared.xformers_available[0]:
         if version.parse(shared.xformers_available[1]) < version.parse(expected_xformers_version):
             print_error_explanation(f"""
-You are running xformers {xformers.__version__}.
+You are running xformers {shared.xformers_available[1]}.
 The program is tested to work with xformers {expected_xformers_version}.
 To reinstall the desired version, run with commandline flag --reinstall-xformers.
 
