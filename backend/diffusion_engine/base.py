@@ -1,4 +1,3 @@
-import torch
 import safetensors.torch as sf
 
 from backend import utils
