@@ -1,8 +1,7 @@
 import torch
+import torch.nn as nn
 from collections import OrderedDict
 
-import torch
-import torch.nn as nn
 
 def make_layers(block, no_relu_layers):
     layers = []
@@ -215,4 +214,3 @@ class handpose_model(nn.Module):
         concat_stage6 = torch.cat([out_stage5, out1_0], 1)
         out_stage6 = self.model6(concat_stage6)
         return out_stage6
-

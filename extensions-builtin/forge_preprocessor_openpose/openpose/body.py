@@ -1,13 +1,9 @@
 import cv2
 import numpy as np
 import math
-import time
 from scipy.ndimage import gaussian_filter
-import matplotlib.pyplot as plt
-import matplotlib
 import torch
-from torchvision import transforms
-from typing import NamedTuple, List, Union
+from typing import List
 
 from . import util
 from .model import bodypose_model
@@ -207,19 +203,17 @@ class Body(object):
         # subset: n*20 array, 0-17 is the index in candidate, 18 is the total score, 19 is the total parts
         # candidate: x, y, score, id
         return candidate, subset
-    
+
     @staticmethod
     def format_body_result(candidate: np.ndarray, subset: np.ndarray) -> List[BodyResult]:
         """
         Format the body results from the candidate and subset arrays into a list of BodyResult objects.
-        
         Args:
             candidate (np.ndarray): An array of candidates containing the x, y coordinates, score, and id
                 for each body part.
             subset (np.ndarray): An array of subsets containing indices to the candidate array for each
                 person detected. The last two columns of each row hold the total score and total parts
                 of the person.
-
         Returns:
             List[BodyResult]: A list of BodyResult objects, where each object represents a person with
                 detected keypoints, total score, and total parts.
@@ -240,19 +234,3 @@ class Body(object):
             )
             for person in subset
         ]
-    
-
-if __name__ == "__main__":
-    body_estimation = Body('../model/body_pose_model.pth')
-
-    test_image = '../images/ski.jpg'
-    oriImg = cv2.imread(test_image)  # B,G,R order
-    candidate, subset = body_estimation(oriImg)
-    bodies = body_estimation.format_body_result(candidate, subset)
-
-    canvas = oriImg
-    for body in bodies:
-        canvas = util.draw_bodypose(canvas, body)
-        
-    plt.imshow(canvas[:, :, [2, 1, 0]])
-    plt.show()

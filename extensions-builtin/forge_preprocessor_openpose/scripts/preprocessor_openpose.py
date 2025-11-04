@@ -3,7 +3,6 @@ from modules_forge.shared import add_supported_preprocessor, preprocessor_dir
 from modules_forge.utils import resize_image_with_pad, HWC3
 from modules import devices
 from modules.modelloader import load_file_from_url
-from modules.paths_internal import models_path
 
 import os
 import torch
@@ -25,9 +24,9 @@ from openpose.hand import Hand
 from openpose.face import Face
 from openpose.types import HandResult, FaceResult, HumanPoseResult, AnimalPoseResult
 from openpose.animalpose import draw_animalposes
-from openpose.util import draw_poses, decode_json_as_poses, encode_poses_as_json
+from openpose.util import draw_poses, encode_poses_as_json#, decode_json_as_poses
 
-from typing import Tuple, List, Callable, Union, Optional
+from typing import Tuple, List, Callable, Union
 
 
 class PreprocessorOpenPose(Preprocessor):
@@ -43,7 +42,7 @@ class PreprocessorOpenPose(Preprocessor):
         self.body_estimation = None
         self.hand_estimation = None
         self.face_estimation = None
-        
+
         self.include_body = body
         self.include_hand = hand
         self.include_face = face
@@ -232,7 +231,7 @@ class PreprocessorDWPose(Preprocessor):
         self.sorting_priority = 100
 
         self.dw_pose_estimation = None
-        
+
         # self.device = devices.get_device_for('controlnet')
 
         self.cache = None
@@ -306,7 +305,7 @@ class PreprocessorAnimalPose(Preprocessor):
         self.sorting_priority = 100
 
         self.animal_pose_estimation = None
-        
+
         # self.device = devices.get_device_for('controlnet')
 
         self.cache = None

@@ -1,11 +1,6 @@
 import cv2
-import json
 import numpy as np
-import math
-import time
 from scipy.ndimage import gaussian_filter
-import matplotlib.pyplot as plt
-import matplotlib
 import torch
 from skimage.measure import label
 
@@ -81,14 +76,3 @@ class Hand(object):
             x = int(float(x) * float(Wr) / float(wsize))
             all_peaks.append([x, y])
         return np.array(all_peaks)
-
-if __name__ == "__main__":
-    hand_estimation = Hand('../model/hand_pose_model.pth')
-
-    # test_image = '../images/hand.jpg'
-    test_image = '../images/hand.jpg'
-    oriImg = cv2.imread(test_image)  # B,G,R order
-    peaks = hand_estimation(oriImg)
-    canvas = util.draw_handpose(oriImg, peaks, True)
-    cv2.imshow('', canvas)
-    cv2.waitKey(0)
