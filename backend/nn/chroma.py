@@ -1,6 +1,5 @@
 # implementation of Chroma for Forge, inspired by https://github.com/lodestone-rock/ComfyUI_FluxMod
 
-import math
 import torch
 
 from torch import nn
@@ -129,7 +128,7 @@ class SingleStreamBlock(nn.Module):
         k = k.view(*_reshape)
         k = torch.add(torch.mul(pe[..., 0], k[..., 0]), torch.mul(pe[..., 1], k[..., 1]))
         k = k.view(*_shape)
-        
+
         scratchA[:, :, :3072] = attention_function(q, k, v, q.shape[1], skip_reshape=True)
         scratchA[:, :, 3072:] = self.mlp_act(mlp)
 
@@ -154,7 +153,7 @@ class LastLayer(nn.Module):
 class IntegratedChromaTransformer2DModel(nn.Module):
     def __init__(self, in_channels: int, vec_in_dim: int, context_in_dim: int, hidden_size: int, mlp_ratio: float, num_heads: int, depth: int, depth_single_blocks: int, axes_dim: list[int], theta: int, qkv_bias: bool, guidance_embed):
         super().__init__()
-        
+
         self.in_channels = in_channels * 4
         self.out_channels = self.in_channels
 
@@ -177,11 +176,11 @@ class IntegratedChromaTransformer2DModel(nn.Module):
 
         self.pe_embedder.force_gpu = True   # hint for memory management
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=True)
-        setattr(self.img_in, 'force_gpu', True)
+        self.img_in.force_gpu = True
         self.distilled_guidance_layer = Approximator(64, 3072, 5120, 5)
         self.distilled_guidance_layer.force_gpu = True
         self.txt_in = nn.Linear(context_in_dim, self.hidden_size)
-        setattr(self.txt_in, 'force_gpu', True)
+        self.txt_in.force_gpu = True
 
         self.double_blocks = nn.ModuleList(
             [
@@ -203,7 +202,7 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         )
 
         self.final_layer = LastLayer(self.hidden_size, 1, self.out_channels)
-        
+
     def inner_forward(self, img, img_ids, txt, txt_ids, timestep, guidance=None):
         if img.ndim != 3 or txt.ndim != 3:
             raise ValueError("Input img and txt tensors must have 3 dimensions.")
@@ -212,7 +211,7 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         dtype = img.dtype
         nb_double_block = len(self.double_blocks)
         nb_single_block = len(self.single_blocks)
-        
+
         mod_index_length = nb_double_block*12 + nb_single_block*3 + 2
         distill_timestep = timestep_embedding(timestep, 16).to(device=device, dtype=dtype)
         distill_guidance = timestep_embedding(guidance, 16).to(device=device, dtype=dtype)
@@ -223,7 +222,7 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         input_vec = torch.cat([timestep_guidance, modulation_index], dim=-1)
 
         mod_vectors = self.distilled_guidance_layer(input_vec)
-        
+
         txt = self.txt_in(txt)
         ids = torch.cat((txt_ids, img_ids), dim=1)
 
@@ -239,13 +238,13 @@ class IntegratedChromaTransformer2DModel(nn.Module):
             pe = torch.cat(pes, dim=0)
         else:
             pe = self.pe_embedder(ids)
-        
+
         scratchQ = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)   # preallocated for combined q|k|v_img|txt
         scratchK = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)   # reduces VRAM usage by ~200MB
         scratchV = torch.empty((img.shape[0], 24, img.shape[1]+txt.shape[1], 128), device=device, dtype=dtype)
         idx_i = 3 * nb_single_block
         idx_t = 3 * nb_single_block + 6 * nb_double_block
-        for i, block in enumerate(self.double_blocks):
+        for _i, block in enumerate(self.double_blocks):
             img_mod1 = mod_vectors[:, idx_i+0:idx_i+3, :]
             img_mod2 = mod_vectors[:, idx_i+3:idx_i+6, :]
             idx_i += 6
@@ -258,7 +257,7 @@ class IntegratedChromaTransformer2DModel(nn.Module):
 
         scratchA = torch.empty((img.shape[0], img.shape[1], 15360), device=device, dtype=dtype)                 # less effective, maybe ineffective
         idx = 0
-        for i, block in enumerate(self.single_blocks):
+        for _i, block in enumerate(self.single_blocks):
             img = block(scratchA, img, shift=mod_vectors[:, idx+0:idx+1, :], scale=mod_vectors[:, idx+1:idx+2, :], gate=mod_vectors[:, idx+2:idx+3, :], pe=pe)
             idx += 3
 
@@ -291,6 +290,6 @@ class IntegratedChromaTransformer2DModel(nn.Module):
         del img, img_ids, txt_ids, timestep, context
         out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_len, w=w_len, ph=2, pw=2)[:, :, :h, :w]
         del h_len, w_len, bs
-        
+
         # torch.cuda.empty_cache()
         return out
