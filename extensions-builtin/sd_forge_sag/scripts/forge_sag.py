@@ -18,15 +18,9 @@ def attention_basic_with_sim(q, k, v, heads, mask=None):
     dim_head //= heads
     scale = dim_head ** -0.5
 
-    h = heads
-    q, k, v = map(
-        lambda t: t.unsqueeze(3)
-        .reshape(b, -1, heads, dim_head)
-        .permute(0, 2, 1, 3)
-        .reshape(b * heads, -1, dim_head)
-        .contiguous(),
-        (q, k, v),
-    )
+    q = rearrange(q, "b z (h d) -> (b h) z d", b=b, h=heads, d=dim_head).contiguous()
+    k = rearrange(k, "b z (h d) -> (b h) z d", b=b, h=heads, d=dim_head).contiguous()
+    v = rearrange(v, "b z (h d) -> (b h) z d", b=b, h=heads, d=dim_head).contiguous()
 
     # force cast to fp32 to avoid overflowing
     if attn_precision == torch.float32:
@@ -39,19 +33,14 @@ def attention_basic_with_sim(q, k, v, heads, mask=None):
     if mask is not None:
         mask = rearrange(mask, 'b ... -> b (...)')
         max_neg_value = -torch.finfo(sim.dtype).max
-        mask = repeat(mask, 'b j -> (b h) () j', h=h)
+        mask = repeat(mask, 'b j -> (b h) () j', h=heads)
         sim.masked_fill_(~mask, max_neg_value)
 
     # attention, what we cannot get enough of
     sim = sim.softmax(dim=-1)
 
     out = einsum('b i j, b j d -> b i d', sim.to(v.dtype), v)
-    out = (
-        out.unsqueeze(0)
-        .reshape(b, heads, -1, dim_head)
-        .permute(0, 2, 1, 3)
-        .reshape(b, -1, heads * dim_head)
-    )
+    out = rearrange(out, "(b h) z d -> b z (h d)", b=b, h=heads, d=dim_head).contiguous()
     return (out, sim)
 
 
@@ -70,7 +59,7 @@ def create_blur_map(x0, attn, sigma=3.0, threshold=1.0):
 
     if h * w != mask.size(1):
         if kohya_shrink_shape := getattr(shared, 'kohya_shrink_shape', None):
-            w = kohya_shrink_shape[0]   #    works with all block numbers for kohya hrfix
+            w = kohya_shrink_shape[0]
             h = kohya_shrink_shape[1]
 
     # Reshape

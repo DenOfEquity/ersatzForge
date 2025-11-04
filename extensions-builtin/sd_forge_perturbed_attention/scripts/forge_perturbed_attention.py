@@ -1,5 +1,4 @@
 import gradio as gr
-import copy
 
 from modules import scripts, shared
 from backend.patcher.base import set_model_options_patch_replace
@@ -69,7 +68,7 @@ class PerturbedAttentionGuidanceForForge(scripts.Script):
                     args["model"], args["cond_denoised"], args["cond"], args["sigma"], args["input"], args["model_options"].copy()
 
                 pag_options = set_model_options_patch_replace(options, attn_proc, "attn1", "middle", 0, 0)
-               
+
                 degraded, _ = calc_cond_uncond_batch(model, cond, None, x, sigma, pag_options)
 
                 result = denoised + (cond_denoised - degraded) * PerturbedAttentionGuidanceForForge.scale
