@@ -1,6 +1,5 @@
 import torch
 
-from collections import namedtuple
 from backend.text_processing import parsing, emphasis
 from backend import memory_management
 
@@ -128,7 +127,7 @@ class T5TextProcessingEngine:
                 for chunk in chunks:
                     tokens = chunk.tokens
                     multipliers = chunk.multipliers
-                    
+
                     z = self.process_tokens([tokens], [multipliers])[0]
                     line_z_values.append(z)
 
