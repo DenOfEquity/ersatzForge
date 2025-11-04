@@ -52,7 +52,7 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
                 self.pixel_perfect = gr.Checkbox(
                     label="Pixel Perfect",
                     value=True,
-                    elem_id=f"extras_controlnet_pixel_perfect_checkbox",
+                    elem_id="extras_controlnet_pixel_perfect_checkbox",
                 )
             with gr.Row(visible=False) as self.advanced:
                 self.processor_res = gr.Slider(
@@ -62,7 +62,7 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
                     maximum=2048,
                     visible=False,
                     interactive=True,
-                    elem_id=f"extras_controlnet_preprocessor_resolution_slider",
+                    elem_id="extras_controlnet_preprocessor_resolution_slider",
                 )
                 self.threshold_a = gr.Slider(
                     label="Threshold A",
@@ -71,7 +71,7 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
                     maximum=1024,
                     visible=False,
                     interactive=True,
-                    elem_id=f"extras_controlnet_threshold_A_slider",
+                    elem_id="extras_controlnet_threshold_A_slider",
                 )
                 self.threshold_b = gr.Slider(
                     label="Threshold B",
@@ -80,7 +80,7 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
                     maximum=1024,
                     visible=False,
                     interactive=True,
-                    elem_id=f"extras_controlnet_threshold_B_slider",
+                    elem_id="extras_controlnet_threshold_B_slider",
                 )
 
         self.register_build_sliders()
@@ -127,7 +127,7 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
 
 
     def process(self, pp: scripts_postprocessing.PostprocessedImage, **args):
-        if args == {} or args['enable'] == False:
+        if args == {} or not args['enable']:
             return
 
         if "Stereogram" in [x.name for x in scripts.scripts_postproc.scripts]: # this checks if Stereogram script exists, not if enabled
