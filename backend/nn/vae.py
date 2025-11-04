@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 from backend.attention import attention_function_single_head_spatial
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from torch import nn
@@ -42,7 +41,7 @@ class Upsample(nn.Module):
     def forward(self, x):
         try:
             x = torch.nn.functional.interpolate(x, scale_factor=2.0, mode="nearest")
-        except Exception as e:
+        except Exception:
             b, c, h, w = x.shape
             out = torch.empty((b, c, h * 2, w * 2), dtype=x.dtype, layout=x.layout, device=x.device)
             split = 8
@@ -158,7 +157,7 @@ class Encoder(nn.Module):
             attn = nn.ModuleList()
             block_in = ch * in_ch_mult[i_level]
             block_out = ch * ch_mult[i_level]
-            for i_block in range(self.num_res_blocks):
+            for _i_block in range(self.num_res_blocks):
                 block.append(ResnetBlock(in_channels=block_in, out_channels=block_out, temb_channels=self.temb_ch, dropout=dropout))
                 block_in = block_out
                 if curr_res in attn_resolutions:
@@ -227,7 +226,7 @@ class Decoder(nn.Module):
             block = nn.ModuleList()
             attn = nn.ModuleList()
             block_out = ch * ch_mult[i_level]
-            for i_block in range(self.num_res_blocks + 1):
+            for _i_block in range(self.num_res_blocks + 1):
                 block.append(ResnetBlock(in_channels=block_in, out_channels=block_out, temb_channels=self.temb_ch, dropout=dropout))
                 block_in = block_out
                 if curr_res in attn_resolutions:

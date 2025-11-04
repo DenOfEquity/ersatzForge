@@ -1,11 +1,9 @@
 # https://github.com/Alpha-VLLM/Lumina-Image-2.0/blob/main/models/model.py
 
-import math
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import repeat, rearrange
+from einops import rearrange
 
 from backend.attention import attention_function
 

@@ -6,7 +6,7 @@ from torch import nn
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 import logging
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Optional, Tuple
 import math
 from torchvision import transforms
 
@@ -209,7 +209,7 @@ class LearnablePosEmbAxis(VideoPositionEmb):
             raise ValueError(f"Unknown interpolation method {self.interpolation}")
 
         norm = torch.linalg.vector_norm(emb, dim=-1, keepdim=True, dtype=torch.float32)
-        norm = torch.add(1e-6, norm, alpha=np.sqrt(norm.numel() / emb.numel()))
+        norm = torch.add(1e-6, norm, alpha=(norm.numel() / emb.numel()) ** 0.5)
         return emb / norm.to(emb.dtype)
 
 
