@@ -11,11 +11,10 @@ import numpy as np
 # Transfer from the input time (sigma) used in EDM to that (t) used in DEIS.
 
 def edm2t(edm_steps, epsilon_s=1e-3, sigma_min=0.002, sigma_max=80):
-    vp_sigma = lambda beta_d, beta_min: lambda t: (np.e ** (0.5 * beta_d * (t ** 2) + beta_min * t) - 1) ** 0.5
     vp_sigma_inv = lambda beta_d, beta_min: lambda sigma: ((beta_min ** 2 + 2 * beta_d * (sigma ** 2 + 1).log()).sqrt() - beta_min) / beta_d
     vp_beta_d = 2 * (np.log(torch.tensor(sigma_min).cpu() ** 2 + 1) / epsilon_s - np.log(torch.tensor(sigma_max).cpu() ** 2 + 1)) / (epsilon_s - 1)
     vp_beta_min = np.log(torch.tensor(sigma_max).cpu() ** 2 + 1) - 0.5 * vp_beta_d
-    t_steps = vp_sigma_inv(vp_beta_d.clone().detach().cpu(), vp_beta_min.clone().detach().cpu())(edm_steps.clone().detach().cpu())
+    t_steps = vp_sigma_inv(vp_beta_d, vp_beta_min)(edm_steps.clone().detach().cpu())
     return t_steps, vp_beta_min, vp_beta_d + vp_beta_min
 
 #----------------------------------------------------------------------------
@@ -36,7 +35,7 @@ def t2alpha_fn(beta_0, beta_1, t):
 
 #----------------------------------------------------------------------------
 
-def cal_intergrand(beta_0, beta_1, taus):
+def cal_integrand(beta_0, beta_1, taus):
     with torch.inference_mode(mode=False):
         taus = taus.clone()
         beta_0 = beta_0.clone()
@@ -62,7 +61,7 @@ def get_deis_coeff_list(t_steps, max_order, N=10000, deis_mode='tab'):
         N: A `int`. Use how many points to perform the numerical integration when deis_mode=='tab'.
         deis_mode: A `str`. Select between 'tab' and 'rhoab'. Type of DEIS.
     Returns:
-        A pytorch tensor. A batch of generated samples or sampling trajectories if return_inters=True.
+        A pytorch tensor.
     """
     if deis_mode == 'tab':
         t_steps, beta_0, beta_1 = edm2t(t_steps)
@@ -72,11 +71,11 @@ def get_deis_coeff_list(t_steps, max_order, N=10000, deis_mode='tab'):
             if order == 1:
                 C.append([])
             else:
-                taus = torch.linspace(t_cur, t_next, N)   # split the interval for integral appximation
+                taus = torch.linspace(t_cur, t_next, N)   # split the interval for integral approximation
                 dtau = (t_next - t_cur) / N
                 prev_t = t_steps[[i - k for k in range(order)]]
                 coeff_temp = []
-                integrand = cal_intergrand(beta_0, beta_1, taus)
+                integrand = cal_integrand(beta_0, beta_1, taus)
                 for j in range(order):
                     poly = cal_poly(prev_t, j, taus)
                     coeff_temp.append(torch.sum(integrand * poly) * dtau)
@@ -84,12 +83,12 @@ def get_deis_coeff_list(t_steps, max_order, N=10000, deis_mode='tab'):
 
     elif deis_mode == 'rhoab':
         # Analytical solution, second order
-        def get_def_intergral_2(a, b, start, end, c):
+        def get_def_integral_2(a, b, start, end, c):
             coeff = (end**3 - start**3) / 3 - (end**2 - start**2) * (a + b) / 2 + (end - start) * a * b
             return coeff / ((c - a) * (c - b))
 
         # Analytical solution, third order
-        def get_def_intergral_3(a, b, c, start, end, d):
+        def get_def_integral_3(a, b, c, start, end, d):
             coeff = (end**4 - start**4) / 4 - (end**3 - start**3) * (a + b + c) / 3 \
                     + (end**2 - start**2) * (a*b + a*c + b*c) / 2 - (end - start) * a * b * c
             return coeff / ((d - a) * (d - b) * (d - c))
@@ -106,16 +105,15 @@ def get_deis_coeff_list(t_steps, max_order, N=10000, deis_mode='tab'):
                     coeff_prev1 = (t_next - t_cur)**2 / (2 * (prev_t[1] - t_cur))
                     coeff_temp = [coeff_cur, coeff_prev1]
                 elif order == 3:
-                    coeff_cur = get_def_intergral_2(prev_t[1], prev_t[2], t_cur, t_next, t_cur)
-                    coeff_prev1 = get_def_intergral_2(t_cur, prev_t[2], t_cur, t_next, prev_t[1])
-                    coeff_prev2 = get_def_intergral_2(t_cur, prev_t[1], t_cur, t_next, prev_t[2])
+                    coeff_cur = get_def_integral_2(prev_t[1], prev_t[2], t_cur, t_next, t_cur)
+                    coeff_prev1 = get_def_integral_2(t_cur, prev_t[2], t_cur, t_next, prev_t[1])
+                    coeff_prev2 = get_def_integral_2(t_cur, prev_t[1], t_cur, t_next, prev_t[2])
                     coeff_temp = [coeff_cur, coeff_prev1, coeff_prev2]
                 elif order == 4:
-                    coeff_cur = get_def_intergral_3(prev_t[1], prev_t[2], prev_t[3], t_cur, t_next, t_cur)
-                    coeff_prev1 = get_def_intergral_3(t_cur, prev_t[2], prev_t[3], t_cur, t_next, prev_t[1])
-                    coeff_prev2 = get_def_intergral_3(t_cur, prev_t[1], prev_t[3], t_cur, t_next, prev_t[2])
-                    coeff_prev3 = get_def_intergral_3(t_cur, prev_t[1], prev_t[2], t_cur, t_next, prev_t[3])
+                    coeff_cur = get_def_integral_3(prev_t[1], prev_t[2], prev_t[3], t_cur, t_next, t_cur)
+                    coeff_prev1 = get_def_integral_3(t_cur, prev_t[2], prev_t[3], t_cur, t_next, prev_t[1])
+                    coeff_prev2 = get_def_integral_3(t_cur, prev_t[1], prev_t[3], t_cur, t_next, prev_t[2])
+                    coeff_prev3 = get_def_integral_3(t_cur, prev_t[1], prev_t[2], t_cur, t_next, prev_t[3])
                     coeff_temp = [coeff_cur, coeff_prev1, coeff_prev2, coeff_prev3]
                 C.append(coeff_temp)
     return C
-

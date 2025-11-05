@@ -939,8 +939,6 @@ def sample_deis(model, x, sigmas, extra_args=None, callback=None, disable=None):
         d_cur = to_d(x_cur, t_cur, denoised)
 
         order = min(max_order, i+1)
-        if t_next <= 0:
-            order = 1
 
         if order == 1:          # First Euler step.
             x_next = x_cur + (t_next - t_cur) * d_cur
@@ -954,11 +952,12 @@ def sample_deis(model, x, sigmas, extra_args=None, callback=None, disable=None):
             coeff_cur, coeff_prev1, coeff_prev2, coeff_prev3 = coeff_list[i]
             x_next = x_cur + coeff_cur * d_cur + coeff_prev1 * buffer_model[-1] + coeff_prev2 * buffer_model[-2] + coeff_prev3 * buffer_model[-3]
 
-        if len(buffer_model) == max_order - 1:
-            for k in range(max_order - 2):
-                buffer_model[k] = buffer_model[k+1]
-            buffer_model[-1] = d_cur.detach()
-        else:
-            buffer_model.append(d_cur.detach())
+        if max_order > 1:
+            if len(buffer_model) == max_order - 1:
+                for k in range(max_order - 2):
+                    buffer_model[k] = buffer_model[k+1]
+                buffer_model[-1] = d_cur.detach()
+            else:
+                buffer_model.append(d_cur.detach())
 
     return x_next
