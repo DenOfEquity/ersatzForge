@@ -2,6 +2,7 @@ from modules_forge.supported_preprocessor import Preprocessor, PreprocessorParam
 from modules_forge.shared import add_supported_preprocessor, preprocessor_dir
 from modules_forge.utils import resize_image_with_pad, HWC3
 from modules import devices
+from modules.modelloader import load_file_from_url
 
 import os
 import torch
@@ -90,7 +91,7 @@ class DensePoseMaskedColormapResultsVisualizer:
         results,
     ) -> numpy.ndarray:
         context = image_bgr
-        for i, result in enumerate(results):
+        for result in results:
             boxes_xywh, labels, uv = result
             iuv_array = torch.cat(
                 (labels[None].type(torch.float32), uv * 255.0)
@@ -254,3 +255,4 @@ class PreprocessorDensepose(Preprocessor):
 
 add_supported_preprocessor(PreprocessorDensepose('densepose_viridis'))
 add_supported_preprocessor(PreprocessorDensepose('densepose_parula'))
+
