@@ -2,13 +2,8 @@ from modules_forge.supported_preprocessor import Preprocessor, PreprocessorParam
 from modules_forge.shared import add_supported_preprocessor
 from modules_forge.utils import resize_image_with_pad, HWC3
 
-import torch
 import mediapipe
 import numpy
-import os
-
-
-# from typing import Mapping
 
 
 right_iris_draw = mediapipe.solutions.drawing_styles.DrawingSpec(color=(10, 200, 250), thickness=2, circle_radius=1)
@@ -177,3 +172,4 @@ class PreprocessorMediaPipeFace(Preprocessor):
         return HWC3(remove_pad(result))
 
 add_supported_preprocessor(PreprocessorMediaPipeFace())
+
