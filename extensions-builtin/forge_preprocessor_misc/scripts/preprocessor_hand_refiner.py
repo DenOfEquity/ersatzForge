@@ -5,7 +5,6 @@ from modules import devices
 
 import os
 import torch
-import numpy
 import contextlib
 
 Extra = lambda x: contextlib.nullcontext()
@@ -63,3 +62,4 @@ class PreprocessorHandRefiner(Preprocessor):
 
 
 add_supported_preprocessor(PreprocessorHandRefiner())
+
