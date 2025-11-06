@@ -4,7 +4,7 @@ from modules.launch_utils import run_pip
 
 
 def try_install_bnb():
-    target_bitsandbytes_version = '0.45.3'
+    target_bitsandbytes_version = '0.48.1'
 
     try:
         bitsandbytes_version = pkg_resources.get_distribution('bitsandbytes').version
@@ -17,5 +17,5 @@ def try_install_bnb():
                 f"install -U bitsandbytes=={target_bitsandbytes_version}",
                 f"bitsandbytes=={target_bitsandbytes_version}",
             )
-    except Exception as e:
-        print(f'Cannot install bitsandbytes. Skipped.')
+    except Exception:
+        print('Cannot install bitsandbytes. Skipped.')
