@@ -18,7 +18,7 @@ def select_gallery_and_update_gen_info(generation_info, html_info, index):
     if index < 0:
         return gr.update(selected_index=0), update_generation_info(generation_info, html_info, 0)
 
-    return gr.update(), update_generation_info(generation_info, html_info, index)
+    return gr.skip(), update_generation_info(generation_info, html_info, index)
 
 
 def update_generation_info(generation_info, html_info, index):
@@ -37,7 +37,7 @@ def select_gallery_0(index):
     if index < 0:
         return gr.update(selected_index=0)
 
-    return gr.update()
+    return gr.skip()
 
 
 def plaintext_to_html(text, classname=None):
@@ -111,7 +111,7 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
         else:
             res.generation_info = gr.Textbox(visible=False, elem_id=f'generation_info_{tabname}')
             res.infotext = gr.HTML(elem_id=f'html_info_{tabname}', elem_classes="infotext")
-            (res.gallery).select(fn=update_generation_info, js="function(x, y, z){ return [x, y, selected_gallery_index()] }", inputs=[res.generation_info, res.infotext, dummy], outputs=[res.infotext], show_progress=False)
+            res.gallery.select(fn=update_generation_info, js="function(x, y, z){ return [x, y, selected_gallery_index()] }", inputs=[res.generation_info, res.infotext, dummy], outputs=[res.infotext], show_progress=False)
 
             res.gallery.change(fn=select_gallery_and_update_gen_info, js="function(x, y, z){ return [x, y, selected_gallery_index()] }", inputs=[res.generation_info, res.infotext, dummy], outputs=[res.gallery, res.infotext], show_progress=False).then(fn=None, js="setup_gallery_lightbox", inputs=None, outputs=None)
 
@@ -174,5 +174,4 @@ def setup_dialog(button_show, dialog, *, button_close=None):
 
     if button_close:
         button_close.click(fn=None, js="closePopup")
-
 

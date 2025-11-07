@@ -287,7 +287,7 @@ class UiSettings:
 
     def add_functionality(self, demo):
         self.submit.click(
-            fn=wrap_gradio_call_no_job(lambda *args: self.run_settings(*args), extra_outputs=[gr.update()]),
+            fn=wrap_gradio_call_no_job(lambda *args: self.run_settings(*args), extra_outputs=[gr.skip()]),
             inputs=self.components,
             outputs=[self.text_settings, self.result],
         )

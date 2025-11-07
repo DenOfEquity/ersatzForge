@@ -12,8 +12,8 @@ def select_style(name):
     existing = style is not None
     empty = not name
 
-    prompt = style.prompt if style else gr.update()
-    negative_prompt = style.negative_prompt if style else gr.update()
+    prompt = style.prompt if style else gr.skip()
+    negative_prompt = style.negative_prompt if style else gr.skip()
 
     return prompt, negative_prompt, gr.update(interactive=existing), gr.update(interactive=not empty)
 
@@ -46,7 +46,7 @@ def materialize_styles(prompt, negative_prompt, styles):
     prompt = shared.prompt_styles.apply_styles_to_prompt(prompt, styles)
     negative_prompt = shared.prompt_styles.apply_negative_styles_to_prompt(negative_prompt, styles)
 
-    return [gr.Textbox.update(value=prompt), gr.Textbox.update(value=negative_prompt), gr.Dropdown.update(value=[])]
+    return [gr.update(value=prompt), gr.update(value=negative_prompt), gr.update(value=[])]
 
 
 def refresh_styles():

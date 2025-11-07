@@ -90,7 +90,7 @@ def connect_reuse_seed(seed: gr.Number, reuse_seed: gr.Button, generation_info: 
             if gen_info_string:
                 errors.report(f"Error retrieving seed from generation info: {gen_info_string}", exc_info=True)
 
-        return [res, gr.update()]
+        return [res, gr.skip()]
 
     reuse_seed.click(
         fn=copy_seed,

@@ -75,7 +75,7 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
     def fail(message):
         shared.state.textinfo = message
         shared.state.end()
-        return [*[gr.update() for _ in range(4)], message]
+        return [*[gr.skip() for _ in range(4)], message]
 
     def weighted_sum(theta0, theta1, alpha):
         return ((1 - alpha) * theta0) + (alpha * theta1)
@@ -277,7 +277,7 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
             shared.state.textinfo = f"{type} saved to {output_modelname}"
             shared.state.end()
 
-        return [gr.Dropdown.update(), gr.Dropdown.update(), "Checkpoint saved to " + output_modelname]
+        return [gr.skip(), gr.skip(), "Checkpoint saved to " + output_modelname]
 
     if theta_1:
         shared.state.textinfo = 'Merging A and B'

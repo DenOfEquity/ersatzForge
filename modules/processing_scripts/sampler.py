@@ -27,8 +27,8 @@ class ScriptSampler(scripts.ScriptBuiltinUI):
 
         self.infotext_fields = [
             PasteField(self.steps, "Steps", api="steps"),
-            PasteField(self.sampler_name, lambda d: d["Sampler"] if d.get("Sampler", None) else gr.update(), api="sampler_name"),
-            PasteField(self.scheduler, lambda d: d["Schedule type"] if d.get("Schedule type", None) else gr.update(), api="scheduler"),
+            PasteField(self.sampler_name, lambda d: d["Sampler"] if d.get("Sampler", None) else gr.skip(), api="sampler_name"),
+            PasteField(self.scheduler, lambda d: d["Schedule type"] if d.get("Schedule type", None) else gr.skip(), api="scheduler"),
         ]
 
         shared.options_templates.update(shared.options_section(('ui_sd', "UI defaults 'sd'", "ui"), {

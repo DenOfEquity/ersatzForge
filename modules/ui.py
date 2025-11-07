@@ -127,12 +127,12 @@ def process_interrogate(interrogation_function, mode, ii_input_dir, ii_output_di
             left, _ = os.path.splitext(filename)
             print(interrogation_function(img), file=open(os.path.join(ii_output_dir, f"{left}.txt"), 'a', encoding='utf-8'))
 
-        return [gr.update(), None]
+        return [gr.skip(), None]
 
 
 def interrogate_deepbooru(image):
     prompt = deepbooru.model.tag(image)
-    return gr.update() if prompt is None else prompt
+    return gr.skip() if prompt is None else prompt
 
 
 def update_token_counter(text, steps, styles, *, is_positive=True):
@@ -191,7 +191,7 @@ def create_override_settings_dropdown(tabname, row):
     dropdown = gr.Dropdown([], label="Override settings", visible=False, elem_id=f"{tabname}_override_settings", multiselect=True)
 
     dropdown.change(
-        fn=lambda x: gr.Dropdown.update(visible=bool(x)),
+        fn=lambda x: gr.update(visible=bool(x)),
         inputs=[dropdown],
         outputs=[dropdown],
         show_progress=False,
@@ -387,7 +387,7 @@ def create_ui():
                 PasteField(width, "Size-1", api="width"),
                 PasteField(height, "Size-2", api="height"),
                 PasteField(batch_size, "Batch size", api="batch_size"),
-                PasteField(toprow.ui_styles.dropdown, lambda d: d["Styles array"] if isinstance(d.get("Styles array"), list) else gr.update(), api="styles"),
+                PasteField(toprow.ui_styles.dropdown, lambda d: d["Styles array"] if isinstance(d.get("Styles array"), list) else gr.skip(), api="styles"),
                 PasteField(denoising_strength, "Denoising strength", api="denoising_strength"),
                 PasteField(enable_hr, lambda d: "Denoising strength" in d and ("HiRes upscale" in d or "HiRes upscaler" in d or "HiRes resize-1" in d), api="enable_hr"),
                 PasteField(hr_scale, "HiRes upscale", api="hr_scale"),
@@ -397,8 +397,8 @@ def create_ui():
                 PasteField(hr_resize_y, "HiRes resize-2", api="hr_resize_y"),
                 PasteField(hr_checkpoint_name, "HiRes checkpoint", api="hr_checkpoint_name"),
                 PasteField(hr_additional_modules, "HiRes additional modules", api="hr_additional_modules"),
-                PasteField(hr_sampler_name, lambda d: d["HiRes sampler"] if d.get("HiRes sampler", None) else gr.update(), api="hr_sampler_name"),
-                PasteField(hr_scheduler, lambda d: d["HiRes schedule type"] if d.get("HiRes schedule type", None) else gr.update(), api="hr_scheduler"),
+                PasteField(hr_sampler_name, lambda d: d["HiRes sampler"] if d.get("HiRes sampler", None) else gr.skip(), api="hr_sampler_name"),
+                PasteField(hr_scheduler, lambda d: d["HiRes schedule type"] if d.get("HiRes schedule type", None) else gr.skip(), api="hr_scheduler"),
                 PasteField(hr_prompt, "HiRes prompt", api="hr_prompt"),
                 PasteField(hr_negative_prompt, "HiRes negative prompt", api="hr_negative_prompt"),
                 PasteField(hr_cfg, "HiRes CFG scale", api="hr_cfg"),
@@ -510,7 +510,7 @@ def create_ui():
 
                                         res_switch_btn.click(fn=lambda w, h: (h, w), inputs=[width, height], outputs=[width, height], show_progress='hidden', queue=False)
                                         detect_image_size_btn.click(
-                                            fn=lambda w, h: (w or gr.update(), h or gr.update()),
+                                            fn=lambda w, h: (w or gr.skip(), h or gr.skip()),
                                             js="currentImg2imgSourceResolution",
                                             inputs=[dummy_component, dummy_component],
                                             outputs=[width, height],
@@ -678,7 +678,7 @@ def create_ui():
                 (width, "Size-1"),
                 (height, "Size-2"),
                 (batch_size, "Batch size"),
-                (toprow.ui_styles.dropdown, lambda d: d["Styles array"] if isinstance(d.get("Styles array"), list) else gr.update()),
+                (toprow.ui_styles.dropdown, lambda d: d["Styles array"] if isinstance(d.get("Styles array"), list) else gr.skip()),
                 (denoising_strength, "Denoising strength"),
                 (mask_blur, "Mask blur"),
                 (inpainting_mask_invert, 'Mask mode'),

@@ -211,8 +211,8 @@ def send_image_and_dimensions(x):
         w = img.width
         h = img.height
     else:
-        w = gr.update()
-        h = gr.update()
+        w = gr.skip()
+        h = gr.skip()
 
     return img, w, h
 
@@ -596,7 +596,7 @@ def connect_paste(button, paste_fields, input_comp, override_settings_component,
                 v = params.get(key, None)
 
             if v is None:
-                res.append(gr.update())
+                res.append(gr.skip())
             elif isinstance(v, type_of_gr_update):
                 res.append(v)
             else:
@@ -612,7 +612,7 @@ def connect_paste(button, paste_fields, input_comp, override_settings_component,
 
                     res.append(gr.update(value=val))
                 except Exception:
-                    res.append(gr.update())
+                    res.append(gr.skip())
 
         return res
 

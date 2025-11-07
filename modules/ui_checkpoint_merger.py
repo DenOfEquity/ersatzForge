@@ -4,7 +4,7 @@ import gradio as gr
 from modules import shared, sd_models, errors, extras, call_queue
 from modules.ui_components import FormRow
 from modules.ui_common import ToolButton, refresh_symbol
-from modules_forge.main_entry import module_list, module_vae_list, module_te_list, refresh_vaete
+from modules_forge.main_entry import module_vae_list, module_te_list, refresh_vaete
 
 
 def update_interp_description(value, choices):
@@ -29,7 +29,7 @@ def modelmerger(*args):
     except Exception as e:
         errors.report("Error loading/saving model file", exc_info=True)
         sd_models.list_models()  # to remove the potentially missing models from the list
-        return [*[gr.Dropdown.update(choices=sd_models.checkpoint_tiles()) for _ in range(4)], f"Error merging checkpoints: {e}"]
+        return [*[gr.update(choices=sd_models.checkpoint_tiles()) for _ in range(4)], f"Error merging checkpoints: {e}"]
     return results
 
 def convert_embeds(one, many, output_dir):
@@ -48,8 +48,7 @@ def convert_embeds(one, many, output_dir):
     )
 
     try:
-        converter_model_path = load_file_from_url("https://github.com/nArn0/sdxl-embedding-converter/releases/download/v1.0/model.safetensors", 
-                                                  model_dir="models", file_name="embedding_converter.safetensors")
+        converter_model_path = load_file_from_url("https://github.com/nArn0/sdxl-embedding-converter/releases/download/v1.0/model.safetensors", model_dir="models", file_name="embedding_converter.safetensors")
         safetensors.torch.load_model(converter_model, converter_model_path)
     except:
         return "ERROR: could not load 'models/embedding_converter.safetensors'"
@@ -66,7 +65,7 @@ def convert_embeds(one, many, output_dir):
 
     if output_dir == "":
         output_dir = ".\\models\\embeddings"
-    
+
     os.makedirs(output_dir, exist_ok=True)
 
     for embed in embeds:
@@ -123,7 +122,6 @@ def convert_embeds(one, many, output_dir):
     del converter_model
 
     return f"DONE: {success_count} processed; {fail_count} failures"
-    
 
 
 class UiCheckpointMerger:
@@ -252,7 +250,7 @@ class UiCheckpointMerger:
 
         self.modelmerger_merge.click(fn=lambda: '', inputs=None, outputs=[self.modelmerger_result])
         self.modelmerger_merge.click(
-            fn=call_queue.wrap_gradio_gpu_call(modelmerger, extra_outputs=lambda: [gr.update() for _ in range(4)]),
+            fn=call_queue.wrap_gradio_gpu_call(modelmerger, extra_outputs=lambda: [gr.skip() for _ in range(4)]),
             js='modelmerger',
             inputs=[
                 dummy_component,
