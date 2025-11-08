@@ -550,7 +550,7 @@ class ControlNetUiGroup(object):
         """Register event handler for send dimension button."""
 
         def send_dimensions(image):
-            def closesteight(num):
+            def closestheight(num):
                 rem = num % 8
                 if rem <= 4:
                     return round(num - rem)
@@ -558,9 +558,9 @@ class ControlNetUiGroup(object):
                     return round(num + (8 - rem))
 
             if image is not None:
-                return closesteight(image.shape[1]), closesteight(image.shape[0])
+                return closestheight(image.shape[1]), closestheight(image.shape[0])
             else:
-                return gr.Slider.update(), gr.Slider.update()
+                return gr.skip(), gr.skip()
 
         self.send_dimen_button.click(
             fn=send_dimensions,
@@ -572,9 +572,7 @@ class ControlNetUiGroup(object):
     def register_refresh_all_models(self):
         def refresh_all_models():
             global_state.update_controlnet_filenames()
-            return gr.Dropdown.update(
-                choices=global_state.get_all_controlnet_names(),
-            )
+            return gr.update(choices=global_state.get_all_controlnet_names())
 
         self.refresh_models.click(
             refresh_all_models,
@@ -647,17 +645,13 @@ class ControlNetUiGroup(object):
             if self.prevent_next_n_module_update > 0:
                 self.prevent_next_n_module_update -= 1
                 return [
-                    gr.Dropdown.update(choices=filtered_preprocessor_list),
-                    gr.Dropdown.update(choices=filtered_controlnet_names),
+                    gr.update(choices=filtered_preprocessor_list),
+                    gr.update(choices=filtered_controlnet_names),
                 ]
             else:
                 return [
-                    gr.Dropdown.update(
-                        value=default_preprocessor, choices=filtered_preprocessor_list
-                    ),
-                    gr.Dropdown.update(
-                        value=default_controlnet_name, choices=filtered_controlnet_names
-                    ),
+                    gr.update(value=default_preprocessor, choices=filtered_preprocessor_list),
+                    gr.update(value=default_controlnet_name, choices=filtered_controlnet_names),
                 ]
 
         self.type_filter.change(
@@ -673,7 +667,7 @@ class ControlNetUiGroup(object):
                 return (
                     gr.update(visible=True),
                     None,
-                    gr.update(),
+                    gr.skip(),
                     *self.openpose_editor.update(""),
                 )
 
@@ -791,15 +785,15 @@ class ControlNetUiGroup(object):
         def shift_preview(is_on):
             return (
                 # generated_image
-                gr.update() if is_on else gr.update(value=None),
+                gr.skip() if is_on else gr.update(value=None),
                 # generated_image_group
                 gr.update(visible=is_on),
                 # use_preview_as_input,
                 gr.update(value=is_on),  # Now this is automatically managed ??
                 # download_pose_link
-                gr.update() if is_on else gr.update(value=None),
+                gr.skip() if is_on else gr.update(value=None),
                 # modal edit button
-                gr.update() if is_on else gr.update(visible=False),
+                gr.skip() if is_on else gr.update(visible=False),
             )
 
         self.preprocessor_preview.change(
@@ -830,9 +824,7 @@ class ControlNetUiGroup(object):
         )
 
         def fn_canvas(h, w):
-            return np.zeros(shape=(h, w, 3), dtype=np.uint8), gr.update(
-                visible=False
-            )
+            return np.zeros(shape=(h, w, 3), dtype=np.uint8), gr.update(visible=False)
 
         self.canvas_create_button.click(
             fn=fn_canvas,
@@ -877,7 +869,7 @@ class ControlNetUiGroup(object):
                 # Init an empty canvas the same size as the generation target.
                 empty_canvas = np.zeros(shape=(canvas_height, canvas_width, 3), dtype=np.uint8)
                 return gr.update(visible=True), gr.update(value=empty_canvas), gr.update(visible=True), \
-                        gr.update(visible=True), gr.update()
+                        gr.update(visible=True), gr.skip()
 
         self.mask_upload.change(
             fn=on_checkbox_click,
