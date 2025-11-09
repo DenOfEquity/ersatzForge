@@ -1,15 +1,12 @@
 import copy
 import random
-import shlex
+import gradio
 
-import modules.scripts as scripts
-import gradio as gr
-
-from modules import sd_samplers, errors, sd_models
+from modules import errors, sd_models, scripts
 from modules.processing import Processed, process_images
-from modules.shared import state
+from modules.shared import opts, state
 from modules.images import image_grid, save_image
-from modules.shared import opts
+
 
 def process_model_tag(tag):
     info = sd_models.get_closet_checkpoint_match(tag)
@@ -30,7 +27,7 @@ def process_float_tag(tag):
 
 
 def process_boolean_tag(tag):
-    return True if (tag == "true") else False
+    return True if (tag.lower() == "true") else False
 
 
 prompt_tags = {
@@ -46,54 +43,57 @@ prompt_tags = {
     "subseed": process_int_tag,
     "seed_resize_from_h": process_int_tag,
     "seed_resize_from_w": process_int_tag,
-    "sampler_index": process_int_tag,
     "sampler_name": process_string_tag,
+    "scheduler": process_string_tag,
     "batch_size": process_int_tag,
     "n_iter": process_int_tag,
     "steps": process_int_tag,
     "cfg_scale": process_float_tag,
+    "distilled_cfg_scale": process_float_tag,
     "width": process_int_tag,
     "height": process_int_tag,
     "restore_faces": process_boolean_tag,
-    "tiling": process_boolean_tag,
+    "tiling": process_string_tag,
     "do_not_save_samples": process_boolean_tag,
     "do_not_save_grid": process_boolean_tag
 }
 
 
 def cmdargs(line):
-    args = shlex.split(line)
+    args = line.split(" ")
     pos = 0
     res = {}
+
+    def get_full_text(pos, args):
+        pos_e = pos
+        while pos_e < len(args) and not args[pos_e].startswith("--"):
+            pos_e += 1
+
+        text = " ".join(args[pos:pos_e])
+
+        return pos_e, text
 
     while pos < len(args):
         arg = args[pos]
 
-        assert arg.startswith("--"), f'must start with "--": {arg}'
-        assert pos+1 < len(args), f'missing argument for command line option {arg}'
+        if not arg.startswith("--"):
+            print (f'[Prompts from file] argument must start with "--": {arg}')
+            pos += 2
+            continue
+        if pos+1 >= len(args):
+            print (f'[Prompts from file] missing data for argument {arg}')
+            pos += 2
+            continue
 
         tag = arg[2:]
 
-        if tag == "prompt" or tag == "negative_prompt":
-            pos += 1
-            prompt = args[pos]
-            pos += 1
-            while pos < len(args) and not args[pos].startswith("--"):
-                prompt += " "
-                prompt += args[pos]
-                pos += 1
-            res[tag] = prompt
+        if tag in ["prompt", "negative_prompt", "sampler_name", "scheduler"]:
+            pos, res[tag] = get_full_text(pos+1, args)
             continue
 
-
-        func = prompt_tags.get(tag, None)
-        assert func, f'unknown commandline option: {arg}'
-
-        val = args[pos+1]
-        if tag == "sampler_name":
-            val = sd_samplers.samplers_map.get(val.lower(), None)
-
-        res[tag] = func(val)
+        if func := prompt_tags.get(tag, None):
+            val = args[pos+1]
+            res[tag] = func(val)
 
         pos += 2
 
@@ -102,7 +102,7 @@ def cmdargs(line):
 
 def load_prompt_file(file):
     if file is None:
-        return None, gr.update()
+        return None, gradio.skip()
     else:
         lines = [x.strip() for x in file.decode('utf8', errors='ignore').split("\n")]
         return None, "\n".join(lines)
@@ -113,22 +113,22 @@ class Script(scripts.Script):
         return "Prompts from file or textbox"
 
     def ui(self, is_img2img):
-        checkbox_iterate = gr.Checkbox(label="Iterate seed every line", value=False, elem_id=self.elem_id("checkbox_iterate"))
-        checkbox_iterate_batch = gr.Checkbox(label="Use same random seed for all lines", value=False, elem_id=self.elem_id("checkbox_iterate_batch"))
-        prompt_position = gr.Radio(["start", "end"], label="Insert prompts at the", elem_id=self.elem_id("prompt_position"), value="start")
-        make_combined = gr.Checkbox(label="Make a combined image containing all outputs (if more than one)", value=False)
+        checkbox_iterate = gradio.Radio(["None", "Iterate every line", "Same every line"], label="Seed iteration", value="None")
+        prompt_position = gradio.Radio(["Start", "End"], label="Insert prompts at the", value="Start")
+        make_combined = gradio.Checkbox(label="Make a combined image containing all outputs (if more than one)", value=False)
 
-        prompt_txt = gr.Textbox(label="List of prompt inputs", lines=2, elem_id=self.elem_id("prompt_txt"))
-        file = gr.File(label="Upload prompt inputs", type='binary', elem_id=self.elem_id("file"))
+        prompt_txt = gradio.Textbox(label="List of prompt inputs", lines=2)
+        file = gradio.File(label="Upload prompt inputs", type='binary')
 
         file.upload(fn=load_prompt_file, inputs=[file], outputs=[file, prompt_txt], show_progress=False)
 
-        return [checkbox_iterate, checkbox_iterate_batch, prompt_position, prompt_txt, make_combined]
+        return [checkbox_iterate, prompt_position, prompt_txt, make_combined]
 
-    def run(self, p, checkbox_iterate, checkbox_iterate_batch, prompt_position, prompt_txt: str, make_combined):
+    def run(self, p, checkbox_iterate, prompt_position, prompt_txt: str, make_combined):
         lines = [x for x in (x.strip() for x in prompt_txt.splitlines()) if x]
 
         p.do_not_save_grid = True
+        p.fill_fields_from_opts()
 
         job_count = 0
         jobs = []
@@ -147,8 +147,8 @@ class Script(scripts.Script):
 
             jobs.append(args)
 
-        print(f"Will process {len(lines)} lines in {job_count} jobs.")
-        if (checkbox_iterate or checkbox_iterate_batch) and p.seed == -1:
+        print (f"[Prompts from file] will process {len(lines)} lines in {job_count} jobs.")
+        if checkbox_iterate != "None" and p.seed == -1:
             p.seed = int(random.randrange(4294967294))
 
         state.job_count = job_count
@@ -167,13 +167,13 @@ class Script(scripts.Script):
                     setattr(copy_p, k, v)
 
             if args.get("prompt") and p.prompt:
-                if prompt_position == "start":
+                if prompt_position == "Start":
                     copy_p.prompt = args.get("prompt") + " " + p.prompt
                 else:
                     copy_p.prompt = p.prompt + " " + args.get("prompt")
 
             if args.get("negative_prompt") and p.negative_prompt:
-                if prompt_position == "start":
+                if prompt_position == "Start":
                     copy_p.negative_prompt = args.get("negative_prompt") + " " + p.negative_prompt
                 else:
                     copy_p.negative_prompt = p.negative_prompt + " " + args.get("negative_prompt")
@@ -181,7 +181,7 @@ class Script(scripts.Script):
             proc = process_images(copy_p)
             images += proc.images
 
-            if checkbox_iterate:
+            if checkbox_iterate == "Iterate every line":
                 p.seed = p.seed + (p.batch_size * p.n_iter)
             all_prompts += proc.all_prompts
             infotexts += proc.infotexts
@@ -189,9 +189,9 @@ class Script(scripts.Script):
         if make_combined and len(images) > 1:
             combined_image = image_grid(images, batch_size=1, rows=None).convert("RGB")
             full_infotext = "\n".join(infotexts)
-            
+
             is_img2img = getattr(p, "init_images", None) is not None
-            
+
             if opts.grid_save:  #   use grid specific Settings
                 save_image(
                     combined_image,
