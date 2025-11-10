@@ -49,7 +49,7 @@ def apply_control(h, control, name):
             if h.shape == ctrl.shape:
                 h.add_(ctrl)
             else: # Kohya HighRes fix changes shape of h
-                h.add_c(torch.nn.functional.interpolate(ctrl, (h.shape[-2], h.shape[-1]), mode='bilinear'))
+                h.add_(torch.nn.functional.interpolate(ctrl, (h.shape[-2], h.shape[-1]), mode='bilinear'))
 
     return h
 
@@ -252,7 +252,7 @@ class BasicTransformerBlock(nn.Module):
             patch = transformer_patches["attn1_output_patch"]
             for p in patch:
                 n = p(n, extra_options)
-        x += n
+        x.add_(n)
         if "middle_patch" in transformer_patches:
             patch = transformer_patches["middle_patch"]
             for p in patch:
@@ -314,17 +314,17 @@ class SpatialTransformer(nn.Module):
                                    disable_self_attn=disable_self_attn, checkpoint=use_checkpoint)
              for d in range(depth)]
         )
-        if not use_linear:
-            self.proj_out = nn.Conv2d(inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
-        else:
+        if use_linear:
             self.proj_out = nn.Linear(in_channels, inner_dim)
+        else:
+            self.proj_out = nn.Conv2d(inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
         self.use_linear = use_linear
 
     def forward(self, x, context=None, transformer_options={}):
         if not isinstance(context, list):
             context = [context] * len(self.transformer_blocks)
         b, c, h, w = x.shape
-        x_in = x
+        x_in = x.clone()
 
         x = self.norm(x)
 
@@ -334,7 +334,7 @@ class SpatialTransformer(nn.Module):
         else:
             x = self.proj_in(x)
             x = rearrange(x, 'b c h w -> b (h w) c').contiguous()
-            
+
         for i, block in enumerate(self.transformer_blocks):
             transformer_options["block_index"] = i
             x = block(x, context=context[i], transformer_options=transformer_options)
@@ -483,7 +483,8 @@ class ResBlock(TimestepBlock):
                 h = out_norm(h)
             if emb_out is not None:
                 scale, shift = torch.chunk(emb_out, 2, dim=1)
-                h.addcmul_(shift, scale.add_(1))
+                h *= (1 + scale)
+                h += shift
             h = out_rest(h)
         else:
             if emb_out is not None:
