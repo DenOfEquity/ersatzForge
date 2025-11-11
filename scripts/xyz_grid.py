@@ -191,14 +191,14 @@ def boolean_choice(reverse: bool = False):
 
 
 def format_value_add_label(p, opt, x):
-    if type(x) == float:
+    if type(x) is float:
         x = round(x, 8)
 
     return f"{opt.label}: {x}"
 
 
 def format_value(p, opt, x):
-    if type(x) == float:
+    if type(x) is float:
         x = round(x, 8)
     return x
 
@@ -439,7 +439,7 @@ class Script(scripts.Script):
         return "X/Y/Z plot"
 
     def ui(self, is_img2img):
-        self.current_axis_options = [x for x in axis_options if type(x) == AxisOption or x.is_img2img == is_img2img]
+        self.current_axis_options = [x for x in axis_options if type(x) is AxisOption or x.is_img2img == is_img2img]
 
         with gr.Row():
             with gr.Column(scale=19):
@@ -577,7 +577,7 @@ class Script(scripts.Script):
             else:
                 valslist = csv_string_to_list_strip(vals)
 
-            if opt.type == int:
+            if opt.type is int:
                 valslist_ext = []
 
                 for val in valslist:
@@ -601,7 +601,7 @@ class Script(scripts.Script):
                         valslist_ext.append(val)
 
                 valslist = valslist_ext
-            elif opt.type == float:
+            elif opt.type is float:
                 valslist_ext = []
 
                 for val in valslist:

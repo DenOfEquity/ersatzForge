@@ -57,7 +57,7 @@ class Script(scripts.Script):
 
     def run(self, p, put_at_start, different_seeds, prompt_type, variations_delimiter, margin_size):
         modules.processing.fix_seed(p)
-        # Raise error if promp type is not positive or negative
+        # Raise error if prompt type is not positive or negative
         if prompt_type not in ["positive", "negative"]:
             raise ValueError(f"Unknown prompt type {prompt_type}")
         # Raise error if variations delimiter is not comma or space
@@ -65,8 +65,8 @@ class Script(scripts.Script):
             raise ValueError(f"Unknown variations delimiter {variations_delimiter}")
 
         prompt = p.prompt if prompt_type == "positive" else p.negative_prompt
-        original_prompt = prompt[0] if type(prompt) == list else prompt
-        positive_prompt = p.prompt[0] if type(p.prompt) == list else p.prompt
+        original_prompt = prompt[0] if isinstance(prompt, list) else prompt
+        positive_prompt = p.prompt[0] if isinstance(p.prompt, list) else p.prompt
 
         delimiter = ", " if variations_delimiter == "comma" else " "
 

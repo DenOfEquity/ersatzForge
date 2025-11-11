@@ -30,21 +30,34 @@ def process_boolean_tag(tag):
     return True if (tag.lower() == "true") else False
 
 
+def process_size_tag(tag):
+    if tag[0] == "r":
+        base = int(tag[1:])
+        lo = 3 * base // 4
+        hi = 5 * base // 3
+        w = int(random.randrange(lo, hi, 16))
+        h = int(base * base / w)
+        h = 16 * ((h + 8) // 16)
+    elif "x" in tag:
+        w, h = tag.split("x", 1)
+        w, h = int(w), int(h)
+    else:
+        w = h = int(tag)
+
+    return w, h
+
+
 prompt_tags = {
     "sd_model": process_model_tag,
     "outpath_samples": process_string_tag,
     "outpath_grids": process_string_tag,
     "prompt_for_display": process_string_tag,
-    "prompt": process_string_tag,
-    "negative_prompt": process_string_tag,
     "styles": process_string_tag,
     "seed": process_int_tag,
     "subseed_strength": process_float_tag,
     "subseed": process_int_tag,
     "seed_resize_from_h": process_int_tag,
     "seed_resize_from_w": process_int_tag,
-    "sampler_name": process_string_tag,
-    "scheduler": process_string_tag,
     "batch_size": process_int_tag,
     "n_iter": process_int_tag,
     "steps": process_int_tag,
@@ -55,7 +68,6 @@ prompt_tags = {
     "restore_faces": process_boolean_tag,
     "tiling": process_string_tag,
     "do_not_save_samples": process_boolean_tag,
-    "do_not_save_grid": process_boolean_tag
 }
 
 
@@ -76,6 +88,9 @@ def cmdargs(line):
     while pos < len(args):
         arg = args[pos]
 
+        if arg == "":
+            pos += 1
+            continue
         if not arg.startswith("--"):
             print (f'[Prompts from file] argument must start with "--": {arg}')
             pos += 2
@@ -85,13 +100,16 @@ def cmdargs(line):
             pos += 2
             continue
 
-        tag = arg[2:]
+        tag = arg[2:].lower()
 
         if tag in ["prompt", "negative_prompt", "sampler_name", "scheduler"]:
             pos, res[tag] = get_full_text(pos+1, args)
             continue
 
-        if func := prompt_tags.get(tag, None):
+        if tag == "size":
+            val = args[pos+1]
+            res["width"], res["height"] = process_size_tag(val)
+        elif func := prompt_tags.get(tag, None):
             val = args[pos+1]
             res[tag] = func(val)
 
@@ -118,9 +136,9 @@ class Script(scripts.Script):
         make_combined = gradio.Checkbox(label="Make a combined image containing all outputs (if more than one)", value=False)
 
         prompt_txt = gradio.Textbox(label="List of prompt inputs", lines=2)
-        file = gradio.File(label="Upload prompt inputs", type='binary')
+        prompt_file = gradio.File(label="Upload prompt inputs", type='binary')
 
-        file.upload(fn=load_prompt_file, inputs=[file], outputs=[file, prompt_txt], show_progress=False)
+        prompt_file.upload(fn=load_prompt_file, inputs=[prompt_file], outputs=[prompt_file, prompt_txt], show_progress=False)
 
         return [checkbox_iterate, prompt_position, prompt_txt, make_combined]
 
