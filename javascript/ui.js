@@ -59,6 +59,7 @@ function switch_to_txt2img() {
 }
 
 function switch_to_img2img_tab(no) {
+    if (no >= 3) no -= 3; // back-compatibility
     gradioApp().querySelector('#tabs').querySelectorAll('button')[1].click();
     gradioApp().getElementById('mode_img2img').querySelectorAll('button')[no].click();
 }
