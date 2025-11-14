@@ -33,18 +33,17 @@ def process_boolean_tag(tag):
 def process_size_tag(tag):
     if tag[0] == "r":
         base = int(tag[1:])
-        lo = 3 * base // 4
-        hi = 5 * base // 3
-        w = int(random.randrange(lo, hi, 16))
-        h = int(base * base / w)
+        lo = (3 * base // 4)
+        hi = (5 * base // 3)
+        w = 16 * (random.randrange(lo, hi, 16) // 16)
+        h = (base * base) / w
         h = 16 * ((h + 8) // 16)
     elif "x" in tag:
         w, h = tag.split("x", 1)
-        w, h = int(w), int(h)
     else:
-        w = h = int(tag)
+        w = h = tag
 
-    return w, h
+    return int(w), int(h)
 
 
 prompt_tags = {
