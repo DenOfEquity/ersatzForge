@@ -5,6 +5,8 @@ import einops
 from backend.args import args
 from backend import memory_management
 from backend.misc.sub_quadratic_attention import efficient_dot_product_attention
+# import backend.operations
+# ops = backend.operations.ForgeOperations
 
 
 BROKEN_XFORMERS = False
@@ -22,18 +24,16 @@ if memory_management.sage_attention_enabled():
     try:
         from sageattention import sageattn
     except ModuleNotFoundError:
-        print(f"\n\nTo use the `--use-sage-attention` feature, the `sageattention` package must be installed first.\ncommand:\n\t{sys.executable} -m pip install sageattention")
+        print("\n\nTo use the `--use-sage-attention` feature, the `sageattention` package must be installed first.\ncommand:\n\tpip install sageattention")
         exit(-1)
 
 if memory_management.flash_attention_enabled():
     try:
         from flash_attn import flash_attn_func
     except ModuleNotFoundError:
-        print(f"\n\nTo use the `--use-flash-attention` feature, the `flash-attn` package must be installed first.\ncommand:\n\t{sys.executable} -m pip install flash-attn")
+        print("\n\nTo use the `--use-flash-attention` feature, the `flash-attn` package must be installed first.\ncommand:\n\tpip install flash-attn")
         exit(-1)
 
-import backend.operations
-ops = backend.operations.ForgeOperations
 
 FORCE_UPCAST_ATTENTION_DTYPE = memory_management.force_upcast_attention_dtype()
 
@@ -63,19 +63,13 @@ def attention_basic(q, k, v, heads, mask=None, attn_precision=None, skip_reshape
 
     h = heads
     if skip_reshape:
-        q, k, v = map(
-            lambda t: t.reshape(b * heads, -1, dim_head),
-            (q, k, v),
-        )
+        q = q.reshape(b * heads, -1, dim_head)
+        k = k.reshape(b * heads, -1, dim_head)
+        v = v.reshape(b * heads, -1, dim_head)
     else:
-        q, k, v = map(
-            lambda t: t.unsqueeze(3)
-            .reshape(b, -1, heads, dim_head)
-            .permute(0, 2, 1, 3)
-            .reshape(b * heads, -1, dim_head)
-            .contiguous(),
-            (q, k, v),
-        )
+        q = einops.rearrange(q, "b z (h d) -> (b h) z d", b=b, h=heads, d=dim_head).contiguous()
+        k = einops.rearrange(k, "b z (h d) -> (b h) z d", b=b, h=heads, d=dim_head).contiguous()
+        v = einops.rearrange(v, "b z (h d) -> (b h) z d", b=b, h=heads, d=dim_head).contiguous()
 
     if attn_precision == torch.float32:
         sim = torch.einsum('b i d, b j d -> b i j', q.to(torch.float32), k.to(torch.float32)) * scale
@@ -100,12 +94,7 @@ def attention_basic(q, k, v, heads, mask=None, attn_precision=None, skip_reshape
 
     sim = sim.softmax(dim=-1)
     out = torch.einsum('b i j, b j d -> b i d', sim.to(v.dtype), v)
-    out = (
-        out.unsqueeze(0)
-        .reshape(b, heads, -1, dim_head)
-        .permute(0, 2, 1, 3)
-        .reshape(b, -1, heads * dim_head)
-    )
+    out = einops.rearrange(out, "(b h) z d -> b z (h d)", b=b, h=heads, d=dim_head).contiguous()
     return out
 
 
@@ -118,7 +107,7 @@ def attention_sub_quad(query, key, value, heads, mask=None, attn_precision=None,
         b, _, dim_head = query.shape
         dim_head //= heads
 
-    scale = dim_head ** -0.5
+    # scale = dim_head ** -0.5
 
     if skip_reshape:
         query = query.reshape(b * heads, -1, dim_head)
@@ -137,7 +126,6 @@ def attention_sub_quad(query, key, value, heads, mask=None, attn_precision=None,
         bytes_per_token = torch.finfo(query.dtype).bits // 8
     batch_x_heads, q_tokens, _ = query.shape
     _, _, k_tokens = key.shape
-    qk_matmul_size_bytes = batch_x_heads * bytes_per_token * q_tokens * k_tokens
 
     mem_free_total, mem_free_torch = memory_management.get_free_memory(query.device, True)
 
@@ -208,12 +196,13 @@ def attention_xformers(q, k, v, heads, mask=None, attn_precision=None, skip_resh
     out = xformers.ops.memory_efficient_attention(q, k, v, attn_bias=mask)
 
     if skip_reshape:
-        out = (
-            out.unsqueeze(0)
-            .reshape(b, heads, -1, dim_head)
-            .permute(0, 2, 1, 3)
-            .reshape(b, -1, heads * dim_head)
-        )
+        out = einops.rearrange(out, "(b h) z d -> b z (h d)", b=b, h=heads, d=dim_head).contiguous()
+        # out = (
+            # out.unsqueeze(0)
+            # .reshape(b, heads, -1, dim_head)
+            # .permute(0, 2, 1, 3)
+            # .reshape(b, -1, heads * dim_head)
+        # )
     else:
         out = out.reshape(b, -1, heads * dim_head)
 
@@ -263,9 +252,7 @@ def attention_sage(q, k, v, heads, mask=None, attn_precision=None, skip_reshape=
 
     if tensor_layout == "HND":
         if not skip_output_reshape:
-            out = (
-                out.transpose(1, 2).reshape(b, -1, heads * dim_head)
-            )
+            out = out.transpose(1, 2).reshape(b, -1, heads * dim_head)
     else:
         if skip_output_reshape:
             out = out.transpose(1, 2)
@@ -313,7 +300,7 @@ def attention_flash(q, k, v, heads, mask=None, attn_precision=None, skip_reshape
     try:
         assert mask is None
         out = flash_attn_wrapper(q, k, v, dropout_p=0.0, causal=False)
-    except Exception as e:
+    except Exception:
         out = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0, is_causal=False)
 
     out = out.transpose(1, 2)
@@ -321,15 +308,14 @@ def attention_flash(q, k, v, heads, mask=None, attn_precision=None, skip_reshape
     if not skip_output_reshape:
         out = out.reshape(b, -1, heads * dim_head)
     return out
-    
-    
+
+
 def slice_attention_single_head_spatial(q, k, v):
     r1 = torch.zeros_like(k, device=q.device)
     scale = (int(q.shape[-1]) ** (-0.5))
 
     mem_free_total = memory_management.get_free_memory(q.device)
 
-    gb = 1024 ** 3
     tensor_size = q.shape[0] * q.shape[1] * k.shape[2] * q.element_size()
     modifier = 3 if q.element_size() == 2 else 2.5
     mem_required = tensor_size * modifier
@@ -379,15 +365,14 @@ def normal_attention_single_head_spatial(q, k, v):
 def xformers_attention_single_head_spatial(q, k, v):
     # compute attention
     B, C, H, W = q.shape
-    q, k, v = map(
-        lambda t: t.view(B, C, -1).transpose(1, 2).contiguous(),
-        (q, k, v),
-    )
+    q = q.view(B, C, -1).transpose(1, 2).contiguous()
+    k = k.view(B, C, -1).transpose(1, 2).contiguous()
+    v = v.view(B, C, -1).transpose(1, 2).contiguous()
 
     try:
         out = xformers.ops.memory_efficient_attention(q, k, v, attn_bias=None)
         out = out.transpose(1, 2).reshape(B, C, H, W)
-    except NotImplementedError as e:
+    except NotImplementedError:
         out = slice_attention_single_head_spatial(q.view(B, -1, C), k.view(B, -1, C).transpose(1, 2),
                                                   v.view(B, -1, C).transpose(1, 2)).reshape(B, C, H, W)
     return out
@@ -396,15 +381,14 @@ def xformers_attention_single_head_spatial(q, k, v):
 def pytorch_attention_single_head_spatial(q, k, v):
     # compute attention
     B, C, H, W = q.shape
-    q, k, v = map(
-        lambda t: t.view(B, 1, C, -1).transpose(2, 3).contiguous(),
-        (q, k, v),
-    )
+    q = q.view(B, 1, C, -1).transpose(2, 3).contiguous()
+    k = k.view(B, 1, C, -1).transpose(2, 3).contiguous()
+    v = v.view(B, 1, C, -1).transpose(2, 3).contiguous()
 
     try:
         out = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False)
         out = out.transpose(2, 3).reshape(B, C, H, W)
-    except memory_management.OOM_EXCEPTION as e:
+    except memory_management.OOM_EXCEPTION:
         print("scaled_dot_product_attention OOMed: switched to slice attention")
         out = slice_attention_single_head_spatial(q.view(B, -1, C), k.view(B, -1, C).transpose(1, 2),
                                                   v.view(B, -1, C).transpose(1, 2)).reshape(B, C, H, W)

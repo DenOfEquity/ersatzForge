@@ -1,6 +1,5 @@
 # Cherry-picked some good parts from ComfyUI with some bad parts fixed
 
-import sys
 import time
 import psutil
 import torch
@@ -193,12 +192,12 @@ try:
     if is_nvidia():
         torch_version = torch.version.__version__
         if int(torch_version[0]) >= 2:
-            if ENABLE_PYTORCH_ATTENTION == False and args.attention_split == False and args.attention_quad == False:
+            if not ENABLE_PYTORCH_ATTENTION and not args.attention_split and not args.attention_quad:
                 ENABLE_PYTORCH_ATTENTION = True
             if torch.cuda.is_bf16_supported() and torch.cuda.get_device_properties(torch.cuda.current_device()).major >= 8:
                 VAE_DTYPES = [torch.bfloat16] + VAE_DTYPES
     if is_intel_xpu():
-        if args.attention_split == False and args.attention_quad == False:
+        if not args.attention_split and not args.attention_quad:
             ENABLE_PYTORCH_ATTENTION = True
 except:
     pass
@@ -302,7 +301,7 @@ def state_dict_size(sd, exclude_device=None):
 
 def state_dict_parameters(sd):
     module_mem = 0
-    for k, v in sd.items():
+    for _k, v in sd.items():
         module_mem += v.nelement()
     return module_mem
 
@@ -390,12 +389,12 @@ def module_size(module, exclude_device=None, include_device=None):
     return module_mem, weight_mem
 
 
-def module_move(module, device, recursive=True, excluded_pattens=[]):
+def module_move(module, device, recursive=True, excluded_patterns=[]):
     if recursive:
         return module.to(device=device)
 
     for k, p in module.named_parameters(recurse=False, remove_duplicate=True):
-        if k in excluded_pattens:
+        if k in excluded_patterns:
             continue
         setattr(module, k, utils.tensor2parameter(p.to(device=device)))
 
@@ -446,7 +445,7 @@ def build_module_profile(model, gpu_memory_available):
             mem_counter += m.total_mem - m.weight_mem
 
     cpu_modules += all_modules
-    
+
     if linear_save > 0:
         print (f"Setting 'Offload nn.Linear modules' has saved {linear_save/(1024*1024):.2f} MB")
 
@@ -463,7 +462,6 @@ class LoadedModel:
 
     def model_load(self, memory_for_inference=0, keep_loaded=[]):
         global vram_state
-        patch_model_to = None
 
         torch_dev = self.model.load_device
 
@@ -501,7 +499,7 @@ class LoadedModel:
         elif vram_set_state in [VRAMState.VERY_LOW_VRAM, VRAMState.LOW_VRAM, VRAMState.NORMAL_VRAM]:
             model_require = self.exclusive_memory
             previously_loaded = self.inclusive_memory
-            
+
             extra_memory = 0
             this_online_lora = dynamic_args['online_lora'] and (len(self.model.lora_patches) > 0)
             if this_online_lora:
@@ -520,7 +518,7 @@ class LoadedModel:
 
             free_memory(total_required_memory, self.device, keep_loaded=keep_loaded)
             gpu_memory_available = get_free_memory(torch_dev) - memory_for_inference - extra_memory + previously_loaded
-            if need_cpu_swap == False:
+            if not need_cpu_swap:
                 need_cpu_swap = (gpu_memory_available < model_require + previously_loaded)
         else:
             free_memory(memory_for_inference, self.device, keep_loaded=keep_loaded)
@@ -556,7 +554,7 @@ class LoadedModel:
                 if not hasattr(m, "prev_parameters_manual_cast") and hasattr(m, "parameters_manual_cast"):
                     m.prev_parameters_manual_cast = m.parameters_manual_cast
                     m.parameters_manual_cast = True
-                module_move(m, device=self.device, recursive=False, excluded_pattens=['weight'])
+                module_move(m, device=self.device, recursive=False, excluded_patterns=['weight'])
                 if hasattr(m, 'weight') and m.weight is not None:
                     if pin_memory:
                         m.weight = utils.tensor2parameter(m.weight.to(self.model.offload_device).pin_memory())
@@ -661,7 +659,7 @@ def free_memory(memory_required, device, keep_loaded=[]):
 def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
     global extra_inference_memory
     execution_start_time = time.perf_counter()
-    
+
     if memory_required == 0:
         memory_required = 1 * 1024 * 1024 * 1024
 
@@ -686,13 +684,13 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
                     extra_memory += (1024 * 1024 * 1024 * 1.125)
                 if getattr(current_loaded_models[i].real_model, 'gguf_baked', False):
                     extra_memory += (1024 * 1024 * 1024 * 0.5)
-                break                
+                break
 
         if not matched:
             models_to_load.append(loaded_model)
 
     if len(models_to_load) == 0:
-        devs = set(map(lambda a: a.device, models_already_loaded))
+        devs = set(model.device for model in models_already_loaded)
         for d in devs:
             if d != torch.device("cpu"):
                 free_memory(memory_for_inference+extra_memory, d, models_already_loaded)
@@ -983,7 +981,7 @@ def sage_attention_enabled():
 def flash_attention_enabled():
     return args.use_flash_attention
 
-    
+
 def xformers_enabled():
     global directml_enabled
     global cpu_state
