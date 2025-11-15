@@ -74,23 +74,15 @@ class PreprocessorDepthAnything(Preprocessor):
         model.eval()
         self.model = model.to(self.dtype)
 
-    def load_model_v3(self):
-        from depth_anything_3.api import DepthAnything3
-
-        # model = DepthAnything3.from_pretrained("depth-anything/da3metric-large")
-        model = DepthAnything3.from_pretrained("depth-anything/da3mono-large")
-        self.model = model.to(torch.float32)
-
     def __call__(self, input_image, resolution=518, slider_1=None, slider_2=None, slider_3=None, **kwargs):
         if self.model is None:
-            if self.name == 'depth_anything_v3':
-                self.load_model_v3()
-            elif self.name == 'depth_anything_v2':
+            if self.name == 'depth_anything_v2':
                 self.load_model_v2()
             else:
                 self.load_model()
         self.model.to(self.device)
 
+        image, remove_pad = resize_image_with_pad(input_image, resolution)
         transform = Compose(
             [
                 Resize(
@@ -107,34 +99,27 @@ class PreprocessorDepthAnything(Preprocessor):
             ]
         )
 
-        image = cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB) / 255.0
+        H, W, _ = image.shape
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) / 255.0
         image = transform({"image": image})["image"]
-        image = torch.from_numpy(image).unsqueeze(0)
+        image = torch.from_numpy(image).unsqueeze(0).to(self.device).to(self.dtype)
 
         with torch.no_grad():
-            if self.name == 'depth_anything_v3':
-                depth = self.model.inference([image], process_res=resolution).depth
-                depth -= depth.min()
-                depth /= depth.max()
-                depth **= 0.5
-                depth = 1.0 - depth
-                depth *= 255.0
-                result = depth.astype(numpy.uint8)
-                result = numpy.moveaxis(result, 0, -1)
-            else:
-                depth = self.model(image.to(self.device).to(self.dtype))
-                depth -= depth.min()
-                depth /= depth.max()
-                depth *= 255.0
-                result = depth.cpu().numpy().astype(numpy.uint8)
-                result = numpy.moveaxis(result, 0, -1)
+            depth = self.model(image)
+
+        depth = torch.nn.functional.interpolate(
+            depth[None], (H, W), mode="bilinear", align_corners=False
+        )[0, 0]
+        depth -= depth.min()
+        depth /= depth.max()
+        depth *= 255.0
+        result = depth.cpu().numpy().astype(numpy.uint8)
 
         self.model.cpu()
         torch.cuda.empty_cache()
 
-        return HWC3(result)
+        return HWC3(remove_pad(result))
 
 
 add_supported_preprocessor(PreprocessorDepthAnything('depth_anything'))
 add_supported_preprocessor(PreprocessorDepthAnything('depth_anything_v2'))
-add_supported_preprocessor(PreprocessorDepthAnything('depth_anything_v3'))

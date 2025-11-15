@@ -41,7 +41,7 @@ class ResidualConvUnit_custom(torch.nn.Module):
         self.conv1 = torch.nn.Conv2d(features, features, kernel_size=3, stride=1, padding=1, bias=True, groups=self.groups)
         self.conv2 = torch.nn.Conv2d(features, features, kernel_size=3, stride=1, padding=1, bias=True, groups=self.groups)
 
-        if self.bn == True:
+        if self.bn:
             self.bn1 = torch.nn.BatchNorm2d(features)
             self.bn2 = torch.nn.BatchNorm2d(features)
 
@@ -51,12 +51,12 @@ class ResidualConvUnit_custom(torch.nn.Module):
     def forward(self, x):
         out = self.activation(x)
         out = self.conv1(out)
-        if self.bn == True:
+        if self.bn:
             out = self.bn1(out)
-       
+
         out = self.activation(out)
         out = self.conv2(out)
-        if self.bn == True:
+        if self.bn:
             out = self.bn2(out)
 
         if self.groups > 1:
@@ -76,14 +76,14 @@ class FeatureFusionBlock_custom(torch.nn.Module):
 
         self.expand = expand
         out_features = features
-        if self.expand==True:
+        if self.expand:
             out_features = features//2
-        
+
         self.out_conv = torch.nn.Conv2d(features, out_features, kernel_size=1, stride=1, padding=0, bias=True, groups=1)
 
         self.resConfUnit1 = ResidualConvUnit_custom(features, activation, bn)
         self.resConfUnit2 = ResidualConvUnit_custom(features, activation, bn)
-        
+
         self.skip_add = torch.nn.quantized.FloatFunctional()
 
     def forward(self, *xs):
@@ -262,7 +262,7 @@ def _make_vit_b_rn50_backbone(model):
 def forward_vit(pretrained, x):
     b, c, h, w = x.shape
 
-    glob = pretrained.model.forward_flex(x)
+    _glob = pretrained.model.forward_flex(x)
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
