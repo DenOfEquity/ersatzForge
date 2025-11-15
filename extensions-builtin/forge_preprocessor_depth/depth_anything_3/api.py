@@ -21,18 +21,15 @@ inference, and export capabilities. It supports both single and nested model arc
 from __future__ import annotations
 
 from typing import Sequence
-import numpy as np
 import torch
 import torch.nn as nn
 from huggingface_hub import PyTorchModelHubMixin
-from PIL import Image
 
 from omegaconf import OmegaConf
 
 from depth_anything_3.cfg import create_object
 from depth_anything_3.registry import MODEL_REGISTRY
 from depth_anything_3.specs import Prediction
-from depth_anything_3.utils.io import OutputProcessor #InputProcessor, 
 
 torch.backends.cudnn.benchmark = False
 
@@ -85,10 +82,6 @@ class DepthAnything3(nn.Module, PyTorchModelHubMixin):
         self.model = create_object(self.config)
         self.model.eval()
 
-        # Initialize processors
-        # self.input_processor = InputProcessor()
-        self.output_processor = OutputProcessor()
-
         # Device management (set by user)
         self.device = None
 
@@ -113,61 +106,36 @@ class DepthAnything3(nn.Module, PyTorchModelHubMixin):
         Returns:
             Dictionary containing model predictions
         """
-        # Determine optimal autocast dtype
-        autocast_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
         with torch.no_grad():
-            with torch.autocast(device_type=image.device.type, dtype=autocast_dtype):
-                return self.model(image, extrinsics, intrinsics, export_feat_layers, infer_gs)
+            return self.model(image, extrinsics, intrinsics, export_feat_layers, infer_gs)
 
     def inference(
         self,
-        image: list[np.ndarray | Image.Image | str],
-        extrinsics: np.ndarray | None = None,
-        intrinsics: np.ndarray | None = None,
-        align_to_input_ext_scale: bool = True,
-        render_exts: np.ndarray | None = None,
-        render_ixts: np.ndarray | None = None,
-        render_hw: tuple[int, int] | None = None,
+        image,
         process_res: int = 504,
         export_feat_layers: Sequence[int] | None = None,
     ) -> Prediction:
-        """
-        Run inference on input images.
-
-        Args:
-            image: List of input images (numpy arrays, PIL Images, or file paths)
-            extrinsics: Camera extrinsics (N, 4, 4)
-            intrinsics: Camera intrinsics (N, 3, 3)
-            align_to_input_ext_scale: whether to align the input pose scale to the prediction
-            render_exts: Optional render extrinsics for Gaussian video export
-            render_ixts: Optional render intrinsics for Gaussian video export
-            render_hw: Optional render resolution for Gaussian video export
-            process_res: Processing resolution
-            export_feat_layers: Layer indices to export intermediate features from
-
-        Returns:
-            Prediction object containing depth maps and camera parameters
-        """
-
-        # Preprocess images
-        # imgs_cpu = self.input_processor(image, process_res)
-        imgs_cpu = image[0]
 
         # Prepare tensors for model
         device = self._get_model_device()
 
         # Move images to model device
-        imgs = imgs_cpu.to(device, non_blocking=True)[None].to(torch.float32)
+        imgs = image.to(device, non_blocking=True)[None]
 
         # Run model forward pass
         export_feat_layers = list(export_feat_layers) if export_feat_layers is not None else []
 
         raw_output = self._run_model_forward(imgs, export_feat_layers)
 
-        # Convert raw output to prediction
-        prediction = self.output_processor(raw_output)
-
-        return prediction
+        depth = raw_output["depth"].squeeze(0).squeeze(-1).cpu().numpy()  # (N, H, W) self._extract_depth(model_output)
+        # sky = raw_output.get("sky", None)
+        # if sky is not None:
+            # sky = sky.squeeze(0).cpu().numpy() >= 0.5  # (N, H, W)
+        return Prediction(
+            depth=depth,
+            # sky=sky,
+            # is_metric=getattr(raw_output, "is_metric", 0),
+        )
 
 
     def _run_model_forward(
