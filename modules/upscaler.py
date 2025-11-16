@@ -1,6 +1,7 @@
 import os
 
-import torch, numpy
+import torch
+import numpy
 
 from PIL import Image
 
@@ -51,11 +52,10 @@ class Upscaler:
         dest_w = int((img.width * scale) // 8 * 8)
         dest_h = int((img.height * scale) // 8 * 8)
 
-        if img.width < dest_w or img.height < dest_h:
-            img = self.do_upscale(img, selected_model)
+        img = self.do_upscale(img, selected_model)
 
-            if img.width != dest_w or img.height != dest_h:
-                img = img.resize((dest_w, dest_h), resample=LANCZOS)
+        if img.width != dest_w or img.height != dest_h:
+            img = img.resize((dest_w, dest_h), resample=LANCZOS)
 
         return img
 
@@ -127,7 +127,7 @@ class UpscalerLanczosCAS(Upscaler):
         image = contrast_adaptive_sharpening(image, 0.55)
         image = image ** (1/2.2)
         image = image.numpy()
-        
+
         return Image.fromarray((image * 255).astype(numpy.uint8), mode="RGB")
 
     def load_model(self, _):
