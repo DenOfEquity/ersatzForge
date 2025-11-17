@@ -26,15 +26,15 @@ class PreprocessorDepthAnything(Preprocessor):
     def __init__(self, name):
         super().__init__()
         self.name = name
-        self.tags = ['Depth']
-        self.model_filename_filters = ['depth']
-        self.slider_resolution = PreprocessorParameter(label='Resolution', minimum=140, maximum=2072, value=518, step=14, visible=True)
+        self.tags = ["Depth"]
+        self.model_filename_filters = ["depth"]
+        self.slider_resolution = PreprocessorParameter(label="Resolution", minimum=140, maximum=2072, value=518, step=14, visible=True)
         self.slider_1 = PreprocessorParameter(visible=False)
         self.slider_2 = PreprocessorParameter(visible=False)
         self.sorting_priority = 100
 
         self.model = None
-        self.device = devices.get_device_for('controlnet')
+        self.device = devices.get_device_for("controlnet")
         self.dtype = torch.float16 if should_use_fp16(self.device, prioritize_performance=False, manual_cast=True) else torch.float32
 
         self.cache = None
@@ -42,8 +42,8 @@ class PreprocessorDepthAnything(Preprocessor):
 
     def load_model(self):
         model_dir = os.path.join(preprocessor_dir, "depth_anything")
-        remote_model_path = 'https://huggingface.co/spaces/LiheYoung/Depth-Anything/resolve/main/checkpoints/depth_anything_vitl14.pth'
-        model_path = os.path.join(model_dir, 'depth_anything_vitl14.pth')
+        remote_model_path = "https://huggingface.co/spaces/LiheYoung/Depth-Anything/resolve/main/checkpoints/depth_anything_vitl14.pth"
+        model_path = os.path.join(model_dir, "depth_anything_vitl14.pth")
         if not os.path.exists(model_path):
             load_file_from_url(remote_model_path, model_dir=model_dir)
 
@@ -54,13 +54,13 @@ class PreprocessorDepthAnything(Preprocessor):
                     localhub=False,
                 )
 
-        model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+        model.load_state_dict(torch.load(model_path, map_location=torch.device("cpu")))
         model.eval()
         self.model = model.to(self.dtype)
 
     def load_model_v2(self):
         model_dir = os.path.join(preprocessor_dir, "depth_anything_v2")
-        remote_model_path = 'https://huggingface.co/MackinationsAi/Depth-Anything-V2_Safetensors/resolve/main/depth_anything_v2_vitl.safetensors'
+        remote_model_path = "https://huggingface.co/MackinationsAi/Depth-Anything-V2_Safetensors/resolve/main/depth_anything_v2_vitl.safetensors"
         model_path = os.path.join(model_dir, 'depth_anything_v2_vitl.safetensors')
         if not os.path.exists(model_path):
             load_file_from_url(remote_model_path, model_dir=model_dir)
@@ -78,15 +78,15 @@ class PreprocessorDepthAnything(Preprocessor):
     def load_model_v3(self):
         from depth_anything_3.api import DepthAnything3
 
-        # model = DepthAnything3.from_pretrained("depth-anything/da3metric-large")
-        model = DepthAnything3.from_pretrained("depth-anything/da3mono-large")
+        # model = DepthAnything3.from_pretrained("depth-anything/da3metric-large", local_files_only=True)
+        model = DepthAnything3.from_pretrained("depth-anything/da3mono-large", local_files_only=True)
         self.model = model.to(self.dtype)
 
     def __call__(self, input_image, resolution=518, slider_1=None, slider_2=None, slider_3=None, **kwargs):
         if self.model is None:
-            if self.name == 'depth_anything_v3':
+            if self.name == "depth_anything_v3":
                 self.load_model_v3()
-            elif self.name == 'depth_anything_v2':
+            elif self.name == "depth_anything_v2":
                 self.load_model_v2()
             else:
                 self.load_model()
@@ -108,24 +108,25 @@ class PreprocessorDepthAnything(Preprocessor):
             ]
         )
 
-        image = cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB) / 255.0
+        image = input_image / 255.0 #cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB) / 255.0
         image = transform({"image": image})["image"]
         image = torch.from_numpy(image).unsqueeze(0).to(self.dtype)
 
         with torch.no_grad():
-            if self.name == 'depth_anything_v3':
-                depth = self.model.inference(image, process_res=resolution).depth
-                depth -= depth.min()
-                depth /= depth.max()
-                depth **= 0.45455
-                depth = 1.0 - depth
-                depth *= 255.0
-                result = depth.astype(numpy.uint8)
+            if self.name == "depth_anything_v3":
+                depth = self.model.inference(image).depth
+                # depth /= (1.0 + depth)
             else:
                 depth = self.model(image.to(self.device))
-                depth -= depth.min()
-                depth /= depth.max()
-                depth *= 255.0
+            depth -= depth.min()
+            depth /= depth.max()
+            depth **= 0.45455
+            if self.name == "depth_anything_v3":
+                depth = 1.0 - depth
+            depth *= 255.0
+            if self.name == "depth_anything_v3":
+                result = depth.astype(numpy.uint8)
+            else:
                 result = depth.cpu().numpy().astype(numpy.uint8)
 
         self.model.cpu()
@@ -135,6 +136,6 @@ class PreprocessorDepthAnything(Preprocessor):
         return HWC3(result)
 
 
-add_supported_preprocessor(PreprocessorDepthAnything('depth_anything'))
-add_supported_preprocessor(PreprocessorDepthAnything('depth_anything_v2'))
-add_supported_preprocessor(PreprocessorDepthAnything('depth_anything_v3'))
+add_supported_preprocessor(PreprocessorDepthAnything("depth_anything"))
+add_supported_preprocessor(PreprocessorDepthAnything("depth_anything_v2"))
+add_supported_preprocessor(PreprocessorDepthAnything("depth_anything_v3"))
