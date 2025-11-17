@@ -112,7 +112,6 @@ class DepthAnything3(nn.Module, PyTorchModelHubMixin):
     def inference(
         self,
         image,
-        process_res: int = 504,
         export_feat_layers: Sequence[int] | None = None,
     ) -> Prediction:
 
