@@ -18,5 +18,5 @@ import numpy
 @dataclass
 class Prediction:
     depth: numpy.ndarray  # N, H, W
-    # sky: numpy.ndarray | None = None  # N, H, W
+    sky: numpy.ndarray | None = None  # N, H, W
     # is_metric: int

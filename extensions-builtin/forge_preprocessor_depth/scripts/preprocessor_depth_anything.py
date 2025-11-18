@@ -29,7 +29,10 @@ class PreprocessorDepthAnything(Preprocessor):
         self.tags = ["Depth"]
         self.model_filename_filters = ["depth"]
         self.slider_resolution = PreprocessorParameter(label="Resolution", minimum=140, maximum=2072, value=518, step=14, visible=True)
-        self.slider_1 = PreprocessorParameter(visible=False)
+        if self.name == "depth_anything_v3":
+            self.slider_1 = PreprocessorParameter(label="Sky threshold", minimum=0.0, maximum=1.0, value=1.0, step=0.01, visible=True)
+        else:
+            self.slider_1 = PreprocessorParameter(visible=False)
         self.slider_2 = PreprocessorParameter(visible=False)
         self.sorting_priority = 100
 
@@ -108,14 +111,17 @@ class PreprocessorDepthAnything(Preprocessor):
             ]
         )
 
-        image = input_image / 255.0 #cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB) / 255.0
+        # image = input_image / 255.0
+        image = cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB) / 255.0
         image = transform({"image": image})["image"]
         image = torch.from_numpy(image).unsqueeze(0).to(self.dtype)
 
         with torch.no_grad():
             if self.name == "depth_anything_v3":
-                depth = self.model.inference(image).depth
-                # depth /= (1.0 + depth)
+                output = self.model.inference(image)
+                depth = output.depth
+                sky = output.sky
+                depth /= (1.0 + depth)
             else:
                 depth = self.model(image.to(self.device))
             depth -= depth.min()
@@ -123,11 +129,13 @@ class PreprocessorDepthAnything(Preprocessor):
             depth **= 0.45455
             if self.name == "depth_anything_v3":
                 depth = 1.0 - depth
+                if slider_1 < 1.0:
+                    sky -= sky.min()
+                    sky /= sky.max()
+                    sky = torch.where(sky >= slider_1, torch.tensor(0.0), torch.tensor(1.0))
+                    depth *= sky
             depth *= 255.0
-            if self.name == "depth_anything_v3":
-                result = depth.astype(numpy.uint8)
-            else:
-                result = depth.cpu().numpy().astype(numpy.uint8)
+            result = depth.cpu().numpy().astype(numpy.uint8)
 
         self.model.cpu()
         torch.cuda.empty_cache()

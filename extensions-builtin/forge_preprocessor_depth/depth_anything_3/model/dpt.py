@@ -255,9 +255,9 @@ class DPT(nn.Module):
             ).squeeze(1)
 
         # 6) Sky head (fixed 1 channel)
-        # if self.use_sky_head:
-            # sky_logits = self.scratch.sky_output_conv2(feat)
-            # outs[self.sky_name] = self._apply_sky_activation(sky_logits).squeeze(1)
+        if self.use_sky_head:
+            sky_logits = self.scratch.sky_output_conv2(feat)
+            outs[self.sky_name] = self._apply_sky_activation(sky_logits).squeeze(1)
 
         return outs
 

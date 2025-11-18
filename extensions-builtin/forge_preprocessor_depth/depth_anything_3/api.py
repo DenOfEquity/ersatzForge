@@ -20,7 +20,6 @@ inference, and export capabilities. It supports both single and nested model arc
 
 from __future__ import annotations
 
-from typing import Sequence
 import torch
 import torch.nn as nn
 from huggingface_hub import PyTorchModelHubMixin
@@ -65,6 +64,7 @@ class DepthAnything3(nn.Module, PyTorchModelHubMixin):
 
     _commit_hash: str | None = None  # Set by mixin when loading from Hub
 
+
     def __init__(self, model_name: str = "da3-large", **kwargs):
         """
         Initialize DepthAnything3 with specified preset.
@@ -89,66 +89,45 @@ class DepthAnything3(nn.Module, PyTorchModelHubMixin):
     def forward(
         self,
         image: torch.Tensor,
-        extrinsics: torch.Tensor | None = None,
-        intrinsics: torch.Tensor | None = None,
-        export_feat_layers: list[int] | None = None,
-        infer_gs: bool = False,
     ) -> dict[str, torch.Tensor]:
         """
-        Forward pass through the model.
-
         Args:
             image: Input batch with shape ``(B, N, 3, H, W)`` on the model device.
-            extrinsics: Optional camera extrinsics with shape ``(B, N, 4, 4)``.
-            intrinsics: Optional camera intrinsics with shape ``(B, N, 3, 3)``.
-            export_feat_layers: Layer indices to return intermediate features for.
 
         Returns:
             Dictionary containing model predictions
         """
         with torch.no_grad():
-            return self.model(image, extrinsics, intrinsics, export_feat_layers, infer_gs)
+            return self.model(image, None, None, [], False)
+
 
     def inference(
         self,
         image,
-        export_feat_layers: Sequence[int] | None = None,
     ) -> Prediction:
 
-        # Prepare tensors for model
-        device = self._get_model_device()
-
         # Move images to model device
+        device = self._get_model_device()
         imgs = image.to(device, non_blocking=True)[None]
 
         # Run model forward pass
-        export_feat_layers = list(export_feat_layers) if export_feat_layers is not None else []
+        raw_output = self._run_model_forward(imgs)
 
-        raw_output = self._run_model_forward(imgs, export_feat_layers)
-
-        depth = raw_output["depth"].squeeze(0).squeeze(-1).cpu().numpy()  # (N, H, W) self._extract_depth(model_output)
-        # sky = raw_output.get("sky", None)
-        # if sky is not None:
-            # sky = sky.squeeze(0).cpu().numpy() >= 0.5  # (N, H, W)
-        return Prediction(
-            depth=depth,
-            # sky=sky,
-            # is_metric=getattr(raw_output, "is_metric", 0),
-        )
+        depth = raw_output["depth"].squeeze(0).squeeze(-1).detach() # (N, H, W)
+        sky = raw_output["sky"].squeeze(0).detach() # (N, H, W)
+        return Prediction(depth=depth, sky=sky)
 
 
     def _run_model_forward(
         self,
         imgs: torch.Tensor,
-        export_feat_layers: Sequence[int] | None = None,
     ) -> dict[str, torch.Tensor]:
         """Run model forward pass."""
         device = imgs.device
         need_sync = device.type == "cuda"
         if need_sync:
             torch.cuda.synchronize(device)
-        feat_layers = list(export_feat_layers) if export_feat_layers is not None else None
-        output = self.forward(imgs, None, None, feat_layers, False)
+        output = self.forward(imgs)
         if need_sync:
             torch.cuda.synchronize(device)
         return output
