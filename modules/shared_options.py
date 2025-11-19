@@ -314,10 +314,10 @@ It is displayed in UI below the image. To use infotext, paste it into the prompt
 
 options_templates.update(options_section(('ui', "Live previews", "ui"), {
     "show_progressbar": OptionInfo(True, "Show progressbar"),
-    "live_previews_enable": OptionInfo(True, "Show live previews of the created image"),
+    # "live_previews_enable": OptionInfo(True, "Show live previews of the created image"),
     "live_previews_image_format": OptionInfo("png", "Live preview file format", gr.Radio, {"choices": ["jpeg", "png", "webp"]}),
     "show_progress_grid": OptionInfo(True, "Show previews of all images generated in a batch as a grid"),
-    "show_progress_every_n_steps": OptionInfo(10, "Live preview display period", gr.Slider, {"minimum": -1, "maximum": 32, "step": 1}).info("in sampling steps - show new live preview image every N sampling steps; -1 = only show after completion of batch"),
+    "show_progress_every_n_steps": OptionInfo(10, "Live preview display period", gr.Slider, {"minimum": -1, "maximum": 32, "step": 1}).info("in sampling steps - show new live preview image every N sampling steps; -1 = only show after completion of batch; 0 = disable live previews"),
     "show_progress_type": OptionInfo("Approx NN", "Live preview method", gr.Radio, {"choices": ["Approx NN", "Approx cheap", "TAESD"]}).info("Approx NN: fast preview; TAESD = high-quality preview; Approx cheap = fastest but low-quality preview"),
     "live_preview_refresh_period": OptionInfo(1000, "Progressbar and preview update period", gr.Number, {"minimum": 100, "maximum": 999999, "step": 1}).info("in milliseconds"),
     "js_live_preview_in_modal_lightbox": OptionInfo(False, "Show Live preview in full page image viewer"),
@@ -356,7 +356,7 @@ options_templates.update(options_section(('sampler-params', "Sampler parameters"
     'fixed_ode_solver': OptionInfo("rk4", "Fixed-ODE solver", gr.Radio, {"choices": ["implicit_adams", "heun3", "midpoint", "rk4"]}, infotext='Fixed-ODE solver'),
 
     'deis_mode': OptionInfo("tab", "DEIS variant", gr.Radio, {"choices": ["tab", "rhoab"]}, infotext='DEIS variant'),
-    'deis_order': OptionInfo(3, "DEIS order", gr.Slider, {"minimum": 2, "maximum": 4, "step": 1}, infotext='DEIS order').info("must be < sampling steps"),
+    'deis_order': OptionInfo(3, "DEIS order", gr.Slider, {"minimum": 1, "maximum": 4, "step": 1}, infotext='DEIS order').info("must be < sampling steps"),
 
     'dpmpp_2m_sde_mode': OptionInfo("midpoint", "DPM++ 2M SDE variant", gr.Radio, {"choices": ["heun", "midpoint"]}, infotext="2M SDE variant"),
 

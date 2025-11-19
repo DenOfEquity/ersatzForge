@@ -112,7 +112,7 @@ def progressapi(req: ProgressRequest):
     live_preview = None
     id_live_preview = req.id_live_preview
 
-    if opts.live_previews_enable and req.live_preview:
+    if opts.show_progress_every_n_steps != 0 and req.live_preview:
         shared.state.set_current_image()
         if shared.state.id_live_preview != req.id_live_preview:
             image = shared.state.current_image
@@ -120,12 +120,7 @@ def progressapi(req: ProgressRequest):
                 buffered = io.BytesIO()
 
                 if opts.live_previews_image_format == "png":
-                    # using optimize for large images takes an enormous amount of time
-                    if max(*image.size) <= 256:
-                        save_kwargs = {"optimize": True}
-                    else:
-                        save_kwargs = {"optimize": False, "compress_level": 1}
-
+                    save_kwargs = {"optimize": False, "compress_level": 1}
                 else:
                     save_kwargs = {}
 
@@ -135,4 +130,3 @@ def progressapi(req: ProgressRequest):
                 id_live_preview = shared.state.id_live_preview
 
     return ProgressResponse(active=active, queued=queued, completed=completed, progress=progress, eta=eta, live_preview=live_preview, id_live_preview=id_live_preview, textinfo=shared.state.textinfo)
-

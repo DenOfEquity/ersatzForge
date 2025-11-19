@@ -93,7 +93,7 @@ class State:
         log.info("Received stop generating request")
 
     def nextjob(self):
-        if shared.opts.live_previews_enable and shared.opts.show_progress_every_n_steps == -1:
+        if shared.opts.show_progress_every_n_steps == -1:
             self.do_set_current_image()
 
         self.job_no += 1
@@ -148,7 +148,7 @@ class State:
         if not shared.parallel_processing_allowed:
             return
 
-        if self.sampling_step - self.current_image_sampling_step >= shared.opts.show_progress_every_n_steps and shared.opts.live_previews_enable and shared.opts.show_progress_every_n_steps != -1:
+        if self.sampling_step - self.current_image_sampling_step >= shared.opts.show_progress_every_n_steps and shared.opts.show_progress_every_n_steps > 0:
             self.do_set_current_image()
 
     @torch.inference_mode()
@@ -173,7 +173,7 @@ class State:
                     self.assign_current_image(modules.sd_samplers.sample_to_image(self.current_latent))
             self.current_image_sampling_step = self.sampling_step
 
-        except Exception as e:
+        except Exception:
             errors.record_exception()
 
     @torch.inference_mode()

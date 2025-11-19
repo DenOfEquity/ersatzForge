@@ -1,7 +1,8 @@
 from __future__ import annotations
 import json
 import math
-import os, gc
+import os
+import gc
 import sys
 from dataclasses import dataclass, field
 
@@ -22,7 +23,6 @@ import modules.paths as paths
 import modules.face_restoration
 import modules.images as images
 
-from einops import repeat
 from blendmodes.blend import blendLayers, BlendType
 from modules_forge.utils import apply_circular_forge
 from modules_forge import main_entry
@@ -903,7 +903,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             p.init(p.all_prompts, p.all_seeds, p.all_subseeds)
 
             # for OSX, loading the model during sampling changes the generated picture, so it is loaded here
-            if opts.live_previews_enable and opts.show_progress_type == "Approx NN":
+            if opts.show_progress_every_n_steps != 0 and opts.show_progress_type == "Approx NN":
                 sd_vae_approx.model()
 
         if state.job_count == -1:
@@ -1433,7 +1433,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                     scale = "1.5"
                 elif self.hr_scale == 2:
                     scale = "2.0"
-                    
+
                 latent_scale = 0.13025 if shared.sd_model.is_sdxl else 0.18215
                 samples = latent_upscale_nn.upscale (samples / latent_scale, version, scale) * latent_scale
 
