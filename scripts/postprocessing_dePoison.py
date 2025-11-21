@@ -400,6 +400,7 @@ class ScriptPostprocessingCodeFormer(scripts_postprocessing.ScriptPostprocessing
             with gr.Row():
                 patch_size = gr.Slider(label="Patch size", minimum=128, maximum=1024, step=64, value=384)
                 overlap = gr.Slider(label="Patch overlap", minimum=0, maximum=512, step=32, value=128)
+            mode = gr.Radio(label="Mode", choices=["high quality", "fast"], value="fast")
 
         return {
             "enable": enable,
@@ -407,9 +408,10 @@ class ScriptPostprocessingCodeFormer(scripts_postprocessing.ScriptPostprocessing
             "iterations": iterations,
             "patch_size": patch_size,
             "overlap": overlap,
+            "mode": mode,
         }
 
-    def process(self, pp: scripts_postprocessing.PostprocessedImage, enable, noise_level, iterations, patch_size, overlap):
+    def process(self, pp: scripts_postprocessing.PostprocessedImage, enable, noise_level, iterations, patch_size, overlap, mode):
         if not enable or not self.model_exists:
             return
 
@@ -432,7 +434,8 @@ class ScriptPostprocessingCodeFormer(scripts_postprocessing.ScriptPostprocessing
 
         sigma_value = float(noise_level) / 255.0
 
-        min_dim = min(pp.image.size)
+        width, height = pp.image.size
+        min_dim = min(width, height)
         patch_size = min(patch_size, min_dim+16)    # +16 for padding
 
         # tto_steps = 0
@@ -443,6 +446,13 @@ class ScriptPostprocessingCodeFormer(scripts_postprocessing.ScriptPostprocessing
         patch_size = int(patch_size)
         overlap = int(overlap)
 
+        stride = patch_size - overlap
+        grid_h = len(list(range(0, height + 16 - patch_size, stride))) + 1
+        grid_w = len(list(range(0, width + 16  - patch_size, stride))) + 1
+
+        self.total_count = iterations * grid_h * grid_w * (len(QUALITY_GEOM_TRANSFORMS) * len(QUALITY_GAIN_FACTORS) if mode == "high quality" else 1)
+        self.this_count = 0
+
         for _ in range(iterations):
             patches, coords, padded_size = split_into_patches(current, patch_size, overlap)
             patches = patches.to(self.device)
@@ -452,8 +462,10 @@ class ScriptPostprocessingCodeFormer(scripts_postprocessing.ScriptPostprocessing
             with torch.no_grad():
                 for start in range(0, patches.size(0), effective_batch):
                     batch = patches[start : start + effective_batch]
-                    # restored = self._run_model(batch, sigma_value)
-                    restored = self._quality_tta_pass(batch, sigma_value)
+                    if mode == "high quality":
+                        restored = self._quality_tta_pass(batch, sigma_value)
+                    else:
+                        restored = self._run_model(batch, sigma_value)
                     restored_batches.append(restored)
 
             restored_all = torch.cat(restored_batches, dim=0)
@@ -463,12 +475,16 @@ class ScriptPostprocessingCodeFormer(scripts_postprocessing.ScriptPostprocessing
             # else:
             current = assembled.detach().cpu()
 
+        print ("[dePoison] processed                 ")
         pp.image = tensor_to_image(current)
 
 
     def _run_model(self, batch: torch.Tensor, sigma_value: float) -> torch.Tensor:
         if self.model is None:
             raise RuntimeError("Model not loaded.")
+        print (f"[dePoison] processing {self.this_count}/{self.total_count}", end="\r")
+        self.this_count += batch.size(0)
+
         sigma_value = float(max(5e-4, min(1.0, sigma_value)))
         sigma = torch.full(
             (batch.shape[0], 1),
