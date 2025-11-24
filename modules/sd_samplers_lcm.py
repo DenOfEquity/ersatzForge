@@ -1,25 +1,7 @@
 import torch
 
-from k_diffusion import utils, sampling
-from k_diffusion.external import DiscreteEpsDDPMDenoiser
 from k_diffusion.sampling import default_noise_sampler, trange
-
-from modules import shared, sd_samplers_cfg_denoiser, sd_samplers_kdiffusion, sd_samplers_common
-
-
-class LCMCompVisDenoiser(DiscreteEpsDDPMDenoiser):
-    def __init__(self, model):
-        timesteps = 1000
-        original_timesteps = 50     # LCM Original Timesteps (default=50, for current version of LCM)
-        self.skip_steps = timesteps // original_timesteps
-
-        alphas_cumprod = 1.0 / (model.forge_objects.unet.model.predictor.sigmas ** 2.0 + 1.0)
-        alphas_cumprod_valid = torch.zeros(original_timesteps, dtype=torch.float32)
-        for x in range(original_timesteps):
-            alphas_cumprod_valid[original_timesteps - 1 - x] = alphas_cumprod[timesteps - 1 - x * self.skip_steps]
-
-        super().__init__(model, alphas_cumprod_valid, quantize=None)
-        self.predictor = model.forge_objects.unet.model.predictor
+from modules import shared, sd_samplers_kdiffusion, sd_samplers_common
 
 
 @torch.no_grad()
@@ -67,29 +49,12 @@ def sample_lcm(model, x, sigmas, extra_args=None, callback=None, disable=None, n
             noise_scaling = sigmas[i + 1]
             if scale < 1.0 and noise_scaling.item() > 1.0:
                 noise_scaling **= scale
-            x.addcmul_(noise_scaling, noise_sampler(sigmas[i], sigmas[i + 1]))
+            x = model.inner_model.predictor.noise_scaling(noise_scaling, noise_sampler(sigmas[i], sigmas[i + 1]), x)
     return x
-
-
-class CFGDenoiserLCM(sd_samplers_cfg_denoiser.CFGDenoiser):
-    @property
-    def inner_model(self):
-        if self.model_wrap is None:
-            denoiser = LCMCompVisDenoiser
-            self.model_wrap = denoiser(shared.sd_model)
-
-        return self.model_wrap
-
-
-class LCMSampler(sd_samplers_kdiffusion.KDiffusionSampler):
-    def __init__(self, funcname, sd_model, options=None):
-        super().__init__(funcname, sd_model, options)
-        self.model_wrap_cfg = CFGDenoiserLCM(self)
-        self.model_wrap = self.model_wrap_cfg.inner_model
 
 
 samplers_lcm = [('LCM', sample_lcm, ['k_lcm'], {}), ]
 samplers_data_lcm = [
-    sd_samplers_common.SamplerData(label, lambda model, funcname=funcname: LCMSampler(funcname, model), aliases, options)
+    sd_samplers_common.SamplerData(label, lambda model, funcname=funcname: sd_samplers_kdiffusion.KDiffusionSampler(funcname, model), aliases, options)
     for label, funcname, aliases, options in samplers_lcm
 ]
