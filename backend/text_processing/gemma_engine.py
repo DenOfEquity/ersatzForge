@@ -27,12 +27,6 @@ class GemmaTextProcessingEngine:
         tokenized = self.tokenizer(texts, truncation=False, add_special_tokens=False)["input_ids"]
         return tokenized
 
-    def encode_with_transformers(self, tokens):
-        device = memory_management.text_encoder_device()
-        tokens = tokens.to(device)
-        self.text_encoder.to(device)
-        return self.text_encoder(tokens)
-
     def tokenize_line(self, line):
         parsed = parsing.parse_prompt_attention(line, self.emphasis.name)
 
@@ -77,6 +71,8 @@ class GemmaTextProcessingEngine:
         cache = {}
 
         self.emphasis = emphasis.get_current_option(opts.emphasis)()
+        if any(x for x in texts if "(" in x or "[" in x) and self.emphasis.name != "Original":
+            emphasis.last_extra_generation_params["Emphasis"] = self.emphasis.name
 
         for line in texts:
             if line != "": # auto include this? makes UI token count incorrect
@@ -109,7 +105,15 @@ class GemmaTextProcessingEngine:
 
             zs.extend(line_z_values)
 
-        return torch.stack(zs)
+        # pad zs
+        max_length = len(max(zs, key=len))
+        for i in range(len(zs)):
+            pad = max_length - len(zs[i])
+            if pad > 0:
+                zs[i] = torch.cat([zs[i], zs[i].new_zeros([pad, zs[i].shape[1]])])
+
+        return zs
+#        return torch.stack(zs)
 
     def process_embeds(self, batch_tokens):
         device = memory_management.text_encoder_device()

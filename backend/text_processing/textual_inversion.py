@@ -253,11 +253,11 @@ def create_embedding_from_data(data, name, filename='unknown embedding file', fi
         vec = emb.detach().to(dtype=torch.float32)
         shape = vec.shape[-1]
         vectors = vec.shape[0]
-    elif type(data) == dict and 'clip_g' in data and 'clip_l' in data:  # SDXL embedding
+    elif type(data) is dict and 'clip_g' in data and 'clip_l' in data:  # SDXL embedding
         vec = {k: v.detach().to(dtype=torch.float32) for k, v in data.items()}
         shape = data['clip_g'].shape[-1] + data['clip_l'].shape[-1]
         vectors = data['clip_g'].shape[0]
-    elif type(data) == dict and type(next(iter(data.values()))) == torch.Tensor:  # diffuser concepts
+    elif type(data) is dict and type(next(iter(data.values()))) is torch.Tensor:  # diffuser concepts
         assert len(data.keys()) == 1, 'embedding file has multiple terms in it'
 
         emb = next(iter(data.values()))

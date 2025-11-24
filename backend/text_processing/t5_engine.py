@@ -116,6 +116,8 @@ class T5TextProcessingEngine:
         cache = {}
 
         self.emphasis = emphasis.get_current_option(opts.emphasis)()
+        if any(x for x in texts if "(" in x or "[" in x) and self.emphasis.name != "Original":
+            emphasis.last_extra_generation_params["Emphasis"] = self.emphasis.name
 
         for line in texts:
             if line in cache:
@@ -145,10 +147,15 @@ class T5TextProcessingEngine:
 
             zs.extend(line_z_values)
 
-        if any(x for x in texts if "(" in x or "[" in x) and self.emphasis.name != "Original":
-            emphasis.last_extra_generation_params["Emphasis"] = self.emphasis.name
+        return zs
+        # pad zs
+        # max_length = len(max(zs, key=len))
+        # for i in range(len(zs)):
+            # pad = max_length - len(zs[i])
+            # if pad > 0:
+                # zs[i] = torch.cat([zs[i], zs[i].new_zeros([pad, zs[i].shape[1]])])
 
-        return torch.stack(zs)
+        # return torch.stack(zs)
 
     def process_tokens(self, batch_tokens, batch_multipliers):
         if self.text_encoder.config["model_type"] == "umt5":
