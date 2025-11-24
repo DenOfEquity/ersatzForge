@@ -105,13 +105,6 @@ class GemmaTextProcessingEngine:
 
             zs.extend(line_z_values)
 
-        # pad zs
-        max_length = len(max(zs, key=len))
-        for i in range(len(zs)):
-            pad = max_length - len(zs[i])
-            if pad > 0:
-                zs[i] = torch.cat([zs[i], zs[i].new_zeros([pad, zs[i].shape[1]])])
-
         return zs
 #        return torch.stack(zs)
 
