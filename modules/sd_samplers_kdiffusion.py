@@ -18,6 +18,7 @@ samplers_k_diffusion = [
     ('DPM++ 2S a', 'sample_dpmpp_2s_ancestral', ['k_dpmpp_2s_a'], {'scheduler': 'karras', "uses_ensd": True, "second_order": True}),
     ('DPM++ 3M SDE', 'sample_dpmpp_3m_sde', ['k_dpmpp_3m_sde'], {'scheduler': 'exponential', 'discard_next_to_last_sigma': True, "brownian_noise": True}),
     ('Euler a', 'sample_euler_ancestral', ['k_euler_a', 'k_euler_ancestral'], {"uses_ensd": True}),
+    # ('Euler a na', 'sample_euler_ancestral_na', ['k_euler_a_na'], {"uses_ensd": True}),
     ('Euler', 'sample_euler', ['k_euler'], {}),
     ('LMS', 'sample_lms', ['k_lms'], {}),
     ('Heun', 'sample_heun', ['k_heun'], {"second_order": True}),
@@ -140,7 +141,7 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
             if scheduler.label == 'Sigmoid Offset':
                 p.extra_generation_params["base c"] = opts.sigmoid_base_c
                 p.extra_generation_params["square k"] = opts.sigmoid_square_k
-      
+
             sigmas = scheduler.function(n=steps, **sigmas_kwargs, device=devices.cpu)
 
         if discard_next_to_last_sigma:
@@ -213,6 +214,10 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
         steps = steps or p.steps
 
         sigmas = self.get_sigmas(p, steps).to(x.device)
+
+        if p.refiner_checkpoint == "[STOP]":    # truncate sigmas (preserving trailing zero) based on refiner switch point
+            length = int((len(sigmas) - 1) * p.refiner_switch_at)
+            sigmas = torch.cat([sigmas[:length], sigmas.new_zeros([1])])
 
         if opts.sgm_noise_multiplier:
             p.extra_generation_params["SGM noise multiplier"] = True

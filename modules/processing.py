@@ -682,10 +682,12 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
     if uses_ensd:
         uses_ensd = sd_samplers_common.is_sampler_using_eta_noise_seed_delta(p)
 
+    timesteps_samplers = ["DDIM", "DDIM CFG++", "PLMS", "UniPC"]
+
     generation_params = {
         "Steps": p.steps,
         "Sampler": p.sampler_name,
-        "Schedule type": p.scheduler,
+        "Schedule type": p.scheduler if p.sampler_name not in timesteps_samplers else None,
         "CFG scale": p.cfg_scale
     }
 
@@ -863,7 +865,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
     if p.tiling is None:
         p.tiling = opts.tiling
 
-    if p.refiner_checkpoint not in (None, "", "None", "none"):
+    if p.refiner_checkpoint not in (None, "", "None", "none", "[STOP]"):
         p.refiner_checkpoint_info = sd_models.get_closet_checkpoint_match(p.refiner_checkpoint)
         if p.refiner_checkpoint_info is None:
             raise Exception(f'Could not find checkpoint with name {p.refiner_checkpoint}')
@@ -967,6 +969,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 with open(os.path.join(paths.data_path, "params.txt"), "w", encoding="utf8") as file:
                     processed = Processed(p, [])
                     file.write(processed.infotext(p, 0))
+                    # also write append a permanent log? datetime: infotext
 
             for comment in p.sd_model.comments:
                 p.comment(comment)
