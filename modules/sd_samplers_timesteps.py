@@ -135,6 +135,7 @@ class CompVisSampler(sd_samplers_common.Sampler):
         if p.refiner_checkpoint == "[STOP]":    # truncate timesteps based on refiner switch point
             length = int(len(timesteps) * p.refiner_switch_at)
             timesteps = timesteps[-length:]
+            p.extra_generation_params["Early stop"] = p.refiner_switch_at # informational only
 
         extra_params_kwargs = self.initialize(p)
         parameters = inspect.signature(self.func).parameters
