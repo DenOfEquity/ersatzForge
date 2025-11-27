@@ -116,7 +116,7 @@ class TimestepEmbedder(nn.Module):
     """Embeds scalar timesteps into vector representations."""
 
     def __init__(
-        self, hidden_size, frequency_embedding_size=256, dtype=None, device=None
+        self, hidden_size, frequency_embedding_size=256, output_size=None, dtype=None, device=None
     ):
         super().__init__()
         self.mlp = nn.Sequential(
@@ -128,7 +128,7 @@ class TimestepEmbedder(nn.Module):
                 device=device,
             ),
             nn.SiLU(),
-            nn.Linear(hidden_size, hidden_size, bias=True, dtype=dtype, device=device),
+            nn.Linear(hidden_size, output_size or hidden_size, bias=True, dtype=dtype, device=device),
         )
         self.frequency_embedding_size = frequency_embedding_size
 
@@ -701,7 +701,7 @@ class MMDiTX(nn.Module):
         num_heads = depth
 
         self.num_heads = num_heads
-        
+
         self.x_embedder = PatchEmbed(
             input_size,
             patch_size,

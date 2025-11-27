@@ -250,10 +250,11 @@ class PredictionFlow(AbstractPrediction):
 
 
 class PredictionDiscreteFlow(AbstractPrediction):
-    def __init__(self,  sigma_data=1.0, prediction_type='const',  shift=1.0, timesteps = 1000):
+    def __init__(self, sigma_data=1.0, prediction_type='const', shift=1.0, multiplier=1000, timesteps=1000):
         super().__init__(sigma_data=sigma_data, prediction_type=prediction_type)
         self.shift = shift
-        ts = self.sigma(torch.arange(1, timesteps + 1, 1))
+        self.multiplier = multiplier
+        ts = self.sigma((torch.arange(1, timesteps + 1, 1) / timesteps) * multiplier)
         self.register_buffer("sigmas", ts)
 
     @property
@@ -265,13 +266,10 @@ class PredictionDiscreteFlow(AbstractPrediction):
         return self.sigmas[-1]
 
     def timestep(self, sigma):
-        return sigma * 1000
+        return sigma * self.multiplier
 
     def sigma(self, timestep: torch.Tensor):
-        timestep = timestep / 1000.0
-        if self.shift == 1.0:
-            return timestep
-        return self.shift * timestep / (1 + (self.shift - 1) * timestep)
+        return time_snr_shift(self.shift, timestep / self.multiplier)
 
     def percent_to_sigma(self, percent):
         if percent <= 0.0:

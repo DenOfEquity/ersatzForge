@@ -449,29 +449,11 @@ class Chroma(FluxSchnell):
         "guidance_embed": False,
     }
 
-    def process_vae_state_dict(self, state_dict):   # AiO
-        if any(k.startswith("first_stage_model.") for k in state_dict.keys()):
-            sd = {}
-            for k, v in state_dict.items():
-                if k.startswith("first_stage_model."):
-                    sd["vae." + k[18:]] = v
-                else:
-                    sd[k] = v
-            return sd
-        return state_dict
+    text_encoder_key_prefix = ["text_encoders.", "cond_stage_model."]
 
-    def process_clip_state_dict(self, state_dict):   # AiO
-        if any(k.startswith("cond_stage_model.") for k in state_dict.keys()):
-            sd = {}
-            for k, v in state_dict.items():
-                if k.startswith("cond_stage_model."):
-                    sd["text_encoders." + k[17:]] = v
-                else:
-                    sd[k] = v
-            state_dict = sd
-        
-        state_dict = utils.state_dict_prefix_replace(state_dict, {k: "" for k in self.text_encoder_key_prefix}, filter_keys=True)
-        return state_dict
+    def process_vae_state_dict(self, state_dict):   # AiO
+        replace_prefix = {"first_stage_model.": "vae."}
+        return utils.state_dict_prefix_replace(state_dict, replace_prefix)
 
     def clip_target(self, state_dict={}):
         return {'t5xxl': 'text_encoder'}
@@ -599,6 +581,7 @@ class Lumina2(BASE):
 
     unet_config = {
         "image_model": "lumina2",
+        "dim": 2304,
     }
 
     sampling_settings = {
@@ -619,7 +602,30 @@ class Lumina2(BASE):
     unet_target = "transformer"
 
     def clip_target(self, state_dict={}):
-        return {"gemma2_2b": "text_encoder"}
+        pref = self.text_encoder_key_prefix[0]
+        if "{}gemma2_2b.transformer.model.embed_tokens.weight".format(pref) in state_dict:
+            state_dict.pop("{}gemma2_2b.logit_scale".format(pref), None)
+            state_dict.pop("{}spiece_model".format(pref), None)
+            return {"gemma2_2b.transformer": "text_encoder"}
+        else:
+            return {"gemma2_2b": "text_encoder"}
 
 
-models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2]#, WAN21_I2V]
+class Zimage(Lumina2):
+    huggingface_repo = "Zimage"
+
+    unet_config = {
+        "image_model": "Zimage",
+        "dim": 3840,
+    }
+
+    sampling_settings = {
+        "multiplier": 1.0,
+        "shift": 3.0,
+    }
+
+    def clip_target(self, state_dict={}):
+        return {"qwen3_4b": "text_encoder"}
+
+
+models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage]#, WAN21_I2V]

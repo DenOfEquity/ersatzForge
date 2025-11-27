@@ -28,9 +28,9 @@ from backend.diffusion_engine.chroma import Chroma
 from backend.diffusion_engine.chromaDCT import ChromaDCT
 from backend.diffusion_engine.cosmos import Cosmos
 from backend.diffusion_engine.wan import Wan
-from backend.diffusion_engine.lumina2 import Lumina2
+from backend.diffusion_engine.lumina2 import Lumina2, Zimage
 
-possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux, Cosmos, Wan, Lumina2]
+possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux, Cosmos, Wan, Zimage, Lumina2]
 
 
 logging.getLogger("diffusers").setLevel(logging.ERROR)
@@ -140,6 +140,39 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 with modeling_utils.no_init_weights():
                     with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
                         model = Gemma2_2B(config)
+
+            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[])
+
+            return model
+
+        if cls_name == "Qwen3Model":
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have Qwen3 state dict!"
+
+            from backend.nn.llm.llama import Qwen3_4B
+
+            config = read_arbitrary_config(config_path)
+
+            storage_dtype = memory_management.text_encoder_dtype()
+            state_dict_dtype = memory_management.state_dict_dtype(state_dict)
+
+            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
+                print(f"Using Detected Qwen3 Data Type: {state_dict_dtype}")
+                storage_dtype = state_dict_dtype
+                if state_dict_dtype in ["nf4", "fp4", "gguf"]:
+                    print("Using pre-quant state dict!")
+                    if state_dict_dtype in ["gguf"]:
+                        beautiful_print_gguf_state_dict_statics(state_dict)
+            else:
+                print(f"Using Default Qwen3 Data Type: {storage_dtype}")
+
+            if storage_dtype in ["nf4", "fp4", "gguf"]:
+                with modeling_utils.no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                        model = Qwen3_4B(config)
+            else:
+                with modeling_utils.no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
+                        model = Qwen3_4B(config)
 
             load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[])
 
@@ -607,6 +640,10 @@ def replace_state_dict(sd, asd, guess):
                 continue
             sd[f"{text_encoder_key_prefix}gemma2_2b.{k}"] = v
 
+    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 4B (Z Image)
+        for k, v in asd.items():
+            sd[f"{text_encoder_key_prefix}qwen3_4b.{k}"] = v
+
 
     # ResAdapter (bytedance) unet patch (sd1.5 or sdxl)
     if 'down_blocks.0.resnets.0.norm1.bias' in asd:
@@ -746,7 +783,7 @@ def forge_loader(sd, additional_state_dicts=None):
             huggingface_components['scheduler'].config.prediction_type = prediction_types.get(estimated_config.model_type.name, huggingface_components['scheduler'].config.prediction_type)
 
     # SDXL flow models
-    flow_names = ['bigaspv25', 'nyaflow']  # use lowercase, could be a Setting for a list of matching names but not enough models to bother
+    flow_names = ['bigaspv25', 'nyaflow', 'snakebite2']  # use lowercase, could be a Setting for a list of matching names but not enough models to bother
     backend.args.dynamic_args.update({'SDXL_flow' : True if any([name in sd.lower() for name in flow_names]) else False})
 
     for M in possible_models:

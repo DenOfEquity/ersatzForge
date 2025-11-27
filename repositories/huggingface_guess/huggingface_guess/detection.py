@@ -13,7 +13,7 @@ def count_blocks(state_dict_keys, prefix_string):
             if k.startswith(prefix_string.format(count)):
                 c = True
                 break
-        if c == False:
+        if not c:
             break
         count += 1
     return count
@@ -24,7 +24,7 @@ def calculate_transformer_depth(prefix, state_dict_keys, state_dict):
     use_linear_in_transformer = False
 
     transformer_prefix = prefix + "1.transformer_blocks."
-    transformer_keys = sorted(list(filter(lambda a: a.startswith(transformer_prefix), state_dict_keys)))
+    transformer_keys = sorted(filter(lambda a: a.startswith(transformer_prefix), state_dict_keys))
     if len(transformer_keys) > 0:
         last_transformer_depth = count_blocks(state_dict_keys, transformer_prefix + '{}')
         context_dim = state_dict['{}0.attn2.to_k.weight'.format(transformer_prefix)].shape[1]
@@ -38,19 +38,36 @@ def calculate_transformer_depth(prefix, state_dict_keys, state_dict):
 def detect_unet_config(state_dict, key_prefix):
     state_dict_keys = list(state_dict.keys())
 
-    if "{}cap_embedder.1.weight".format(key_prefix) in state_dict_keys:  # Lumina 2
+    if "{}cap_embedder.1.weight".format(key_prefix) in state_dict_keys:  # Lumina 2, Z image
         dit_config = {}
-        dit_config["image_model"] = "lumina2"
         dit_config["patch_size"] = 2
         dit_config["in_channels"] = 16
-        dit_config["dim"] = 2304
-        dit_config["cap_feat_dim"] = int(state_dict["{}cap_embedder.1.weight".format(key_prefix)].shape[1])
+
+        w = state_dict['{}cap_embedder.1.weight'.format(key_prefix)]
+        dit_config["dim"] = w.shape[0]
+        dit_config["cap_feat_dim"] = w.shape[1]
+
         dit_config["n_layers"] = count_blocks(state_dict_keys, "{}layers.".format(key_prefix) + "{}.")
-        dit_config["n_heads"] = 24
-        dit_config["n_kv_heads"] = 8
         dit_config["qk_norm"] = True
-        dit_config["axes_dims"] = [32, 32, 32]
-        dit_config["axes_lens"] = [300, 512, 512]
+        if dit_config["dim"] == 2304:   # Lumina 2
+            dit_config["image_model"] = "lumina2"
+            dit_config["n_heads"] = 24
+            dit_config["n_kv_heads"] = 8
+            dit_config["axes_dims"] = [32, 32, 32]
+            dit_config["axes_lens"] = [300, 512, 512]
+            dit_config["ffn_dim_multiplier"] = 4.0
+            dit_config["rope_theta"] = 10000.0
+        else:   # Z image
+            dit_config["image_model"] = "Zimage"
+            dit_config["n_heads"] = 30
+            dit_config["n_kv_heads"] = 30
+            dit_config["axes_dims"] = [32, 48, 48]
+            dit_config["axes_lens"] = [1536, 512, 512]
+            dit_config["ffn_dim_multiplier"] = (8.0 / 3.0)
+            dit_config["rope_theta"] = 256.0
+            dit_config["z_modulation"] = True
+            if '{}cap_pad_token'.format(key_prefix) in state_dict_keys:
+                dit_config["pad_tokens_multiple"] = 32
         return dit_config
 
     if '{}joint_blocks.0.context_block.attn.qkv.weight'.format(key_prefix) in state_dict_keys:  # mmdit model
@@ -239,10 +256,10 @@ def detect_unet_config(state_dict, key_prefix):
     if '{}double_blocks.0.img_attn.norm.key_norm.scale'.format(key_prefix) in state_dict_keys:  # Flux / Chroma
         dit_config = {}
         dit_config["image_model"] = "flux"
-        
+
         if "{}distilled_guidance_layer.layers.0.in_layer.bias".format(key_prefix) in state_dict_keys:
             dit_config["image_model"] = "chroma"
-        
+
         dit_config["in_channels"] = 16
         dit_config["vec_in_dim"] = 768
         dit_config["context_in_dim"] = 4096
@@ -292,7 +309,6 @@ def detect_unet_config(state_dict, key_prefix):
 
     num_res_blocks = []
     channel_mult = []
-    attention_resolutions = []
     transformer_depth = []
     transformer_depth_output = []
     context_dim = None
@@ -312,11 +328,11 @@ def detect_unet_config(state_dict, key_prefix):
         prefix = '{}input_blocks.{}.'.format(key_prefix, count)
         prefix_output = '{}output_blocks.{}.'.format(key_prefix, input_block_count - count - 1)
 
-        block_keys = sorted(list(filter(lambda a: a.startswith(prefix), state_dict_keys)))
+        block_keys = sorted(filter(lambda a: a.startswith(prefix), state_dict_keys))
         if len(block_keys) == 0:
             break
 
-        block_keys_output = sorted(list(filter(lambda a: a.startswith(prefix_output), state_dict_keys)))
+        block_keys_output = sorted(filter(lambda a: a.startswith(prefix_output), state_dict_keys))
 
         if "{}0.op.weight".format(prefix) in block_keys:  # new layer
             num_res_blocks.append(last_res_blocks)
@@ -461,8 +477,7 @@ def convert_config(unet_config):
             t_in += [d] * res
             t_out += [d] * (res + 1)
             s *= 2
-        transformer_depth = t_in
-        transformer_depth_output = t_out
+
         new_config["transformer_depth"] = t_in
         new_config["transformer_depth_output"] = t_out
         new_config["transformer_depth_middle"] = transformer_depth_middle
@@ -488,7 +503,7 @@ def unet_config_from_diffusers_unet(state_dict, dtype=None):
 
         attn_res *= 2
         if attn_blocks == 0:
-            for i in range(res_blocks):
+            for _i in range(res_blocks):
                 transformer_depth.append(0)
 
     match["transformer_depth"] = transformer_depth

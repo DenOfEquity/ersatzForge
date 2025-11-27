@@ -12,13 +12,13 @@ class PromptChunk:
 
 
 class GemmaTextProcessingEngine:
-    def __init__(self, text_encoder, tokenizer):
+    def __init__(self, text_encoder, tokenizer, min_length=1):
         super().__init__()
 
         self.text_encoder = text_encoder
         self.tokenizer = tokenizer
 
-        self.min_length = 1
+        self.min_length = min_length
         self.id_start = 2
         self.id_end = 1
         self.id_pad = 0
@@ -75,8 +75,9 @@ class GemmaTextProcessingEngine:
             emphasis.last_extra_generation_params["Emphasis"] = self.emphasis.name
 
         for line in texts:
-            if line != "": # auto include this? makes UI token count incorrect
+            if line != "":
                 line = "You are an assistant designed to generate high-quality images with the highest degree of image-text alignment based on textual prompts. <Prompt Start> " + line
+
             if line in cache:
                 line_z_values = cache[line]
             else:
@@ -106,7 +107,7 @@ class GemmaTextProcessingEngine:
             zs.extend(line_z_values)
 
         return zs
-#        return torch.stack(zs)
+        # return torch.stack(zs)
 
     def process_embeds(self, batch_tokens):
         device = memory_management.text_encoder_device()
@@ -141,4 +142,11 @@ class GemmaTextProcessingEngine:
     def process_tokens(self, batch_tokens, batch_multipliers):
         embeds, mask, count = self.process_embeds(batch_tokens)
         z, _ = self.text_encoder(input_ids=None, embeds=embeds, attention_mask=mask, num_tokens=count)#, intermediate_output=-2, final_layer_norm_intermediate=False)
+
+        self.emphasis.tokens = batch_tokens
+        self.emphasis.multipliers = torch.asarray(batch_multipliers).to(z)
+        self.emphasis.z = z
+        self.emphasis.after_transformers()
+        z = self.emphasis.z
+
         return z

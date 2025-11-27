@@ -8,26 +8,48 @@ import torch.nn as nn
 from backend.memory_management import cast_to_device
 from backend.attention import attention_pytorch as attention_function
 
-from . import qwen_vl
+# from . import qwen_vl
 
 
 @dataclass
-class Qwen25_7BVLI_Config:
-    vocab_size: int = 152064
-    hidden_size: int = 3584
-    intermediate_size: int = 18944
-    num_hidden_layers: int = 28
-    num_attention_heads: int = 28
-    num_key_value_heads: int = 4
-    max_position_embeddings: int = 128000
+class Qwen3_4BConfig:
+    vocab_size: int = 151936
+    hidden_size: int = 2560
+    intermediate_size: int = 9728
+    num_hidden_layers: int = 36
+    num_attention_heads: int = 32
+    num_key_value_heads: int = 8
+    max_position_embeddings: int = 40960
     rms_norm_eps: float = 1e-6
     rope_theta: float = 1000000.0
     transformer_type: str = "llama"
     head_dim = 128
     rms_norm_add = False
     mlp_activation = "silu"
-    qkv_bias = True
-    rope_dims = [16, 24, 24]
+    qkv_bias = False
+    rope_dims = None
+    q_norm = "gemma3"
+    k_norm = "gemma3"
+    rope_scale = None
+    final_norm: bool = True
+
+# @dataclass
+# class Qwen25_7BVLI_Config:
+    # vocab_size: int = 152064
+    # hidden_size: int = 3584
+    # intermediate_size: int = 18944
+    # num_hidden_layers: int = 28
+    # num_attention_heads: int = 28
+    # num_key_value_heads: int = 4
+    # max_position_embeddings: int = 128000
+    # rms_norm_eps: float = 1e-6
+    # rope_theta: float = 1000000.0
+    # transformer_type: str = "llama"
+    # head_dim = 128
+    # rms_norm_add = False
+    # mlp_activation = "silu"
+    # qkv_bias = True
+    # rope_dims = [16, 24, 24]
 
 
 @dataclass
@@ -47,7 +69,11 @@ class Gemma2_2B_Config:
     mlp_activation = "gelu_pytorch_tanh"
     qkv_bias = False
     rope_dims = None
-
+    q_norm = None
+    k_norm = None
+    rope_scale = None
+    final_norm: bool = True
+    sliding_attention = None
 
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float, add=False):
@@ -71,13 +97,19 @@ def rotate_half(x):
     return torch.cat((-x2, x1), dim=-1)
 
 
-def precompute_freqs_cis(head_dim, position_ids, theta, rope_dims=None, device=None):
+def precompute_freqs_cis(head_dim, position_ids, theta, rope_scale=None, rope_dims=None, device=None):
     theta_numerator = torch.arange(0, head_dim, 2, device=device).to(torch.float32)
     inv_freq = 1.0 / (theta ** (theta_numerator / head_dim))
 
+    if rope_scale is not None:
+        if isinstance(rope_scale, list):
+            inv_freq /= rope_scale[index]
+        else:
+            inv_freq /= rope_scale
+
     inv_freq_expanded = inv_freq[None, :, None].to(torch.float32).expand(position_ids.shape[0], -1, 1)
     position_ids_expanded = position_ids[:, None, :].to(torch.float32)
-    freqs = (inv_freq_expanded.float() @ position_ids_expanded.to(torch.float32)).transpose(1, 2)
+    freqs = (inv_freq_expanded.to(torch.float32) @ position_ids_expanded.to(torch.float32)).transpose(1, 2)
     emb = torch.cat((freqs, freqs), dim=-1)
     cos = emb.cos()
     sin = emb.sin()
@@ -102,7 +134,7 @@ def apply_rope(xq, xk, freqs_cis):
 
 
 class Attention(nn.Module):
-    def __init__(self, config: Qwen25_7BVLI_Config | Gemma2_2B_Config):
+    def __init__(self, config):
         super().__init__()
         self.num_heads = config.num_attention_heads
         self.num_kv_heads = config.num_key_value_heads
@@ -115,6 +147,14 @@ class Attention(nn.Module):
         self.k_proj = nn.Linear(config.hidden_size, self.num_kv_heads * self.head_dim, bias=config.qkv_bias)
         self.v_proj = nn.Linear(config.hidden_size, self.num_kv_heads * self.head_dim, bias=config.qkv_bias)
         self.o_proj = nn.Linear(self.inner_size, config.hidden_size, bias=False)
+
+        self.q_norm = None
+        self.k_norm = None
+
+        if config.q_norm == "gemma3":
+            self.q_norm = RMSNorm(self.head_dim, eps=config.rms_norm_eps, add=config.rms_norm_add)
+        if config.k_norm == "gemma3":
+            self.k_norm = RMSNorm(self.head_dim, eps=config.rms_norm_eps, add=config.rms_norm_add)
 
     def forward(
         self,
@@ -132,6 +172,11 @@ class Attention(nn.Module):
         xk = xk.view(batch_size, seq_length, self.num_kv_heads, self.head_dim).transpose(1, 2)
         xv = xv.view(batch_size, seq_length, self.num_kv_heads, self.head_dim).transpose(1, 2)
 
+        if self.q_norm is not None:
+            xq = self.q_norm(xq)
+        if self.k_norm is not None:
+            xk = self.k_norm(xk)
+
         xq, xk = apply_rope(xq, xk, freqs_cis=freqs_cis)
 
         xk = xk.repeat_interleave(self.num_heads // self.num_kv_heads, dim=1)
@@ -142,7 +187,7 @@ class Attention(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, config: Qwen25_7BVLI_Config | Gemma2_2B_Config):
+    def __init__(self, config):
         super().__init__()
         self.gate_proj = nn.Linear(config.hidden_size, config.intermediate_size, bias=False)
         self.up_proj = nn.Linear(config.hidden_size, config.intermediate_size, bias=False)
@@ -157,12 +202,12 @@ class MLP(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, config: Qwen25_7BVLI_Config | Gemma2_2B_Config, index):
+    def __init__(self, config, index):
         super().__init__()
         self.self_attn = Attention(config)
         self.mlp = MLP(config)
-        self.input_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.input_layernorm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -171,7 +216,7 @@ class TransformerBlock(nn.Module):
         freqs_cis: Optional[torch.Tensor] = None,
         optimized_attention=None,
     ):
-        # Self Attention
+        #Self Attention
         residual = x
         x = self.input_layernorm(x)
         x = self.self_attn(
@@ -182,7 +227,7 @@ class TransformerBlock(nn.Module):
         )
         x = residual + x
 
-        # MLP
+        #MLP
         residual = x
         x = self.post_attention_layernorm(x)
         x = self.mlp(x)
@@ -192,7 +237,7 @@ class TransformerBlock(nn.Module):
 
 
 class TransformerBlockGemma2(nn.Module):
-    def __init__(self, config: Gemma2_2B_Config, index):
+    def __init__(self, config, index):
         super().__init__()
         self.self_attn = Attention(config)
         self.mlp = MLP(config)
@@ -200,7 +245,10 @@ class TransformerBlockGemma2(nn.Module):
         self.post_attention_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps, add=config.rms_norm_add)
         self.pre_feedforward_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps, add=config.rms_norm_add)
         self.post_feedforward_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps, add=config.rms_norm_add)
-        self.sliding_attention = False
+        if config.sliding_attention is not None:
+            self.sliding_attention = config.sliding_attention[index % len(config.sliding_attention)]
+        else:
+            self.sliding_attention = False
         self.transformer_type = config.transformer_type
 
     def forward(
@@ -210,6 +258,13 @@ class TransformerBlockGemma2(nn.Module):
         freqs_cis: Optional[torch.Tensor] = None,
         optimized_attention=None,
     ):
+        if self.transformer_type == 'gemma3':
+            if self.sliding_attention:
+                assert x.shape[1] <= self.sliding_attention
+                freqs_cis = freqs_cis[1]
+            else:
+                freqs_cis = freqs_cis[0]
+
         # Self Attention
         residual = x
         x = self.input_layernorm(x)
@@ -234,14 +289,14 @@ class TransformerBlockGemma2(nn.Module):
 
 
 class Llama2_(nn.Module):
-    def __init__(self, config: Qwen25_7BVLI_Config | Gemma2_2B_Config):
+    def __init__(self, config):
         super().__init__()
         self.config = config
         self.vocab_size = config.vocab_size
 
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
 
-        if self.config.transformer_type == "gemma2":
+        if self.config.transformer_type == "gemma2" or self.config.transformer_type == "gemma3":
             transformer = TransformerBlockGemma2
             self.normalize_in = True
         else:
@@ -249,7 +304,10 @@ class Llama2_(nn.Module):
             self.normalize_in = False
 
         self.layers = nn.ModuleList([transformer(config, index=i) for i in range(config.num_hidden_layers)])
-        self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps, add=config.rms_norm_add)
+        if config.final_norm:
+            self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps, add=config.rms_norm_add)
+        else:
+            self.norm = None
 
     def forward(self, x, attention_mask=None, embeds=None, num_tokens=None, intermediate_output=None, final_layer_norm_intermediate=True, dtype=None, position_ids=None, embeds_info=[]):
         if embeds is not None:
@@ -263,7 +321,7 @@ class Llama2_(nn.Module):
         if position_ids is None:
             position_ids = torch.arange(0, x.shape[1], device=x.device).unsqueeze(0)
 
-        freqs_cis = precompute_freqs_cis(self.config.head_dim, position_ids, self.config.rope_theta, self.config.rope_dims, device=x.device)
+        freqs_cis = precompute_freqs_cis(self.config.head_dim, position_ids, self.config.rope_theta, self.config.rope_scale, self.config.rope_dims, device=x.device)
 
         mask = None
         if attention_mask is not None:
@@ -278,8 +336,12 @@ class Llama2_(nn.Module):
 
         intermediate = None
         all_intermediate = None
+        only_layers = None
         if intermediate_output is not None:
-            if intermediate_output == "all":
+            if isinstance(intermediate_output, list):
+                all_intermediate = []
+                only_layers = set(intermediate_output)
+            elif intermediate_output == "all":
                 all_intermediate = []
                 intermediate_output = None
             elif intermediate_output < 0:
@@ -287,7 +349,8 @@ class Llama2_(nn.Module):
 
         for i, layer in enumerate(self.layers):
             if all_intermediate is not None:
-                all_intermediate.append(x.unsqueeze(1).clone())
+                if only_layers is None or (i in only_layers):
+                    all_intermediate.append(x.unsqueeze(1).clone())
             x = layer(
                 x=x,
                 attention_mask=mask,
@@ -297,14 +360,17 @@ class Llama2_(nn.Module):
             if i == intermediate_output:
                 intermediate = x.clone()
 
-        x = self.norm(x)
+        if self.norm is not None:
+            x = self.norm(x)
+
         if all_intermediate is not None:
-            all_intermediate.append(x.unsqueeze(1).clone())
+            if only_layers is None or ((i + 1) in only_layers):
+                all_intermediate.append(x.unsqueeze(1).clone())
 
         if all_intermediate is not None:
             intermediate = torch.cat(all_intermediate, dim=1)
 
-        if intermediate is not None and final_layer_norm_intermediate:
+        if intermediate is not None and final_layer_norm_intermediate and self.norm is not None:
             intermediate = self.norm(intermediate)
 
         return x, intermediate
@@ -318,10 +384,10 @@ class BaseLlama:
         self.model.embed_tokens = embeddings
 
 
-class Qwen25_7BVLI(BaseLlama, nn.Module):
+class Qwen3_4B(BaseLlama, torch.nn.Module):
     def __init__(self, config_dict):
         super().__init__()
-        config = Qwen25_7BVLI_Config()
+        config = Qwen3_4BConfig()
 
         _config_dict = asdict(config)
         for key, value in _config_dict.items():
@@ -331,42 +397,60 @@ class Qwen25_7BVLI(BaseLlama, nn.Module):
         self.num_layers = config.num_hidden_layers
 
         self.model = Llama2_(config)
-        self.visual = qwen_vl.Qwen2VLVisionTransformer(hidden_size=1280, output_hidden_size=config.hidden_size)
 
-    def preprocess_embed(self, embed, device):
-        if embed["type"] == "image":
-            image, grid = qwen_vl.process_qwen2vl_images(embed["data"])
-            return self.visual(image.to(device, dtype=torch.float32), grid), grid
-        return None, None
+    def forward(self, input_ids, *args, **kwargs):
+        return self.model(input_ids, *args, **kwargs)
 
-    def forward(self, x, attention_mask=None, embeds=None, num_tokens=None, intermediate_output=None, final_layer_norm_intermediate=True, dtype=None, embeds_info=[]):
-        grid = None
-        position_ids = None
-        offset = 0
 
-        for e in embeds_info:
-            if e.get("type") == "image":
-                grid = e.get("extra", None)
-                position_ids = torch.zeros((3, embeds.shape[1]), device=embeds.device)
-                start = e.get("index")
-                if position_ids is None:
-                    position_ids = torch.zeros((3, embeds.shape[1]), device=embeds.device)
-                    position_ids[:, :start] = torch.arange(0, start, device=embeds.device)
-                end = e.get("size") + start
-                len_max = int(grid.max()) // 2
-                start_next = len_max + start
-                position_ids[:, end:] = torch.arange(start_next + offset, start_next + (embeds.shape[1] - end) + offset, device=embeds.device)
-                position_ids[0, start:end] = start + offset
-                max_d = int(grid[0][1]) // 2
-                position_ids[1, start:end] = torch.arange(start + offset, start + max_d + offset, device=embeds.device).unsqueeze(1).repeat(1, math.ceil((end - start) / max_d)).flatten(0)[: end - start]
-                max_d = int(grid[0][2]) // 2
-                position_ids[2, start:end] = torch.arange(start + offset, start + max_d + offset, device=embeds.device).unsqueeze(0).repeat(math.ceil((end - start) / max_d), 1).flatten(0)[: end - start]
-                offset += len_max - (end - start)
+# class Qwen25_7BVLI(BaseLlama, nn.Module):
+    # def __init__(self, config_dict):
+        # super().__init__()
+        # config = Qwen25_7BVLI_Config()
 
-        if grid is None:
-            position_ids = None
+        # _config_dict = asdict(config)
+        # for key, value in _config_dict.items():
+            # if key in config_dict:
+                # assert value == config_dict[key]
 
-        return self.model(x, attention_mask=attention_mask, embeds=embeds, num_tokens=num_tokens, intermediate_output=intermediate_output, final_layer_norm_intermediate=final_layer_norm_intermediate, dtype=dtype, position_ids=position_ids)
+        # self.num_layers = config.num_hidden_layers
+
+        # self.model = Llama2_(config)
+        # self.visual = qwen_vl.Qwen2VLVisionTransformer(hidden_size=1280, output_hidden_size=config.hidden_size)
+
+    # def preprocess_embed(self, embed, device):
+        # if embed["type"] == "image":
+            # image, grid = qwen_vl.process_qwen2vl_images(embed["data"])
+            # return self.visual(image.to(device, dtype=torch.float32), grid), grid
+        # return None, None
+
+    # def forward(self, x, attention_mask=None, embeds=None, num_tokens=None, intermediate_output=None, final_layer_norm_intermediate=True, dtype=None, embeds_info=[]):
+        # grid = None
+        # position_ids = None
+        # offset = 0
+
+        # for e in embeds_info:
+            # if e.get("type") == "image":
+                # grid = e.get("extra", None)
+                # position_ids = torch.zeros((3, embeds.shape[1]), device=embeds.device)
+                # start = e.get("index")
+                # if position_ids is None:
+                    # position_ids = torch.zeros((3, embeds.shape[1]), device=embeds.device)
+                    # position_ids[:, :start] = torch.arange(0, start, device=embeds.device)
+                # end = e.get("size") + start
+                # len_max = int(grid.max()) // 2
+                # start_next = len_max + start
+                # position_ids[:, end:] = torch.arange(start_next + offset, start_next + (embeds.shape[1] - end) + offset, device=embeds.device)
+                # position_ids[0, start:end] = start + offset
+                # max_d = int(grid[0][1]) // 2
+                # position_ids[1, start:end] = torch.arange(start + offset, start + max_d + offset, device=embeds.device).unsqueeze(1).repeat(1, math.ceil((end - start) / max_d)).flatten(0)[: end - start]
+                # max_d = int(grid[0][2]) // 2
+                # position_ids[2, start:end] = torch.arange(start + offset, start + max_d + offset, device=embeds.device).unsqueeze(0).repeat(math.ceil((end - start) / max_d), 1).flatten(0)[: end - start]
+                # offset += len_max - (end - start)
+
+        # if grid is None:
+            # position_ids = None
+
+        # return self.model(x, attention_mask=attention_mask, embeds=embeds, num_tokens=num_tokens, intermediate_output=intermediate_output, final_layer_norm_intermediate=final_layer_norm_intermediate, dtype=dtype, position_ids=position_ids)
 
 
 class Gemma2_2B(BaseLlama, torch.nn.Module):
