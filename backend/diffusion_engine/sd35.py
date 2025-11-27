@@ -34,7 +34,7 @@ class StableDiffusion3(ForgeDiffusionEngine):
             }
         )
 
-        k_predictor = PredictionDiscreteFlow(shift=3.0)
+        k_predictor = PredictionDiscreteFlow(shift=3.0)#opts.sd3_flow_shift)
 
         vae = VAE(model=huggingface_components['vae'])
 
@@ -87,6 +87,12 @@ class StableDiffusion3(ForgeDiffusionEngine):
         self.is_sd3 = True
 
     def set_clip_skip(self, clip_skip):
+        # def sigma (timestep, s):
+            # return s * timestep / (1 + (s - 1) * timestep)
+
+        # ts = sigma((torch.arange(1, 10000 + 1, 1) / 10000), opts.sd3_flow_shift)
+        # self.forge_objects.unet.model.predictor.sigmas = ts
+
         self.text_processing_engine_l.clip_skip = clip_skip
         self.text_processing_engine_g.clip_skip = clip_skip
 
@@ -117,13 +123,19 @@ class StableDiffusion3(ForgeDiffusionEngine):
             g_pooled = torch.zeros_like(g_pooled)
             cond_l = torch.zeros_like(cond_l)
             cond_g = torch.zeros_like(cond_g)
-            cond_t5 = torch.zeros_like(cond_t5)
+            cond_t5 = [torch.zeros_like(t) for t in cond_t5]
 
         cond_lg = torch.cat([cond_l, cond_g], dim=-1)
         cond_lg = torch.nn.functional.pad(cond_lg, (0, 4096 - cond_lg.shape[-1]))
 
+        # T5 now returns as a list
+        crossattn = []
+        for i in range(len(cond_t5)):
+            ca = torch.cat([cond_lg[i], cond_t5[i]], dim=-2)
+            crossattn.append(ca)
+
         cond = dict(
-            crossattn=torch.cat([cond_lg, cond_t5], dim=-2),
+            crossattn=crossattn,
             vector=torch.cat([l_pooled, g_pooled], dim=-1),
         )
 
