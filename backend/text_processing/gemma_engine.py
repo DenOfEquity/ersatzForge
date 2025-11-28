@@ -54,12 +54,8 @@ class GemmaTextProcessingEngine:
                 next_chunk()
                 continue
 
-            position = 0
-            while position < len(tokens):
-                token = tokens[position]
-                chunk.tokens.append(token)
-                chunk.multipliers.append(weight)
-                position += 1
+            chunk.tokens.extend(tokens)
+            chunk.multipliers.extend([weight] * len(tokens))
 
         if chunk.tokens or not chunks:
             next_chunk()
@@ -88,7 +84,7 @@ class GemmaTextProcessingEngine:
                     tokens = chunk.tokens
                     multipliers = chunk.multipliers
 
-                    z = self.process_tokens([tokens], [multipliers])[0]
+                    z = self.process_tokens(tokens, multipliers)[0]
                     line_z_values.append(z)
 
                 # remove start/end - maybe slightly better
@@ -107,7 +103,6 @@ class GemmaTextProcessingEngine:
             zs.extend(line_z_values)
 
         return zs
-        # return torch.stack(zs)
 
     def process_embeds(self, batch_tokens):
         device = memory_management.text_encoder_device()
@@ -140,13 +135,16 @@ class GemmaTextProcessingEngine:
         return torch.cat(embeds_out), torch.tensor(attention_masks, device=device, dtype=torch.long), num_tokens
 
     def process_tokens(self, batch_tokens, batch_multipliers):
-        embeds, mask, count = self.process_embeds(batch_tokens)
-        z, _ = self.text_encoder(input_ids=None, embeds=embeds, attention_mask=mask, num_tokens=count)#, intermediate_output=-2, final_layer_norm_intermediate=False)
+        embeds, mask, count = self.process_embeds([batch_tokens])
 
-        self.emphasis.tokens = batch_tokens
-        self.emphasis.multipliers = torch.asarray(batch_multipliers).to(z)
-        self.emphasis.z = z
-        self.emphasis.after_transformers()
-        z = self.emphasis.z
+        if self.emphasis.name == "No norm":
+            embeds *= torch.tensor(batch_multipliers).to(embeds).unsqueeze(1).unsqueeze(0)
+        elif self.emphasis.name == "Original":
+            original_mean = z.mean()
+            embeds *= torch.tensor(batch_multipliers).to(embeds).unsqueeze(1).unsqueeze(0)
+            new_mean = z.mean()
+            embeds *= (original_mean / new_mean)
+
+        z, _ = self.text_encoder(input_ids=None, embeds=embeds, attention_mask=mask, num_tokens=count)#, intermediate_output=-2, final_layer_norm_intermediate=False)
 
         return z
