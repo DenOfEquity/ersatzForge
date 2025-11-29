@@ -119,23 +119,23 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         tags = build_tags(metadata)
         gradio_tags = [(tag, str(count)) for tag, count in tags[0:24]]
 
-        version = user_metadata.get('sd_version_str')
+        version = user_metadata.get('sd_version_str') or item.get('sd_version_str')
         if version:
-            version = version.replace('SdVersion.', '')
+            version = version[10:] #.replace('SdVersion.', '')
         else:
             version = user_metadata.get("sd version", "Unknown")
 
         return [
             *values[0:5],
             version,
-            gr.HighlightedText.update(value=gradio_tags, visible=True if tags else False),
+            gr.update(value=gradio_tags, visible=True if tags else False),
             user_metadata.get('activation text', ''),
             float(user_metadata.get('preferred weight', 1.0)),
             user_metadata.get('negative text', ''),
         ]
 
     def create_extra_default_items_in_left_column(self):
-        self.select_sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Flux', 'Unknown'], value='Unknown', label='Base model', interactive=True)
+        self.select_sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Flux', 'Zimage', 'Unknown'], value='Unknown', label='Base model', interactive=True)
 
     def create_editor(self):
         self.create_default_editor_elems()
@@ -161,7 +161,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
 
             return activation_text + ", " + tag
 
-        self.taginfo.select(fn=select_tag, inputs=[self.edit_activation_text], outputs=[self.edit_activation_text], show_progress=False)
+        self.taginfo.select(fn=select_tag, inputs=[self.edit_activation_text], outputs=[self.edit_activation_text], show_progress="hidden")
 
         self.create_default_buttons()
 
@@ -179,7 +179,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         ]
 
         self.button_edit\
-            .click(fn=self.put_values_into_components, inputs=[self.edit_name_input], outputs=viewed_components)\
+            .click(fn=self.put_values_into_components, inputs=[self.edit_name_input], outputs=viewed_components, show_progress="hidden")\
             .then(fn=lambda: gr.update(visible=True), inputs=None, outputs=[self.box])
 
         edited_components = [

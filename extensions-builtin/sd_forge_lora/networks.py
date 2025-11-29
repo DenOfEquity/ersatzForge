@@ -4,7 +4,6 @@ import os
 import re
 import torch
 import network
-# import functools
 
 from backend.args import dynamic_args
 from modules import shared, sd_models, errors, scripts
@@ -23,7 +22,8 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
     lora_clip, lora_unmatch = load_lora(lora_unmatch, clip_keys)
 
     if len(lora_unmatch) > 12:
-        print(f'[LORA] apparent version mismatch for {model_flag}: {filename}')
+        # print (lora_unmatch.keys())
+        print(f'[LORA] apparent version mismatch ({len(lora_unmatch)} keys) for {model_flag}: {filename}')
 
     del lora, lora_unmatch
 
@@ -51,7 +51,6 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
     return model, clip
 
 
-# @functools.lru_cache(maxsize=5)
 def load_lora_state_dict(filename):
     return load_torch_file(filename, safe_load=True)
 
@@ -64,8 +63,6 @@ def load_network(name, network_on_disk):
 
 
 def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=None):
-    global lora_state_dict_cache
-
     current_sd = sd_models.model_data.get_sd_model()
     if current_sd is None:
         return
@@ -87,7 +84,7 @@ def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=No
         list_available_networks()
         networks_on_disk = [available_networks.get(name, None) if name.lower() in forbidden_network_aliases else available_network_aliases.get(name, None) for name in names]
 
-    for i, (network_on_disk, name) in enumerate(zip(networks_on_disk, names)):
+    for _i, (network_on_disk, name) in enumerate(zip(networks_on_disk, names)):
         try:
             net = load_network(name, network_on_disk)
         except Exception as e:
