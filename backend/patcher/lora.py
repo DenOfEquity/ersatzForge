@@ -310,6 +310,105 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
             except Exception as e:
                 print("ERROR {} {} {}".format(patch_type, key, e))
                 raise e
+
+        elif patch_type == "oft":
+            blocks = v[0]
+            rescale = v[1]
+            alpha = v[2]
+            if alpha is None:
+                alpha = 0
+            dora_scale = v[3]
+
+            blocks = memory_management.cast_to_device(blocks, weight.device, computation_dtype)
+            if rescale is not None:
+                rescale = memory_management.cast_to_device(rescale, weight.device, computation_dtype)
+
+            block_num, block_size, *_ = blocks.shape
+
+            try:
+                # Get r
+                I = torch.eye(block_size, device=blocks.device, dtype=blocks.dtype)
+                # for Q = -Q^T
+                q = blocks - blocks.transpose(1, 2)
+                normed_q = q
+                if alpha > 0: # alpha in oft/boft is for constraint
+                    q_norm = torch.norm(q) + 1e-8
+                    if q_norm > alpha:
+                        normed_q = q * alpha / q_norm
+                # use float() to prevent unsupported type in .inverse()
+                r = (I + normed_q) @ (I - normed_q).float().inverse()
+                r = r.to(weight)
+                _, *shape = weight.shape
+                lora_diff = torch.einsum(
+                    "k n m, k n ... -> k m ...",
+                    (r * strength) - strength * I,
+                    weight.view(block_num, block_size, *shape),
+                ).view(-1, *shape)
+                if dora_scale is not None:
+                    weight = weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype, function)
+                else:
+                    weight += function((strength * lora_diff).type(weight.dtype))
+            except Exception as e:
+                logging.error("ERROR {} {} {}".format(self.name, key, e))
+
+        elif patch_type == "boft":
+            blocks = v[0]
+            rescale = v[1]
+            alpha = v[2]
+            dora_scale = v[3]
+
+            blocks = memory_management.cast_to_device(blocks, weight.device, computation_dtype)
+            if rescale is not None:
+                rescale = memory_management.cast_to_device(rescale, weight.device, computation_dtype)
+
+            boft_m, block_num, boft_b, *_ = blocks.shape
+
+            try:
+                # Get r
+                I = torch.eye(boft_b, device=blocks.device, dtype=blocks.dtype)
+                # for Q = -Q^T
+                q = blocks - blocks.transpose(-1, -2)
+                normed_q = q
+                if alpha > 0: # alpha in boft/bboft is for constraint
+                    q_norm = torch.norm(q) + 1e-8
+                    if q_norm > alpha:
+                        normed_q = q * alpha / q_norm
+                # use float() to prevent unsupported type in .inverse()
+                r = (I + normed_q) @ (I - normed_q).float().inverse()
+                r = r.to(weight)
+                inp = org = weight
+
+                r_b = boft_b//2
+                for i in range(boft_m):
+                    bi = r[i]
+                    g = 2
+                    k = 2**i * r_b
+                    if strength != 1:
+                        bi = bi * strength + (1-strength) * I
+                    inp = (
+                        inp.unflatten(0, (-1, g, k))
+                        .transpose(1, 2)
+                        .flatten(0, 2)
+                        .unflatten(0, (-1, boft_b))
+                    )
+                    inp = torch.einsum("b i j, b j ...-> b i ...", bi, inp)
+                    inp = (
+                        inp.flatten(0, 1).unflatten(0, (-1, k, g)).transpose(1, 2).flatten(0, 2)
+                    )
+
+                if rescale is not None:
+                    inp = inp * rescale
+
+                lora_diff = inp - org
+                lora_diff = memory_management.cast_to_device(lora_diff, weight.device, computation_dtype)
+                if dora_scale is not None:
+                    weight = weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype, function)
+                else:
+                    weight += function((strength * lora_diff).type(weight.dtype))
+            except Exception as e:
+                logging.error("ERROR {} {} {}".format(self.name, key, e))
+
+
         elif patch_type in extra_weight_calculators:
             weight = extra_weight_calculators[patch_type](weight, strength, v)
         else:
