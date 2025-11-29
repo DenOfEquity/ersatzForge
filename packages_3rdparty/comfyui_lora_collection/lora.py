@@ -178,6 +178,22 @@ def load_lora(lora, to_load):
             loaded_keys.add(b1_name)
             loaded_keys.add(b2_name)
 
+        #oft (3), boft(4) - untested
+        blocks_name = "{}.oft_blocks".format(x)
+        rescale_name = "{}.rescale".format(x)
+
+        if blocks_name in lora.keys():
+            blocks = lora[blocks_name]
+            if blocks.ndim in [3, 4]:
+                loaded_keys.add(blocks_name)
+                if rescale_name in lora.keys():
+                    rescale = lora[rescale_name]
+                    loaded_keys.add(rescale_name)
+                else:
+                    rescale = None
+                patch_dict[to_load[x]] = ("oft" if blocks.ndim == 3 else "boft", (blocks, rescale, alpha, dora_scale))
+
+
         w_norm_name = "{}.w_norm".format(x)
         b_norm_name = "{}.b_norm".format(x)
         w_norm = lora.get(w_norm_name, None)
@@ -338,6 +354,15 @@ def model_lora_keys_unet(model, key_map={}):
     #         if k.startswith("diffusion_model.") and k.endswith(".weight"):
     #             key_lora = k[len("diffusion_model."):-len(".weight")]
     #             key_map["base_model.model.{}".format(key_lora)] = k #official hunyuan lora format
+
+    if model.config.huggingface_repo in ["Lumina2", "Zimage"]:
+        diffusers_keys = utils.z_image_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
+        for k in diffusers_keys:
+            if k.endswith(".weight"):
+                to = diffusers_keys[k]
+                key_lora = k[:-len(".weight")]
+                key_map["diffusion_model.{}".format(key_lora)] = to
+                key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to
 
     if 'flux' in model.config.huggingface_repo.lower() or 'Chroma' == model.config.huggingface_repo: #Diffusers lora Flux
         diffusers_keys = utils.flux_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
