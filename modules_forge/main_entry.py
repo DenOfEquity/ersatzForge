@@ -48,7 +48,7 @@ def bind_to_opts(comp, k, save=False, callback=None):
             callback()
         return
 
-    comp.change(on_change, inputs=[comp], show_progress=False)
+    comp.change(on_change, inputs=[comp], show_progress="hidden")
     return
 
 
@@ -121,8 +121,7 @@ def make_checkpoint_manager_ui():
             shared.opts.set('sd_model_checkpoint', next(iter(sd_models.checkpoints_list.values())).name)
 
     ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value='-', 
-                                  choices=['sd', 'xl', 'sd3', 'flux', 'chroma', 'all'], scale=0, filterable=False)#lambda: shared.opts.forge_preset,
-
+                                  choices=['sd', 'xl', 'sd3', 'flux', 'chroma', 'zimage', 'all'], scale=0, filterable=False)
     ui_checkpoint = gr.Dropdown(
         value=lambda: shared.opts.sd_model_checkpoint,
         label="Checkpoint",
@@ -150,7 +149,7 @@ def make_checkpoint_manager_ui():
         fn=gr_refresh_models,
         inputs=None,
         outputs=[ui_checkpoint, ui_vae, ui_txt2img_hr_checkpoint, ui_txt2img_hr_vae],
-        show_progress=False,
+        show_progress="hidden",
     )
 
     ui_forge_unet_storage_dtype_options = gr.Dropdown(label="Diffusion in Low Bits", value=lambda: shared.opts.forge_unet_storage_dtype, choices=list(forge_unet_storage_dtype_options.keys()), filterable=False)
@@ -162,16 +161,16 @@ def make_checkpoint_manager_ui():
 
     mem_comps = [ui_forge_inference_memory, ui_forge_swap]
 
-    ui_forge_inference_memory.change(ui_refresh_memory_management_settings, inputs=mem_comps, show_progress=False)
-    ui_forge_swap.change(ui_refresh_memory_management_settings, inputs=mem_comps, show_progress=False)
+    ui_forge_inference_memory.change(ui_refresh_memory_management_settings, inputs=mem_comps, show_progress="hidden")
+    ui_forge_swap.change(ui_refresh_memory_management_settings, inputs=mem_comps, show_progress="hidden")
 
-    Context.root_block.load(ui_refresh_memory_management_settings, inputs=mem_comps, show_progress=False)
+    Context.root_block.load(ui_refresh_memory_management_settings, inputs=mem_comps, show_progress="hidden")
 
     ui_clip_skip = gr.Number(label="Clip skip", value=lambda: shared.opts.CLIP_stop_at_last_layers, minimum=1, maximum=12, step=1, scale=0)
     bind_to_opts(ui_clip_skip, 'CLIP_stop_at_last_layers', save=True)
 
-    ui_checkpoint.change(checkpoint_change_ui, inputs=[ui_checkpoint, ui_vae], outputs=[ui_vae], show_progress=False)
-    ui_vae.change(modules_change, inputs=[ui_vae], show_progress=False)
+    ui_checkpoint.change(checkpoint_change_ui, inputs=[ui_checkpoint, ui_vae], outputs=[ui_vae], show_progress="hidden")
+    ui_vae.change(modules_change, inputs=[ui_vae], show_progress="hidden")
 
     return
 
@@ -313,6 +312,9 @@ def forge_main_entry():
     ui_txt2img_hr_cfg = get_a1111_ui_component('txt2img', 'HiRes CFG scale')
     ui_txt2img_hr_distilled_cfg = get_a1111_ui_component('txt2img', 'HiRes Distilled CFG scale')
 
+    ui_txt2img_steps = get_a1111_ui_component('txt2img', 'steps')
+    ui_img2img_steps = get_a1111_ui_component('img2img', 'steps')
+
     output_targets = [
         ui_vae,
         ui_clip_skip,
@@ -332,13 +334,15 @@ def forge_main_entry():
         ui_img2img_scheduler,
         ui_txt2img_hr_cfg,
         ui_txt2img_hr_distilled_cfg,
+        ui_txt2img_steps,
+        ui_img2img_steps,
     ]
 
-    ui_forge_preset.change(on_preset_change, inputs=[ui_forge_preset], outputs=output_targets, show_progress=False).then(
-                          js="clickLoraRefresh", fn=None, show_progress=False)
+    ui_forge_preset.change(on_preset_change, inputs=[ui_forge_preset], outputs=output_targets, show_progress="hidden").then(
+                          js="clickLoraRefresh", fn=None, show_progress="hidden")
 
 # not setting on startup
-#    Context.root_block.load(on_preset_change, inputs=None, outputs=output_targets, show_progress=False)
+#    Context.root_block.load(on_preset_change, inputs=None, outputs=output_targets, show_progress="hidden")
 
     refresh_model_loading_parameters()
     return
@@ -375,6 +379,8 @@ def on_preset_change(preset=None):
                 gr.update(value=ui_settings_from_file['customscript/sampler.py/img2img/Schedule type/value']),
                 gr.update(visible=True, value=ui_settings_from_file['txt2img/HiRes CFG scale/value']),
                 gr.update(visible=True, value=ui_settings_from_file['txt2img/HiRes Distilled CFG scale/value']),
+                gr.skip(),
+                gr.skip(),
             ]
         else:
             return [
@@ -396,33 +402,87 @@ def on_preset_change(preset=None):
                 gr.update(value="Simple"),
                 gr.update(value=3),
                 gr.update(visible=True, value=3.5),
+                gr.skip(),
+                gr.skip(),
             ]
     else: # other presets
-        model_mem = getattr(shared.opts, f"{preset}_GPU_MB", 0)
-        if model_mem < 0 or model_mem > total_vram:
-            model_mem = 0
-        p = "flux" if preset == "chroma" else preset
-        return [
-            gr.update(value=getattr(shared.opts, f"{p}_vae_te", [""])),
-            gr.update(visible=(p != "flux")),                                                          # ui_clip_skip
-            gr.update(value=getattr(shared.opts, f"{p}_unet_dtype", "Automatic")),
-            gr.update(value=model_mem),
-            gr.update(value=getattr(shared.opts, f"{p}_t2i_width", 512)),
-            gr.update(value=getattr(shared.opts, f"{p}_i2i_width", 512)),
-            gr.update(value=getattr(shared.opts, f"{p}_t2i_height", 640)),
-            gr.update(value=getattr(shared.opts, f"{p}_i2i_height", 512)),
-            gr.update(value=getattr(shared.opts, f"{p}_t2i_cfg", 1)),
-            gr.update(value=getattr(shared.opts, f"{p}_i2i_cfg", 1)),
-            gr.update(visible=(preset == "flux"), value=getattr(shared.opts, "flux_t2i_d_cfg", 3.5)),       # ui_txt2img_distilled_cfg
-            gr.update(visible=(preset == "flux"), value=getattr(shared.opts, "flux_i2i_d_cfg", 3.5)),       # ui_img2img_distilled_cfg
-            gr.update(value=getattr(shared.opts, f"{p}_t2i_sampler", "Euler")),
-            gr.update(value=getattr(shared.opts, f"{p}_i2i_sampler", "Euler")),
-            gr.update(value=getattr(shared.opts, f"{p}_t2i_scheduler", "Simple")),
-            gr.update(value=getattr(shared.opts, f"{p}_i2i_scheduler", "Simple")),
-            gr.update(value=getattr(shared.opts, f"{p}_t2i_hr_cfg", 1.0)),
-            gr.update(visible=(preset == "flux"), value=getattr(shared.opts, "flux_t2i_hr_d_cfg", 3.5)),    # ui_txt2img_hr_distilled_cfg
-        ]
+        preset_code = getattr(shared.opts, f"preset_code_{preset}", "")
+        codes = preset_code.split(",")
+        if len(codes) == 9:
+            codes = [c.strip() for c in codes]
+            return [
+                gr.skip(),          #vae_te
+                gr.update(visible=False) if codes[0] == "None" else gr.update(visible=True, value=int(codes[0])),   # ui_clip_skip
+                gr.skip(),  #storage type
+                gr.update(visible=False, value=0) if codes[1] == "None" else gr.update(visible=True, value=int(codes[1])),   # mem
+                gr.update(value=int(codes[2])),
+                gr.update(value=int(codes[2])),
+                gr.update(value=int(codes[3])),
+                gr.update(value=int(codes[3])),
+                gr.update(visible=False, value=1.0) if codes[4] == "None" else gr.update(visible=True, value=float(codes[4])), #cfg t2i
+                gr.update(visible=False, value=1.0) if codes[4] == "None" else gr.update(visible=True, value=float(codes[4])), #cfg i2i
+                gr.update(visible=False, value=0.0) if codes[5] == "None" else gr.update(visible=True, value=float(codes[5])), #dcfg t2i
+                gr.update(visible=False, value=0.0) if codes[5] == "None" else gr.update(visible=True, value=float(codes[5])), #dcfg i2i
+                gr.update(value=codes[6]), #sampler
+                gr.update(value=codes[6]),
+                gr.update(value=codes[7]), #scheduler
+                gr.update(value=codes[7]),
+                gr.update(visible=False, value=1.0) if codes[4] == "None" else gr.update(visible=True, value=float(codes[4])), #cfg hr
+                gr.update(visible=False, value=0.0) if codes[5] == "None" else gr.update(visible=True, value=float(codes[5])), #dcfg hr
+                gr.update(value=int(codes[8])), #steps
+                gr.update(value=int(codes[8])),
+            ]
+            
+        else:
+            model_mem = getattr(shared.opts, f"{preset}_GPU_MB", 0)
+            if model_mem < 0 or model_mem > total_vram:
+                model_mem = 0
 
+            p = "flux" if preset == "chroma" else preset
+            return [
+                gr.update(value=getattr(shared.opts, f"{p}_vae_te", [""])),
+                gr.update(visible=(p != "flux")),                                                          # ui_clip_skip
+                gr.update(value=getattr(shared.opts, f"{p}_unet_dtype", "Automatic")),
+                gr.update(value=model_mem),
+                gr.update(value=getattr(shared.opts, f"{p}_t2i_width", 512)),
+                gr.update(value=getattr(shared.opts, f"{p}_i2i_width", 512)),
+                gr.update(value=getattr(shared.opts, f"{p}_t2i_height", 640)),
+                gr.update(value=getattr(shared.opts, f"{p}_i2i_height", 512)),
+                gr.update(value=getattr(shared.opts, f"{p}_t2i_cfg", 1)),
+                gr.update(value=getattr(shared.opts, f"{p}_i2i_cfg", 1)),
+                gr.update(visible=(preset == "flux"), value=getattr(shared.opts, "flux_t2i_d_cfg", 3.5)),       # ui_txt2img_distilled_cfg
+                gr.update(visible=(preset == "flux"), value=getattr(shared.opts, "flux_i2i_d_cfg", 3.5)),       # ui_img2img_distilled_cfg
+                gr.update(value=getattr(shared.opts, f"{p}_t2i_sampler", "Euler")),
+                gr.update(value=getattr(shared.opts, f"{p}_i2i_sampler", "Euler")),
+                gr.update(value=getattr(shared.opts, f"{p}_t2i_scheduler", "Simple")),
+                gr.update(value=getattr(shared.opts, f"{p}_i2i_scheduler", "Simple")),
+                gr.update(value=getattr(shared.opts, f"{p}_t2i_hr_cfg", 1.0)),
+                gr.update(visible=(preset == "flux"), value=getattr(shared.opts, "flux_t2i_hr_d_cfg", 3.5)),    # ui_txt2img_hr_distilled_cfg
+                gr.skip(),
+                gr.skip(),
+            ]
+
+shared.options_templates.update(shared.options_section(('ui_other', "UI defaults (other)", "ui"), {
+    "preset_codes_explanation": shared.OptionHTML("""
+<h3>Codes for UI presets.</h3>
+All settings apply to <strong>Txt2img</strong> and <strong>Img2img</strong>.<br/>
+Code order is: (all must be present)<br/>
+<ol>
+<li>clip skip : <em>can be </em>None<em>, in which case the control will be hidden</em> <sub>note: value can be changed by loading Infotext</sub></li>
+<li>reserved VRAM : <em>can be </em>None</li>
+<li>width</li>
+<li>height</li>
+<li>CFG : <em>also applies to <strong>HiRes-fix</strong>; can be </em>None</li>
+<li>distilled CFG : <em>also applies to <strong>HiRes-fix</strong>; can be </em>None</li>
+<li>sampler</li>
+<li>scheduler</li>
+<li>sampling steps</li>
+</ol>
+"""),
+    "preset_code_chroma": shared.OptionInfo("", "Chroma preset code", gr.Textbox, {"maxlines": 1, "placeholder": "see UI defaults 'flux'"}),
+    "preset_code_zimage": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Zimage preset code", gr.Textbox, {"maxlines": 1}),
+
+}))
 
 shared.options_templates.update(shared.options_section(('ui_sd', "UI defaults 'sd'", "ui"), {
     "sd_t2i_width":  shared.OptionInfo(512,  "txt2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
