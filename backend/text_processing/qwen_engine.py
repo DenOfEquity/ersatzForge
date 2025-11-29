@@ -71,8 +71,7 @@ class Qwen3TextProcessingEngine:
             emphasis.last_extra_generation_params["Emphasis"] = self.emphasis.name
 
         for line in texts:
-            if line != "":
-                line = self.llama_template + line
+            line = self.llama_template + line
 
             if line in cache:
                 line_z_values = cache[line]
@@ -147,3 +146,4 @@ class Qwen3TextProcessingEngine:
         )
 
         return z
+
