@@ -314,7 +314,6 @@ It is displayed in UI below the image. To use infotext, paste it into the prompt
 
 options_templates.update(options_section(('ui', "Live previews", "ui"), {
     "show_progressbar": OptionInfo(True, "Show progressbar"),
-    # "live_previews_enable": OptionInfo(True, "Show live previews of the created image"),
     "live_previews_image_format": OptionInfo("png", "Live preview file format", gr.Radio, {"choices": ["jpeg", "png", "webp"]}),
     "show_progress_grid": OptionInfo(True, "Show previews of all images generated in a batch as a grid"),
     "show_progress_every_n_steps": OptionInfo(10, "Live preview display period", gr.Slider, {"minimum": -1, "maximum": 32, "step": 1}).info("in sampling steps - show new live preview image every N sampling steps; -1 = only show after completion of batch; 0 = disable live previews"),
@@ -389,5 +388,3 @@ options_templates.update(options_section((None, "Hidden options"), {
 }))
 
 forge_shared_options.register(options_templates, options_section, OptionInfo)
-
-

@@ -65,8 +65,8 @@ class CheckpointUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataE
         ]
 
         self.button_edit\
-            .click(fn=self.put_values_into_components, inputs=[self.edit_name_input], outputs=viewed_components, show_progress=False)\
-            .then(fn=lambda: gr.update(visible=True), inputs=None, outputs=[self.box], show_progress=False)
+            .click(fn=self.put_values_into_components, inputs=[self.edit_name_input], outputs=viewed_components, show_progress="hidden")\
+            .then(fn=lambda: gr.update(visible=True), inputs=None, outputs=[self.box], show_progress="hidden")
 
         edited_components = [
             self.edit_description,

@@ -175,7 +175,7 @@ def connect_paste_params_buttons():
                 js=jsfunc,
                 inputs=[binding.source_image_component],
                 outputs=[destination_image_component, destination_width_component, destination_height_component] if need_send_dimensions else [destination_image_component],
-                show_progress=False,
+                show_progress="hidden",
             )
 
         if binding.source_text_component is not None and fields is not None:
@@ -187,7 +187,7 @@ def connect_paste_params_buttons():
                 fn=lambda *x: x,
                 inputs=[field for field, name in paste_fields[binding.source_tabname]["fields"] if name in paste_field_names],
                 outputs=[field for field, name in fields if name in paste_field_names],
-                show_progress=False,
+                show_progress="hidden",
             )
 
         binding.paste_button.click(
@@ -195,7 +195,7 @@ def connect_paste_params_buttons():
             js=f"switch_to_{binding.tabname}",
             inputs=None,
             outputs=None,
-            show_progress=False,
+            show_progress="hidden",
         )
 
 
@@ -632,13 +632,5 @@ def connect_paste(button, paste_fields, input_comp, override_settings_component,
         fn=paste_func,
         inputs=[input_comp],
         outputs=[x[0] for x in paste_fields],
-        show_progress=False,
+        show_progress="hidden",
     )
-    # button.click(
-        # fn=None,
-        # js=f"recalculate_prompts_{tabname}",
-        # inputs=None,
-        # outputs=None,
-        # show_progress=False,
-    # )
-

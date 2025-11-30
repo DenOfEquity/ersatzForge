@@ -85,29 +85,29 @@ Styles are additions to the **Prompt** and **Negative prompt**. The *{prompt}* t
             fn=select_style,
             inputs=[self.selection],
             outputs=[self.prompt, self.neg_prompt, self.delete, self.save],
-            show_progress=False,
+            show_progress="hidden",
         )
 
         self.save.click(
             fn=save_style,
             inputs=[self.selection, self.prompt, self.neg_prompt],
             outputs=[self.delete],
-            show_progress=False,
-        ).then(refresh_styles, outputs=[self.dropdown, self.selection], show_progress=False)
+            show_progress="hidden",
+        ).then(refresh_styles, outputs=[self.dropdown, self.selection], show_progress="hidden")
 
         self.delete.click(
             fn=delete_style,
             js='function(name){ if(name == "") return ""; return confirm("Delete style " + name + "?") ? name : ""; }',
             inputs=[self.selection],
             outputs=[self.selection, self.prompt, self.neg_prompt],
-            show_progress=False,
-        ).then(refresh_styles, outputs=[self.dropdown, self.selection], show_progress=False)
+            show_progress="hidden",
+        ).then(refresh_styles, outputs=[self.dropdown, self.selection], show_progress="hidden")
 
         self.copy.click(
             fn=lambda p, n: (p, n),
             inputs=[main_ui_prompt, main_ui_negative_prompt],
             outputs=[self.prompt, self.neg_prompt],
-            show_progress=False,
+            show_progress="hidden",
         )
 
         ui_common.setup_dialog(button_show=edit_button, dialog=styles_dialog, button_close=None)
@@ -116,5 +116,5 @@ Styles are additions to the **Prompt** and **Negative prompt**. The *{prompt}* t
             fn=materialize_styles,
             inputs=[main_ui_prompt, main_ui_negative_prompt, self.dropdown],
             outputs=[main_ui_prompt, main_ui_negative_prompt, self.dropdown],
-            show_progress=False,
+            show_progress="hidden",
         )

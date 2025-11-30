@@ -144,8 +144,8 @@ class UserMetadataEditor:
 
     def setup_save_handler(self, button, func, components):
         button\
-            .click(fn=func, inputs=[self.edit_name_input, *components], outputs=None, show_progress=False)\
-            .then(fn=None, js="function(name){closePopup(); extraNetworksRefreshSingleCard(" + json.dumps(self.page.name) + "," + json.dumps(self.tabname) + ", name);}", inputs=[self.edit_name_input], outputs=None, show_progress=False)
+            .click(fn=func, inputs=[self.edit_name_input, *components], outputs=None, show_progress="hidden")\
+            .then(fn=None, js="function(name){closePopup(); extraNetworksRefreshSingleCard(" + json.dumps(self.page.name) + "," + json.dumps(self.tabname) + ", name);}", inputs=[self.edit_name_input], outputs=None, show_progress="hidden")
 
     def create_editor(self):
         self.create_default_editor_elems()
@@ -155,8 +155,8 @@ class UserMetadataEditor:
         self.create_default_buttons()
 
         self.button_edit\
-            .click(fn=self.put_values_into_components, inputs=[self.edit_name_input], outputs=[self.edit_name, self.edit_description, self.html_filedata, self.html_preview, self.edit_notes], show_progress=False)\
-            .then(fn=lambda: gr.update(visible=True), inputs=None, outputs=[self.box], show_progress=False)
+            .click(fn=self.put_values_into_components, inputs=[self.edit_name_input], outputs=[self.edit_name, self.edit_description, self.html_filedata, self.html_preview, self.edit_notes], show_progress="hidden")\
+            .then(fn=lambda: gr.update(visible=True), inputs=None, outputs=[self.box], show_progress="hidden")
 
         self.setup_save_handler(self.button_save, self.save_user_metadata, [self.edit_description, self.edit_notes])
 
@@ -197,7 +197,7 @@ class UserMetadataEditor:
             rw = tw
             rh = int(tw / old_aspect)
             crop = (0, (rh - th)//2, tw, (rh + th)//2)
-        
+
         images.save_image_with_geninfo(image.resize((rw, rh)).crop(crop), geninfo, item["local_preview"])
         self.page.lister.update_file_entry(item["local_preview"])
         item['preview'] = self.page.find_preview(item["local_preview"])
@@ -209,11 +209,11 @@ class UserMetadataEditor:
             js=f"function(x, y, z){{return [selected_gallery_index_id('{self.tabname + '_gallery_container'}'), y, z]}}",
             inputs=[self.edit_name_input, gallery, self.edit_name_input],
             outputs=[self.html_preview],
-            show_progress=False
+            show_progress="hidden"
         ).then(
             fn=None,
             js="function(name){extraNetworksRefreshSingleCard(" + json.dumps(self.page.name) + "," + json.dumps(self.tabname) + ", name);}",
             inputs=[self.edit_name_input],
             outputs=None,
-            show_progress=False
+            show_progress="hidden"
         )

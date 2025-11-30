@@ -307,7 +307,7 @@ class UiSettings:
                     fn=lambda value, k=k: self.run_settings_single(value, key=k),
                     inputs=[component],
                     outputs=[component, self.text_settings],
-                    show_progress=False,
+                    show_progress="hidden",
                 )
 
 

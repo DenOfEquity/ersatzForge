@@ -56,16 +56,26 @@ class Toprow:
             fn=modules.images.image_data,
             inputs=[self.prompt_img],
             outputs=[self.prompt, self.prompt_img],
-            show_progress=False,
+            show_progress="hidden",
         )
 
     def create_submit_box(self):
         with gr.Row(elem_id=f"{self.id_part}_generate_box", elem_classes=["generate-box"] + (["generate-box-compact"]), render=False) as submit_box:
             self.submit_box = submit_box
+            if self.id_part == "extras":
+                shared.opts.extras_save = True
+                autosave_extras = ToolButton(value="💾", variant="primary" if shared.opts.extras_save else "secondary")
+
+                def toggleAutosaveExtras():
+                    shared.opts.extras_save ^= True
+                    print (f"[Extras] Autosave result(s): {shared.opts.extras_save}")
+                    return gr.update(variant="primary" if shared.opts.extras_save else "secondary")
+
+                autosave_extras.click(fn=toggleAutosaveExtras, inputs=None, outputs=[autosave_extras])
 
             self.interrupt = gr.Button('Interrupt', elem_id=f"{self.id_part}_interrupt", elem_classes="generate-box-interrupt", tooltip="End generation")
             self.skip = gr.Button('Skip', elem_id=f"{self.id_part}_skip", elem_classes="generate-box-skip", tooltip="Stop generation of current batch and continues onto next batch")
-            self.submit = gr.Button('Generate', elem_id=f"{self.id_part}_generate", variant='primary', tooltip="Right click generate forever menu")
+            self.submit = gr.Button('Generate', elem_id=f"{self.id_part}_generate", variant='primary', tooltip="Right click generate forever menu" if self.id_part != "extras" else None)
 
             self.skip.click(fn=shared.state.skip)
             self.interrupt.click(fn=shared.state.interrupt, js='function(){ showSubmitInterruptingPlaceholder("' + self.id_part + '"); }')

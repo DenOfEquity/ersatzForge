@@ -6,13 +6,6 @@ from modules import ui_extra_networks, shared
 from modules.ui_extra_networks import quote_js
 import enum
 
-class SdVersion(enum.Enum): #   same as in lora.network
-    Unknown = 1
-    SD1 = 2
-    SD2 = 3
-    SDXL = 4
-    SD3 = 5
-    Flux = 6
 
 embedding_db = textual_inversion.EmbeddingDatabase(None)
 embedding_db.add_embedding_dir(cmd_opts.embeddings_dir)
@@ -51,20 +44,20 @@ class ExtraNetworksPageTextualInversion(ui_extra_networks.ExtraNetworksPage):
 
         match getattr(embedding, 'shape', 0):
             case 768:
-                sd_version = SdVersion.SD1
+                sd_version = "SdVersion.SD1"
             case 1024:
-                sd_version = SdVersion.SD2
+                sd_version = "SdVersion.SD2"
             case 2048:
-                sd_version = SdVersion.SDXL
+                sd_version = "SdVersion.SDXL"
             # case 4096:
-                # sd_version = SdVersion.Flux
+                # sd_version = "SdVersion.Flux"
             case _:
-                sd_version = SdVersion.Unknown
+                sd_version = "SdVersion.Unknown"
 
-        item["sd_version_str"] = str(sd_version)
+        item["sd_version_str"] = sd_version
 
         return item
-        
+
     def list_items(self):
         # instantiate a list to protect against concurrent modification
         names = list(embedding_db.word_embeddings)

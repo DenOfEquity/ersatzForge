@@ -394,8 +394,8 @@ def create_ui():
                 with gr.Row(elem_classes="progress-container"):
                     extensions_table = gr.HTML('Loading...', elem_id="extensions_installed_html")
 
-                ui.load(fn=extension_table, inputs=None, outputs=[extensions_table], show_progress=False)
-                refresh.click(fn=extension_table, inputs=None, outputs=[extensions_table], show_progress=False)
+                ui.load(fn=extension_table, inputs=None, outputs=[extensions_table], show_progress="hidden")
+                refresh.click(fn=extension_table, inputs=None, outputs=[extensions_table], show_progress="hidden")
 
                 apply.click(
                     fn=apply_and_restart,

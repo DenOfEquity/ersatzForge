@@ -745,7 +745,7 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
             related_tabs.append(tab)
 
     for tab in unrelated_tabs:
-        tab.select(fn=None, js=f"function(){{extraNetworksUnrelatedTabSelected('{tabname}');}}", inputs=None, outputs=None, show_progress=False)
+        tab.select(fn=None, js=f"function(){{extraNetworksUnrelatedTabSelected('{tabname}');}}", inputs=None, outputs=None, show_progress="hidden")
 
     for page, tab in zip(ui.stored_extra_pages, related_tabs):
         jscode = (
@@ -754,7 +754,7 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
             f"applyExtraNetworkFilter('{tabname}_{page.extra_networks_tabname}');"
             "}}"
         )
-        tab.select(fn=None, js=jscode, inputs=None, outputs=None, show_progress=False)
+        tab.select(fn=None, js=jscode, inputs=None, outputs=None, show_progress="hidden")
 
         def refresh():
             for pg in ui.stored_extra_pages:
@@ -773,7 +773,7 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
             create_html()
         return ui.pages_contents
 
-    interface.load(fn=pages_html, inputs=None, outputs=ui.pages, show_progress=False).then(fn=lambda: None, js='setupAllResizeHandles')
+    interface.load(fn=pages_html, inputs=None, outputs=ui.pages, show_progress="hidden").then(fn=lambda: None, js='setupAllResizeHandles')
 
     return ui
 
@@ -788,4 +788,3 @@ def path_is_parent(parent_path, child_path):
 def setup_ui(ui, gallery):
     for editor in ui.user_metadata_editors:
         editor.setup_ui(gallery)
-

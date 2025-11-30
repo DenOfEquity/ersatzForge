@@ -46,8 +46,8 @@ def create_ui():
                     def clearO():
                         return "", 0, "", 1
 
-                    clear_split.click(fn=clearI, inputs=None, outputs=[input_video, output_frames], show_progress=False)
-                    clear_combine.click(fn=clearO, inputs=None, outputs=[input_frames, output_fps, output_video, interpolate], show_progress=False)
+                    clear_split.click(fn=clearI, inputs=None, outputs=[input_video, output_frames], show_progress="hidden")
+                    clear_combine.click(fn=clearO, inputs=None, outputs=[input_frames, output_fps, output_video, interpolate], show_progress="hidden")
 
 
             script_inputs = scripts.scripts_postproc.setup_ui()
@@ -87,12 +87,12 @@ def create_ui():
             output_panel.generation_info,
             output_panel.html_log,
         ],
-        show_progress=False,
+        show_progress="hidden",
     )
 
     parameters_copypaste.add_paste_fields("extras", extras_image, None)
 
     extras_image.change(
         fn=scripts.scripts_postproc.image_changed,
-        inputs=None, outputs=None, show_progress=False
+        inputs=None, outputs=None, show_progress="hidden"
     )

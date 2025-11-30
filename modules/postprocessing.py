@@ -13,7 +13,7 @@ from modules.shared import opts
 try:
     from imageio_ffmpeg import get_ffmpeg_exe
     FFMPEG = get_ffmpeg_exe()
-except Exception as e:
+except Exception:
     FFMPEG = 'ffmpeg'
 
 
@@ -45,9 +45,9 @@ def getVideoFPS(video_path):
     if ext == '.webp' or ext == '.apng' or ext == '.png':
         #from gif2gif extension
         with Image.open(video_path) as im:
-            try:
+            if 'duration' in im.info:
                 fps = round (1000 / im.info["duration"], 3)
-            except:
+            else:
                 fps = 'unknown'
     else:
         video = cv2.VideoCapture(video_path)
@@ -55,7 +55,7 @@ def getVideoFPS(video_path):
         video.release()
 
     return fps
-        
+
 def save_video(frames_dir, fps, original, output_path, interpolate):
     if original != '':  # order of parameters is fussy
         ffmpeg_cmd = [
@@ -153,7 +153,7 @@ def run_postprocessing(extras_mode, image, image_folder, input_dir, output_dir, 
 
             # Create the frames folder if it doesn't exist
             os.makedirs(output_frames, exist_ok=True)
-                
+
             if ext == '.webp' or ext == '.apng' or ext == '.png':
                 #from gif2gif extension
                 with Image.open(input_video) as im:
@@ -184,7 +184,7 @@ def run_postprocessing(extras_mode, image, image_folder, input_dir, output_dir, 
 
             save_video(input_frames, output_fps, input_video, output_video, interpolate)
             output_text += f'video saved to {output_video}'
-            
+
         return '', ui_common.plaintext_to_html(output_text), ''
 
     elif extras_mode == 2 and output_dir != '':
@@ -246,7 +246,7 @@ def run_postprocessing(extras_mode, image, image_folder, input_dir, output_dir, 
 
             shared.state.assign_current_image(pp.image)
 
-            if save_output:
+            if save_output and opts.extras_save:
                 fullfn, _ = images.save_image(pp.image, path=outpath, basename=basename, extension=opts.samples_format, info=infotext, short_filename=True, no_prompt=True, grid=False, pnginfo_section_name="postprocessing", existing_info=existing_pnginfo, forced_filename=forced_filename, suffix=suffix)
 
                 if pp.caption:

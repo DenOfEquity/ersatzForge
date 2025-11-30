@@ -199,7 +199,7 @@ class UiCheckpointMerger:
 
                         self.refresh_button = ToolButton(value=refresh_symbol)
 
-                    self.interp_method.change(fn=update_interp_description, inputs=[self.interp_method, self.model_names], outputs=[self.interp_method, self.model_names], show_progress=False)
+                    self.interp_method.change(fn=update_interp_description, inputs=[self.interp_method, self.model_names], outputs=[self.interp_method, self.model_names], show_progress="hidden")
 
                     self.interp_amount = gr.Slider(minimum=0.0, maximum=1.0, step=0.05, label='Multiplier (M)', value=0.5, elem_id="modelmerger_interp_amount")
 
@@ -212,8 +212,8 @@ class UiCheckpointMerger:
                         return gr.Dropdown(choices=sd_models.checkpoint_tiles())
 
                     self.refresh_button\
-                    .click(fn=refresh_checkpoints, inputs=None, outputs=[self.model_names], show_progress=False)\
-                    .then(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te], show_progress=False)
+                    .click(fn=refresh_checkpoints, inputs=None, outputs=[self.model_names], show_progress="hidden")\
+                    .then(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te], show_progress="hidden")
 
                     with FormRow():
                         self.save_u = gr.Dropdown(label="Unet precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2"], value="float16")
@@ -276,5 +276,5 @@ class UiCheckpointMerger:
                 sd_model_checkpoint_component,
                 self.modelmerger_result,
             ]
-        ).then(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te], show_progress=False)
+        ).then(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te], show_progress="hidden")
 
