@@ -2,7 +2,6 @@ import torch
 
 from backend import memory_management, attention
 from backend.modules.k_prediction import k_prediction_from_diffusers_scheduler
-from backend.nn.chromaDCT import IntegratedChromaDCTTransformer2DModel
 
 class KModel(torch.nn.Module):
     def __init__(self, model, diffusers_scheduler, k_predictor=None, config=None):
@@ -15,7 +14,7 @@ class KModel(torch.nn.Module):
 
         print(f'K-Model Created: {dict(storage_dtype=self.storage_dtype, computation_dtype=self.computation_dtype)}')
 
-        self.diffusion_model = model
+        self.diffusion_model = model.eval()
 
         if k_predictor is None:
             self.predictor = k_prediction_from_diffusers_scheduler(diffusers_scheduler)
@@ -50,10 +49,17 @@ class KModel(torch.nn.Module):
         if attention.get_attn_precision() == torch.float32:
             dtype_size = 4
 
-        scaler = 1.65    #may need to be higher for some attention functions?
-        mem_required = input_shape[0] * input_shape[1] * input_shape[2] * input_shape[3] * dtype_size * scaler * 1024
+        # true memory requirements may not be so simply calculated, may be quadratic to image size
+        match (self.diffusion_model.__class__.__name__):
+            case "IntegratedChromaDCTTransformer2DModel":
+                scaler = 1.65 / 3.0
+            case "IntegratedChromaTransformer2DModel":
+                scaler = 1.65
+            case "Lumina2DiT":
+                scaler = 1.4
+            case _:
+                scaler = 1.65    #may need to be higher for some attention functions?
 
-        if isinstance(self.diffusion_model, IntegratedChromaDCTTransformer2DModel):
-            mem_required /= 3
+        mem_required = scaler * input_shape[0] * input_shape[1] * input_shape[2] * input_shape[3] * dtype_size * 1024
 
         return mem_required
