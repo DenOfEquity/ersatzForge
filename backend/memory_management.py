@@ -502,8 +502,14 @@ class LoadedModel:
 
             extra_memory = 0
             this_online_lora = dynamic_args['online_lora'] and (len(self.model.lora_patches) > 0)
-            if this_online_lora:
-                extra_memory += (1024 * 1024 * 1024 * 1.125)
+            if this_online_lora and hasattr(self.model.model, 'diffusion_model'):
+                match self.model.model.diffusion_model.__class__.__name__:
+                    case "IntegratedFluxTransformer2DModel":
+                        extra_memory += (1024 * 1024 * 1024 * 1.125)
+                    case "IntegratedChromaTransformer2DModel":
+                        extra_memory += (1024 * 1024 * 1024 * 1.125)
+                    case _:
+                        pass
 
             if getattr(self.real_model, 'gguf_baked', False):    # reserve a little more for GGUF quants
                 extra_memory += (1024 * 1024 * 1024 * 0.5)
@@ -678,9 +684,16 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
             if (x.is_clone(current_loaded_models[i].model) and getattr(x, 'lora_patches', {}) is getattr(current_loaded_models[i].model, 'lora_patches', {})) or loaded_model == current_loaded_models[i]:
                 models_already_loaded.append(current_loaded_models[i])
                 matched = True
+
                 this_online_lora = dynamic_args['online_lora'] and (len(x.lora_patches) > 0)
-                if this_online_lora:
-                    extra_memory += (1024 * 1024 * 1024 * 1.125)
+                if this_online_lora and hasattr(loaded_model.model.model, 'diffusion_model'):
+                    match loaded_model.model.model.diffusion_model.__class__.__name__:
+                        case "IntegratedFluxTransformer2DModel":
+                            extra_memory += (1024 * 1024 * 1024 * 1.125)
+                        case "IntegratedChromaTransformer2DModel":
+                            extra_memory += (1024 * 1024 * 1024 * 1.125)
+                        case _:
+                            pass
                 if getattr(current_loaded_models[i].real_model, 'gguf_baked', False):
                     extra_memory += (1024 * 1024 * 1024 * 0.5)
                 break
