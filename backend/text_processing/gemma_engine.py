@@ -140,9 +140,9 @@ class GemmaTextProcessingEngine:
         if self.emphasis.name == "No norm":
             embeds *= torch.tensor(batch_multipliers).to(embeds).unsqueeze(1).unsqueeze(0)
         elif self.emphasis.name == "Original":
-            original_mean = z.mean()
+            original_mean = embeds.mean()
             embeds *= torch.tensor(batch_multipliers).to(embeds).unsqueeze(1).unsqueeze(0)
-            new_mean = z.mean()
+            new_mean = embeds.mean()
             embeds *= (original_mean / new_mean)
 
         z, _ = self.text_encoder(input_ids=None, embeds=embeds, attention_mask=mask, num_tokens=count)#, intermediate_output=-2, final_layer_norm_intermediate=False)

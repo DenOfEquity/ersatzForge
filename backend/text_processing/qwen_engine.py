@@ -131,9 +131,9 @@ class Qwen3TextProcessingEngine:
         if self.emphasis.name == "No norm":
             embeds *= torch.tensor(batch_multipliers).to(embeds).unsqueeze(1).unsqueeze(0)
         elif self.emphasis.name == "Original":
-            original_mean = z.mean()
+            original_mean = embeds.mean()
             embeds *= torch.tensor(batch_multipliers).to(embeds).unsqueeze(1).unsqueeze(0)
-            new_mean = z.mean()
+            new_mean = embeds.mean()
             embeds *= (original_mean / new_mean)
 
         _, z = self.text_encoder(
@@ -146,4 +146,3 @@ class Qwen3TextProcessingEngine:
         )
 
         return z
-
