@@ -38,7 +38,7 @@ global_state.update_controlnet_filenames()
 @functools.lru_cache(maxsize=shared.opts.data.get("control_net_unit_count", 3))
 def cached_controlnet_loader(filename):
     return try_load_supported_control_model(filename)
-
+#cached_controlnet_loader.cache_clear() # on mm.unload_all_models?
 
 class ControlNetCachedParameters:
     def __init__(self):
@@ -85,7 +85,7 @@ class ControlNetForForgeOfficial(scripts.Script):
                             group = ControlNetUiGroup(is_img2img, default_unit, photopea)
                             ui_groups.append(group)
                             controls.append(group.render(f"ControlNet-{i}", elem_id_tabname))
-                        enabled.change(fn=lambda x:x, inputs=[enabled], outputs=[group.enabled], show_progress=False)
+                        enabled.change(fn=lambda x:x, inputs=[enabled], outputs=[group.enabled], show_progress="hidden")
 
         for i, ui_group in enumerate(ui_groups):
             infotext.register_unit(i, ui_group)

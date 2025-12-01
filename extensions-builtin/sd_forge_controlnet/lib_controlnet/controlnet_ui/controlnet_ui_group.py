@@ -277,9 +277,9 @@ class ControlNetUiGroup(object):
                                     columns=[4], rows=[2], object_fit="contain", height="auto", label="Masks"
                                 )
 
-            self.upload_tab.select(fn=lambda: InputMode.SIMPLE, inputs=None, outputs=[self.input_mode], show_progress=False)
-            self.batch_tab.select(fn=lambda: InputMode.BATCH, inputs=None, outputs=[self.input_mode], show_progress=False)
-            self.merge_tab.select(fn=lambda: InputMode.MERGE, inputs=None, outputs=[self.input_mode], show_progress=False)
+            self.upload_tab.select(fn=lambda: InputMode.SIMPLE, inputs=None, outputs=[self.input_mode], show_progress="hidden")
+            self.batch_tab.select(fn=lambda: InputMode.BATCH, inputs=None, outputs=[self.input_mode], show_progress="hidden")
+            self.merge_tab.select(fn=lambda: InputMode.MERGE, inputs=None, outputs=[self.input_mode], show_progress="hidden")
 
             if self.photopea:
                 self.photopea.attach_photopea_output(self.generated_image.background)
@@ -566,7 +566,7 @@ class ControlNetUiGroup(object):
             fn=send_dimensions,
             inputs=[self.image.background],
             outputs=[self.width_slider, self.height_slider],
-            show_progress=False,
+            show_progress="hidden",
         )
 
     def register_refresh_all_models(self):
@@ -577,7 +577,7 @@ class ControlNetUiGroup(object):
         self.refresh_models.click(
             refresh_all_models,
             outputs=[self.model],
-            show_progress=False,
+            show_progress="hidden",
         )
 
     def register_build_sliders(self):
@@ -620,12 +620,8 @@ class ControlNetUiGroup(object):
             self.refresh_models,
             self.control_mode,
         ]
-        self.module.change(
-            build_sliders, inputs=inputs, outputs=outputs, show_progress=False
-        )
-        self.pixel_perfect.change(
-            build_sliders, inputs=inputs, outputs=outputs, show_progress=False
-        )
+        self.module.change(build_sliders, inputs=inputs, outputs=outputs, show_progress="hidden")
+        self.pixel_perfect.change(build_sliders, inputs=inputs, outputs=outputs, show_progress="hidden")
 
         def filter_selected(k: str):
             logger.debug(f"Prevent update {self.prevent_next_n_module_update}")
@@ -658,7 +654,7 @@ class ControlNetUiGroup(object):
             fn=filter_selected,
             inputs=[self.type_filter],
             outputs=[self.module, self.model],
-            show_progress=False,
+            show_progress="hidden",
         )
 
     def register_run_annotator(self):
@@ -806,7 +802,7 @@ class ControlNetUiGroup(object):
                 self.openpose_editor.download_link,
                 self.openpose_editor.modal,
             ],
-            show_progress=False,
+            show_progress="hidden",
         )
 
     def register_create_canvas(self):
@@ -814,13 +810,13 @@ class ControlNetUiGroup(object):
             lambda: gr.update(visible=True),
             inputs=None,
             outputs=self.create_canvas,
-            show_progress=False,
+            show_progress="hidden",
         )
         self.canvas_cancel_button.click(
             lambda: gr.update(visible=False),
             inputs=None,
             outputs=self.create_canvas,
-            show_progress=False,
+            show_progress="hidden",
         )
 
         def fn_canvas(h, w):
@@ -830,7 +826,7 @@ class ControlNetUiGroup(object):
             fn=fn_canvas,
             inputs=[self.canvas_height, self.canvas_width],
             outputs=[self.image.background, self.create_canvas],
-            show_progress=False,
+            show_progress="hidden",
         )
 
     def register_img2img_same_input(self):
@@ -852,7 +848,7 @@ class ControlNetUiGroup(object):
                 self.trigger_preprocessor,
                 self.resize_mode,
             ],
-            show_progress=False,
+            show_progress="hidden",
         )
 
     def register_shift_crop_input_image(self):
@@ -876,7 +872,7 @@ class ControlNetUiGroup(object):
             inputs=[self.mask_upload, self.height_slider, self.width_slider],
             outputs=[self.mask_image_group, self.mask_image.background, self.batch_mask_dir,
                      self.batch_mask_gallery_group, self.batch_mask_gallery],
-            show_progress=False,
+            show_progress="hidden",
         )
 
         if self.upload_independent_img_in_img2img is not None:
@@ -889,7 +885,7 @@ class ControlNetUiGroup(object):
                 ),
                 inputs=[self.upload_independent_img_in_img2img],
                 outputs=[self.mask_upload],
-                show_progress=False,
+                show_progress="hidden",
             )
 
     def register_sync_batch_dir(self):
@@ -955,7 +951,7 @@ class ControlNetUiGroup(object):
                     fn=clear_preview,
                     inputs=self.use_preview_as_input,
                     outputs=[self.use_preview_as_input, self.generated_image.background],
-                    show_progress=False
+                    show_progress="hidden"
                 )
 
     def register_core_callbacks(self):

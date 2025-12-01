@@ -122,8 +122,8 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
             self.threshold_b,
             self.advanced,
         ]
-        self.module.change(build_sliders, inputs=inputs, outputs=outputs, show_progress=False)
-        self.pixel_perfect.change(build_sliders, inputs=inputs, outputs=outputs, show_progress=False)
+        self.module.change(build_sliders, inputs=inputs, outputs=outputs, show_progress="hidden")
+        self.pixel_perfect.change(build_sliders, inputs=inputs, outputs=outputs, show_progress="hidden")
 
 
     def process(self, pp: scripts_postprocessing.PostprocessedImage, **args):
