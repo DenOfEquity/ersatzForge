@@ -58,7 +58,7 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
                                 upscaling_res_switch_btn = ToolButton(value=switch_values_symbol, elem_id="upscaling_res_switch_btn", tooltip="Switch width/height")
                                 upscaling_crop = gr.Checkbox(label='Crop to fit', value=True, elem_id="extras_upscaling_crop")
 
-        upscaling_res_switch_btn.click(lambda w, h: (h, w), inputs=[upscaling_resize_w, upscaling_resize_h], outputs=[upscaling_resize_w, upscaling_resize_h], show_progress=False)
+        upscaling_res_switch_btn.click(lambda w, h: (h, w), inputs=[upscaling_resize_w, upscaling_resize_h], outputs=[upscaling_resize_w, upscaling_resize_h], show_progress="hidden")
         tab_scale_by.select(fn=lambda: 0, inputs=None, outputs=[selected_tab])
         tab_scale_to.select(fn=lambda: 1, inputs=None, outputs=[selected_tab])
 
@@ -151,4 +151,5 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
 
     def image_changed(self):
         upscale_cache.clear()
+
 
