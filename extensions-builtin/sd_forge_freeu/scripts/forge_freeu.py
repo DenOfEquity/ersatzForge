@@ -110,7 +110,7 @@ class FreeUForForge(scripts.Script):
 
         freeu_preset.input( fn=setParams,
                             inputs=[freeu_preset],
-                            outputs=[freeu_b1, freeu_b2, freeu_s1, freeu_s2, freeu_start, freeu_end, freeu_preset], show_progress=False)
+                            outputs=[freeu_b1, freeu_b2, freeu_s1, freeu_s2, freeu_start, freeu_end, freeu_preset], show_progress="hidden")
 
         self.infotext_fields = [
             (freeu_enabled, lambda d: d.get("freeu_enabled", False)),
