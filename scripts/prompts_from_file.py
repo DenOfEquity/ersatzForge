@@ -137,7 +137,7 @@ class Script(scripts.Script):
         prompt_txt = gradio.Textbox(label="List of prompt inputs", lines=2)
         prompt_file = gradio.File(label="Upload prompt inputs", type='binary')
 
-        prompt_file.upload(fn=load_prompt_file, inputs=[prompt_file], outputs=[prompt_file, prompt_txt], show_progress=False)
+        prompt_file.upload(fn=load_prompt_file, inputs=[prompt_file], outputs=[prompt_file, prompt_txt], show_progress="hidden")
 
         return [checkbox_iterate, prompt_position, prompt_txt, make_combined]
 
@@ -236,3 +236,4 @@ class Script(scripts.Script):
             infotexts.insert(0, full_infotext)
 
         return Processed(p, images, p.seed, "", all_prompts=all_prompts, infotexts=infotexts)
+
