@@ -194,7 +194,7 @@ def create_override_settings_dropdown(tabname, row):
         fn=lambda x: gr.update(visible=bool(x)),
         inputs=[dropdown],
         outputs=[dropdown],
-        show_progress=False,
+        show_progress="hidden",
     )
 
     return dropdown
@@ -431,7 +431,7 @@ def create_ui():
                         # go_button = gr.Button("Check markdown")
                         # markdown_output = gr.Markdown("", height="60vh")
 
-                        # go_button.click(fn=lambda x:x, inputs=markdown_input, outputs=markdown_output, show_progress=False)
+                        # go_button.click(fn=lambda x:x, inputs=markdown_input, outputs=markdown_output, show_progress="hidden")
 
         extra_tabs.__exit__()
 
@@ -488,9 +488,9 @@ def create_ui():
                                     img2img_batch_png_info_dir = gr.Textbox(label="PNG info directory", **shared.hide_dirs, placeholder="Leave empty to use input directory", elem_id="img2img_batch_png_info_dir")
                                     img2img_batch_png_info_props = gr.CheckboxGroup(["Prompt", "Negative prompt", "Seed", "CFG scale", "Sampler", "Schedule type", "Steps", "Model hash"], label="Parameters to take from png info", info="Prompts from png info will be appended to prompts set in UI")
 
-                            tab_img2img.select       (fn=lambda: 0, show_progress=False, inputs=None, outputs=img2img_selected_tab)
-                            tab_inpaint_upload.select(fn=lambda: 1, show_progress=False, inputs=None, outputs=img2img_selected_tab)
-                            tab_batch.select         (fn=lambda: 2, show_progress=False, inputs=None, outputs=img2img_selected_tab)
+                            tab_img2img.select       (fn=lambda: 0, show_progress="hidden", inputs=None, outputs=img2img_selected_tab)
+                            tab_inpaint_upload.select(fn=lambda: 1, show_progress="hidden", inputs=None, outputs=img2img_selected_tab)
+                            tab_batch.select         (fn=lambda: 2, show_progress="hidden", inputs=None, outputs=img2img_selected_tab)
 
                         resize_mode = gr.Radio(label="Resize mode", elem_id="resize_mode", choices=["Just resize", "Crop and resize", "Resize and fill", "Just resize (latent upscale)"], type="index", value="Just resize")
 
@@ -855,3 +855,4 @@ def setup_ui_api(app):
 
     import fastapi.staticfiles
     app.mount("/webui-assets", fastapi.staticfiles.StaticFiles(directory=launch_utils.repo_dir('stable-diffusion-webui-assets')), name="webui-assets")
+
