@@ -108,7 +108,7 @@ class ForgeSpace:
 
         self.btn_launch.click(self.run, outputs=comps)
         self.btn_install.click(self.install, outputs=comps)
-        Context.root_block.load(self.refresh_gradio, outputs=comps, queue=False, show_progress=False)
+        Context.root_block.load(self.refresh_gradio, outputs=comps, queue=False, show_progress="hidden")
 
         return
 
