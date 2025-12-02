@@ -11,8 +11,8 @@ from backend.nn.flux import EmbedND
 from backend.nn.mmditx import TimestepEmbedder
 
 
-def modulate(x, scale):
-    return x * (1 + scale.unsqueeze(1))
+# def modulate(x, scale):
+    # return x * (1 + scale.unsqueeze(1))
 
 
 class JointAttention(nn.Module):
@@ -126,13 +126,13 @@ class JointTransformerBlock(nn.Module):
 
             x.add_(gate_msa.unsqueeze(1).tanh() * self.attention_norm2(
                 self.attention(
-                    modulate(self.attention_norm1(x), scale_msa),
+                    self.attention_norm1(x).mul_(scale_msa.add_(1.0).unsqueeze(1)), # modulate(self.attention_norm1(x), scale_msa),
                     x_mask,
                     freqs_cis,
                 )))
             x.add_(gate_mlp.unsqueeze(1).tanh() * self.ffn_norm2(
                 self.feed_forward(
-                    modulate(self.ffn_norm1(x), scale_mlp),
+                    self.ffn_norm1(x).mul_(scale_mlp.add_(1.0).unsqueeze(1)), # modulate(self.ffn_norm1(x), scale_mlp),
                 )))
         else:
             assert adaln_input is None
@@ -163,7 +163,7 @@ class FinalLayer(nn.Module):
 
     def forward(self, x, c):
         scale = self.adaLN_modulation(c)
-        x = modulate(self.norm_final(x), scale)
+        x = self.norm_final(x).mul_(scale.add_(1).unsqueeze(1)) # modulate(self.norm_final(x), scale)
         x = self.linear(x)
         return x
 
