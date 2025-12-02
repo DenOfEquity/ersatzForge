@@ -40,15 +40,14 @@ def download_model(model_path, model_url):
 
 
 def model():
-    if shared.sd_model.is_flux or shared.sd_model.is_chromaDCT or shared.sd_model.is_wan or shared.sd_model.is_cosmos_predict2:
-        return None
-
     if shared.sd_model.is_sd3:
         model_name = "vaeapprox-sd3.pt"
     elif shared.sd_model.is_sdxl:
         model_name = "vaeapprox-sdxl.pt"
-    else:
+    elif shared.sd_model.is_sd1 or shared.sd_model.is_sd2:
         model_name = "model.pt"
+    else:
+        return None
 
     loaded_model = sd_vae_approx_models.get(model_name)
 
@@ -62,9 +61,9 @@ def model():
             download_model(model_path, 'https://github.com/AUTOMATIC1111/stable-diffusion-webui/releases/download/v1.0.0-pre/' + model_name)
 
         loaded_model = VAEApprox(latent_channels=shared.sd_model.forge_objects.vae.latent_channels)
-        loaded_model.load_state_dict(torch.load(model_path, map_location='cpu' if devices.device.type != 'cuda' else None))
+        loaded_model.load_state_dict(torch.load(model_path, map_location='cpu'))
         loaded_model.eval()
-        loaded_model.to(devices.device, devices.dtype_vae)
+        loaded_model.to(devices.cpu, torch.float32)
         sd_vae_approx_models[model_name] = loaded_model
 
     return loaded_model

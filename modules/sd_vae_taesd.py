@@ -72,8 +72,7 @@ class TAESDDecoder(nn.Module):
                 latent_channels = 4
 
         self.decoder = decoder(latent_channels)
-        self.decoder.load_state_dict(
-            torch.load(decoder_path, map_location='cpu' if devices.device.type != 'cuda' else None))
+        self.decoder.load_state_dict(torch.load(decoder_path, map_location='cpu'))
 
 
 class TAESDEncoder(nn.Module):
@@ -126,8 +125,9 @@ def decoder_model():
         if os.path.exists(model_path):
             loaded_model = TAESDDecoder(model_path)
             loaded_model.eval()
-            loaded_model.to(devices.device, devices.dtype_vae)
+            loaded_model.to(devices.cpu, torch.float32)
             sd_vae_taesd_models[model_name] = loaded_model
+            devices.torch_gc()
         else:
             raise FileNotFoundError('TAESD model not found')
 

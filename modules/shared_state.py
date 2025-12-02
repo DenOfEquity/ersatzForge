@@ -3,12 +3,10 @@ import logging
 import threading
 import time
 import torch
-from contextlib import nullcontext
 
 from modules import errors, shared, devices
 from typing import Optional
 
-from backend.args import args
 
 log = logging.getLogger(__name__)
 
@@ -36,10 +34,6 @@ class State:
 
     def __init__(self):
         self.server_start = time.time()
-        if args.cuda_stream:
-            self.vae_stream = torch.cuda.Stream()
-        else:
-            self.vae_stream = None
 
     @property
     def need_restart(self) -> bool:
@@ -156,25 +150,13 @@ class State:
         if self.current_latent is None:
             return
 
-        import modules.sd_samplers
-
-        try:
-            if self.vae_stream is not None:
-                # not waiting on default stream will result in corrupt results
-                # will not block main stream under any circumstances
-                self.vae_stream.wait_stream(torch.cuda.default_stream())
-                vae_context = torch.cuda.stream(self.vae_stream)
-            else:
-                vae_context = nullcontext()
-            with vae_context:
-                if shared.opts.show_progress_grid:
-                    self.assign_current_image(modules.sd_samplers.samples_to_image_grid(self.current_latent))
-                else:
-                    self.assign_current_image(modules.sd_samplers.sample_to_image(self.current_latent))
-            self.current_image_sampling_step = self.sampling_step
-
-        except Exception:
-            errors.record_exception()
+        import modules.sd_samplers_common
+        if shared.opts.show_progress_grid:
+            self.assign_current_image(modules.sd_samplers_common.samples_to_image_grid(self.current_latent))
+        else:
+            self.assign_current_image(modules.sd_samplers_common.sample_to_image(self.current_latent))
+        self.current_image_sampling_step = self.sampling_step
+        self.current_latent = None
 
     @torch.inference_mode()
     def assign_current_image(self, image):

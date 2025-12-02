@@ -33,7 +33,7 @@ approximation_indexes = {"Full": 0, "Approx NN": 1, "Approx cheap": 2, "TAESD": 
 
 
 def samples_to_images_tensor(sample, approximation=None, model=None):
-    """Transforms 4-channel latent space images into 3-channel RGB image tensors, with values in range [-1, 1]."""
+    """Transforms latent space images into 3-channel RGB image tensors, with values in range [-1, 1]."""
 
     if approximation is None or shared.state.interrupted:
         approximation = approximation_indexes.get(opts.show_progress_type, 0)
@@ -45,20 +45,20 @@ def samples_to_images_tensor(sample, approximation=None, model=None):
 
     if model.is_chromaDCT:
         x_sample = model.decode_first_stage(sample)
-    elif approximation == 2:
-        x_sample = sd_vae_approx.cheap_approximation(sample)
-    elif approximation == 1:
-        m = sd_vae_approx.model()
+    elif approximation in [1, 2, 3]:
+        sample = sample.to(devices.cpu, torch.float32)
+        if approximation == 1:
+            m = sd_vae_approx.model()
+        elif approximation == 2:
+            m = None
+        elif approximation == 3:
+            m = sd_vae_taesd.decoder_model()
+
         if m is None:
             x_sample = sd_vae_approx.cheap_approximation(sample)
         else:
-            x_sample = m(sample.to(devices.device, devices.dtype_vae)).detach()
-    elif approximation == 3:
-        m = sd_vae_taesd.decoder_model()
-        if m is None:
-            x_sample = sd_vae_approx.cheap_approximation(sample)
-        else:
-            x_sample = m(sample.to(devices.device, devices.dtype_vae)).detach()
+            x_sample = m(sample).detach()
+        if approximation == 3:
             x_sample = x_sample * 2 - 1
     else:
         x_sample = model.decode_first_stage(sample)
