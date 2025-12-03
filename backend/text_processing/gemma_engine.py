@@ -34,17 +34,12 @@ class GemmaTextProcessingEngine:
 
         chunks = []
         chunk = PromptChunk()
-        token_count = 0
 
         def next_chunk():
-            nonlocal token_count
             nonlocal chunk
 
             chunk.tokens = [self.id_start] + chunk.tokens + [self.id_end]
             chunk.multipliers = [1.0] + chunk.multipliers + [1.0]
-
-            current_chunk_length = len(chunk.tokens)
-            token_count += current_chunk_length
 
             chunks.append(chunk)
             chunk = PromptChunk()
@@ -60,7 +55,7 @@ class GemmaTextProcessingEngine:
         if chunk.tokens or not chunks:
             next_chunk()
 
-        return chunks, token_count
+        return chunks
 
     def __call__(self, texts):
         zs = []
@@ -77,7 +72,7 @@ class GemmaTextProcessingEngine:
             if line in cache:
                 line_z_values = cache[line]
             else:
-                chunks, token_count = self.tokenize_line(line)
+                chunks = self.tokenize_line(line)
                 line_z_values = []
 
                 for chunk in chunks:
@@ -138,10 +133,10 @@ class GemmaTextProcessingEngine:
         embeds, mask, count = self.process_embeds([batch_tokens])
 
         if self.emphasis.name == "No norm":
-            embeds *= torch.tensor(batch_multipliers).to(embeds).unsqueeze(1).unsqueeze(0)
+            embeds *= torch.tensor(batch_multipliers).to(embeds)[None, :, None]
         elif self.emphasis.name == "Original":
             original_mean = embeds.mean()
-            embeds *= torch.tensor(batch_multipliers).to(embeds).unsqueeze(1).unsqueeze(0)
+            embeds *= torch.tensor(batch_multipliers).to(embeds)[None, :, None]
             new_mean = embeds.mean()
             embeds *= (original_mean / new_mean)
 

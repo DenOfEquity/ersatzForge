@@ -70,10 +70,8 @@ class T5TextProcessingEngine:
 
         chunks = []
         chunk = PromptChunk()
-        token_count = 0
 
         def next_chunk():
-            nonlocal token_count
             nonlocal chunk
 
             if self.end_with_pad:
@@ -84,7 +82,6 @@ class T5TextProcessingEngine:
             chunk.multipliers = chunk.multipliers + [1.0]
             current_chunk_length = len(chunk.tokens)
 
-            token_count += current_chunk_length
             remaining_count = self.min_length - current_chunk_length
 
             if remaining_count > 0:
@@ -109,7 +106,7 @@ class T5TextProcessingEngine:
         if chunk.tokens or not chunks:
             next_chunk()
 
-        return chunks, token_count
+        return chunks
 
     def __call__(self, texts):
         zs = []
@@ -123,7 +120,7 @@ class T5TextProcessingEngine:
             if line in cache:
                 line_z_values = cache[line]
             else:
-                chunks, token_count = self.tokenize_line(line)
+                chunks = self.tokenize_line(line)
                 line_z_values = []
 
                 for chunk in chunks:

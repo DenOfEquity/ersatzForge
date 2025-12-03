@@ -26,7 +26,7 @@ class Qwen3TextProcessingEngine:
         self.tokenizer = tokenizer
 
         self.id_pad = 151643
-        self.llama_template = "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
+        # self.llama_template = "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
         self.intermediate_output = -2
         self.layer_norm_hidden_state = False
 
@@ -40,11 +40,13 @@ class Qwen3TextProcessingEngine:
 
         chunks = []
         chunk = PromptChunk()
-        token_count = 0
 
         def next_chunk():
-            nonlocal token_count
             nonlocal chunk
+
+            #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
+            chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198]
+            chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0]
 
             chunks.append(chunk)
             chunk = PromptChunk()
@@ -60,7 +62,7 @@ class Qwen3TextProcessingEngine:
         if chunk.tokens or not chunks:
             next_chunk()
 
-        return chunks, token_count
+        return chunks
 
     def __call__(self, texts):
         zs = []
@@ -71,12 +73,10 @@ class Qwen3TextProcessingEngine:
             emphasis.last_extra_generation_params["Emphasis"] = self.emphasis.name
 
         for line in texts:
-            line = self.llama_template.format(line)
-
             if line in cache:
                 line_z_values = cache[line]
             else:
-                chunks, token_count = self.tokenize_line(line)
+                chunks = self.tokenize_line(line)
                 line_z_values = []
 
                 for chunk in chunks:
@@ -86,7 +86,17 @@ class Qwen3TextProcessingEngine:
                     z = self.process_tokens(tokens, multipliers)[0]
                     line_z_values.append(z)
 
-                line_z_values = [torch.cat(line_z_values, dim=0, )] # remove 1st token of all after index 0?
+                # remove start/end tokens
+                count_z = len(line_z_values)
+                for i in range(count_z):
+                    if i - 1 >= 0 and i + 1 < count_z:
+                        line_z_values[i] = line_z_values[i][3:-5]
+                    elif i + 1 < count_z:
+                        line_z_values[i] = line_z_values[i][:-5]
+                    elif i - 1 >= 0:
+                        line_z_values[i] = line_z_values[i][3:]
+
+                line_z_values = [torch.cat(line_z_values, dim=0, )]
                 cache[line] = line_z_values
 
             zs.extend(line_z_values)
@@ -129,10 +139,10 @@ class Qwen3TextProcessingEngine:
         embeds, mask, count = self.process_embeds([batch_tokens])
 
         if self.emphasis.name == "No norm":
-            embeds *= torch.tensor(batch_multipliers).to(embeds).unsqueeze(1).unsqueeze(0)
+            embeds *= torch.tensor(batch_multipliers).to(embeds)[None, :, None]
         elif self.emphasis.name == "Original":
             original_mean = embeds.mean()
-            embeds *= torch.tensor(batch_multipliers).to(embeds).unsqueeze(1).unsqueeze(0)
+            embeds *= torch.tensor(batch_multipliers).to(embeds)[None, :, None]
             new_mean = embeds.mean()
             embeds *= (original_mean / new_mean)
 
@@ -146,4 +156,3 @@ class Qwen3TextProcessingEngine:
         )
 
         return z
-
