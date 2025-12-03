@@ -10,9 +10,7 @@ from backend.attention import attention_function
 from backend.nn.flux import EmbedND
 from backend.nn.mmditx import TimestepEmbedder
 
-
-# def modulate(x, scale):
-    # return x * (1 + scale.unsqueeze(1))
+from modules import shared
 
 
 class JointAttention(nn.Module):
@@ -89,7 +87,7 @@ class FeedForward(nn.Module):
 
 
 class JointTransformerBlock(nn.Module):
-    def __init__(self, layer_id: int, dim: int, n_heads: int, n_kv_heads: int, multiple_of: int, ffn_dim_multiplier: float, norm_eps: float, qk_norm: bool, modulation=True, z_modulation=False):
+    def __init__(self, layer_id: int, dim: int, n_heads: int, n_kv_heads: int, multiple_of: int, ffn_dim_multiplier: float, norm_eps: float, qk_norm: bool, modulation=True, z_modulation=False, block_id=None):
         super().__init__()
         self.dim = dim
         self.head_dim = dim // n_heads
@@ -101,6 +99,7 @@ class JointTransformerBlock(nn.Module):
             ffn_dim_multiplier=ffn_dim_multiplier,
         )
         self.layer_id = layer_id
+        self.block_id = block_id
         self.attention_norm1 = nn.RMSNorm(dim, eps=norm_eps, elementwise_affine=True)
         self.ffn_norm1 = nn.RMSNorm(dim, eps=norm_eps, elementwise_affine=True)
 
@@ -119,20 +118,20 @@ class JointTransformerBlock(nn.Module):
                     nn.Linear(min(dim, 1024), 4 * dim, bias=True),
                 )
 
-    def forward(self, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor, adaln_input: torch.Tensor = None):
+    def forward(self, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor, adaln_input: torch.Tensor=None, hints=None, strength=None):
         if self.modulation:
             assert adaln_input is not None
             scale_msa, gate_msa, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_input).chunk(4, dim=1)
 
             x.add_(gate_msa.unsqueeze(1).tanh() * self.attention_norm2(
                 self.attention(
-                    self.attention_norm1(x).mul_(scale_msa.add_(1.0).unsqueeze(1)), # modulate(self.attention_norm1(x), scale_msa),
+                    self.attention_norm1(x).mul_(scale_msa.add_(1.0).unsqueeze(1)),
                     x_mask,
                     freqs_cis,
                 )))
             x.add_(gate_mlp.unsqueeze(1).tanh() * self.ffn_norm2(
                 self.feed_forward(
-                    self.ffn_norm1(x).mul_(scale_mlp.add_(1.0).unsqueeze(1)), # modulate(self.ffn_norm1(x), scale_mlp),
+                    self.ffn_norm1(x).mul_(scale_mlp.add_(1.0).unsqueeze(1)),
                 )))
         else:
             assert adaln_input is None
@@ -146,11 +145,41 @@ class JointTransformerBlock(nn.Module):
                 self.feed_forward(
                     self.ffn_norm1(x),
                 )))
+
+        if self.block_id is not None and hints is not None and strength is not None:
+            x.add_(hints[self.block_id] * strength)
+
         return x
 
 
-class FinalLayer(nn.Module):
+class JointTransformerBlockControl(JointTransformerBlock):
+    def __init__(self, layer_id: int, dim: int, n_heads: int, n_kv_heads: int, multiple_of: int, ffn_dim_multiplier: float, norm_eps: float, qk_norm: bool, modulation=True, z_modulation=False, block_id=None, control=False):
+        super().__init__(layer_id, dim, n_heads, n_kv_heads, multiple_of, ffn_dim_multiplier, norm_eps, qk_norm, modulation, z_modulation)
+        if control and layer_id < 6:
+            if layer_id == 0:
+                self.before_proj = nn.Linear(self.dim, self.dim)
+            self.after_proj = nn.Linear(self.dim, self.dim)
 
+
+    def forward(self, c: torch.Tensor, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor, adaln_input: torch.Tensor=None):
+        if self.layer_id == 0:
+            c = self.before_proj(c) + x
+            all_c = []
+        elif self.layer_id < 6:
+            all_c = list(torch.unbind(c))
+            c = all_c.pop(-1)
+
+        c = super().forward(c, x_mask, freqs_cis, adaln_input)
+        
+        if self.layer_id < 6:
+            c_skip = self.after_proj(c)
+            all_c += [c_skip, c]
+            c = torch.stack(all_c)
+
+        return c
+
+
+class FinalLayer(nn.Module):
     def __init__(self, hidden_size, patch_size, out_channels, z_modulation=False):
         super().__init__()
         self.norm_final = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
@@ -163,13 +192,12 @@ class FinalLayer(nn.Module):
 
     def forward(self, x, c):
         scale = self.adaLN_modulation(c)
-        x = self.norm_final(x).mul_(scale.add_(1).unsqueeze(1)) # modulate(self.norm_final(x), scale)
+        x = self.norm_final(x).mul_(scale.add_(1).unsqueeze(1))
         x = self.linear(x)
         return x
 
 
 class Lumina2DiT(nn.Module):
-
     def __init__(
         self,
         patch_size: int = 2,
@@ -189,13 +217,24 @@ class Lumina2DiT(nn.Module):
         rope_theta: float = 10000.0,
         z_modulation: bool = False,
         pad_tokens_multiple = None,
+        num_keys: int = None,
     ):
         super().__init__()
+        assert (dim // n_heads) == sum(axes_dims)
+        self.axes_dims = axes_dims
+        self.axes_lens = axes_lens
+        self.rope_embedder = EmbedND(theta=rope_theta, axes_dim=axes_dims)
+        self.dim = dim
+        self.n_heads = n_heads
 
         self.in_channels = in_channels
         self.out_channels = in_channels
         self.patch_size = patch_size
         self.pad_tokens_multiple = pad_tokens_multiple
+
+        self.control_in_dim = 16
+        self.control_layers_places = [0, 5, 10, 15, 20, 25]
+        self.control_layers_mapping = {i: n for n, i in enumerate(self.control_layers_places)}
 
         self.x_embedder = nn.Linear(in_features=patch_size * patch_size * in_channels, out_features=dim, bias=True)
 
@@ -238,6 +277,45 @@ class Lumina2DiT(nn.Module):
             nn.RMSNorm(cap_feat_dim, eps=norm_eps, elementwise_affine=True),
             nn.Linear(cap_feat_dim, dim, bias=True),
         )
+        if num_keys > 455:
+            self.control_layers = nn.ModuleList(
+                [
+                    JointTransformerBlockControl(
+                        i, 
+                        dim, 
+                        n_heads, 
+                        n_kv_heads, 
+                        multiple_of,
+                        ffn_dim_multiplier,
+                        norm_eps, 
+                        qk_norm,
+                        z_modulation=z_modulation,
+                        control=True,
+                    )
+                    for i in range(6)
+                ]
+            )
+
+            self.control_x_embedder = nn.Linear(1 * 2 * 2 * self.control_in_dim, dim, bias=True)
+            self.control_noise_refiner = nn.ModuleList(
+                [
+                    JointTransformerBlockControl(
+                        layer_id+1000,
+                        dim,
+                        n_heads,
+                        n_kv_heads,
+                        multiple_of,
+                        ffn_dim_multiplier,
+                        norm_eps,
+                        qk_norm,
+                        z_modulation=z_modulation,
+                    )
+                    for layer_id in range(n_refiner_layers)
+                ]
+            )
+            self.control = True
+        else: #controlnet not added
+            self.control = False
 
         self.layers = nn.ModuleList(
             [
@@ -251,19 +329,20 @@ class Lumina2DiT(nn.Module):
                     norm_eps,
                     qk_norm,
                     z_modulation=z_modulation,
+                    block_id=self.control_layers_mapping[layer_id] if layer_id in self.control_layers_places else None,
                 )
                 for layer_id in range(n_layers)
             ]
         )
+
         self.norm_final = nn.RMSNorm(dim, eps=norm_eps, elementwise_affine=True)
         self.final_layer = FinalLayer(dim, patch_size, self.out_channels, z_modulation=z_modulation)
 
-        assert (dim // n_heads) == sum(axes_dims)
-        self.axes_dims = axes_dims
-        self.axes_lens = axes_lens
-        self.rope_embedder = EmbedND(theta=rope_theta, axes_dim=axes_dims)
-        self.dim = dim
-        self.n_heads = n_heads
+        if self.pad_tokens_multiple is not None: # load in detection and add to config?
+            # how to load from model here? keys are 'x_pad_token' and 'cap_pad_token'
+            self.x_pad_token = nn.Parameter(torch.empty((1, dim)))
+            # self.cap_pad_token = nn.Parameter(torch.empty((1, dim)))
+
 
     def unpatchify(self, x: torch.Tensor, img_size: tuple[int, int], cap_size: int) -> list[torch.Tensor]:
         pH = pW = self.patch_size
@@ -288,76 +367,43 @@ class Lumina2DiT(nn.Module):
             if not torch.is_floating_point(cap_mask):
                 cap_mask = (cap_mask - 1).to(dtype) * torch.finfo(dtype).max
 
-        img_size = [x.shape[2], x.shape[3]]
-        img_len = (x.shape[2] // pH) * (x.shape[3] // pW)
+        H, W = x.shape[2], x.shape[3]
+        img_len = (H // pH) * (W // pW)
 
-        max_seq_len = num_tokens + img_len
-        if self.pad_tokens_multiple is not None:
-            pad_extra = (-max_seq_len) % self.pad_tokens_multiple
-            max_seq_len += pad_extra
-            
-        H, W = img_size
-        H_tokens, W_tokens = H // pH, W // pW
-        row_ids = torch.arange(H_tokens, dtype=torch.int32, device=device).view(-1, 1).repeat(1, W_tokens).flatten()
-        col_ids = torch.arange(W_tokens, dtype=torch.int32, device=device).view(1, -1).repeat(H_tokens, 1).flatten()
-        position_ids = torch.zeros(bsz, max_seq_len, 3, dtype=torch.int32, device=device)
-        for i in range(bsz):
-            position_ids[i, :num_tokens, 0] = torch.arange(num_tokens, dtype=torch.int32, device=device)
-            position_ids[i, num_tokens : num_tokens + img_len, 0] = num_tokens
-            position_ids[i, num_tokens : num_tokens + img_len, 1] = row_ids
-            position_ids[i, num_tokens : num_tokens + img_len, 2] = col_ids
+
+        cap_pos_ids = torch.zeros(bsz, num_tokens, 3, dtype=torch.float32, device=device)
+        cap_pos_ids[:, :, 0] = torch.arange(num_tokens, dtype=torch.float32, device=device) + 1.0
 
         x = rearrange(x, 'b c (h ph) (w pw) -> b (h w) (ph pw c)', ph=pH, pw=pW)
+        x = self.x_embedder(x)
+
+        H_tokens, W_tokens = H // pH, W // pW
+        row_ids = torch.arange(H_tokens, dtype=torch.float32, device=device).view(-1, 1).repeat(1, W_tokens).flatten()
+        col_ids = torch.arange(W_tokens, dtype=torch.float32, device=device).view(1, -1).repeat(H_tokens, 1).flatten()
+        position_ids = torch.zeros(bsz, x.shape[1], 3, dtype=torch.int32, device=device)
+        position_ids[:,:, 0] = num_tokens + 1
+        position_ids[:,:, 1] = row_ids
+        position_ids[:,:, 2] = col_ids
 
         if self.pad_tokens_multiple is not None:
-            pad_extra = (-img_len) % self.pad_tokens_multiple
-        else:
-            pad_extra = 0
+            pad_extra = (-x.shape[1]) % self.pad_tokens_multiple
+            if pad_extra:
+                x = torch.cat((x, self.x_pad_token.to(device=x.device, dtype=x.dtype, copy=True).unsqueeze(0).repeat(x.shape[0], pad_extra, 1)), dim=1)
+                position_ids = torch.nn.functional.pad(position_ids, (0, 0, 0, pad_extra))
 
-        padded_img_embed = torch.zeros(bsz, img_len+pad_extra, x.shape[-1], device=device, dtype=dtype)
-        padded_img_embed[:, :img_len] = x
-        padded_img_embed = self.x_embedder(padded_img_embed)
-
-        freqs_cis = self.rope_embedder(position_ids).movedim(1, 2).to(dtype)
-
-        cap_freqs_cis_shape = list(freqs_cis.shape)
-        cap_freqs_cis_shape[1] = cap_feats.shape[1]
-        cap_freqs_cis = torch.zeros(*cap_freqs_cis_shape, device=device, dtype=freqs_cis.dtype)
-
-        img_freqs_cis_shape = list(freqs_cis.shape)
-        img_freqs_cis_shape[1] = img_len+pad_extra
-        img_freqs_cis = torch.zeros(*img_freqs_cis_shape, device=device, dtype=freqs_cis.dtype)
-
-        for i in range(bsz):
-            cap_freqs_cis[i, :num_tokens] = freqs_cis[i, :num_tokens]
-            img_freqs_cis[i, :img_len] = freqs_cis[i, num_tokens : num_tokens + img_len]
+        freqs_cis = self.rope_embedder(torch.cat((cap_pos_ids, position_ids), dim=1)).movedim(1, 2).to(dtype)
 
         for layer in self.context_refiner:
-            cap_feats = layer(cap_feats, cap_mask, cap_freqs_cis)
-
-
-        padded_img_mask = torch.zeros(bsz, img_len+pad_extra, dtype=dtype, device=device)
-        for i in range(bsz):
-            padded_img_mask[i, img_len :] = -torch.finfo(dtype).max
-        padded_img_mask = padded_img_mask.unsqueeze(1)
+            cap_feats = layer(cap_feats, cap_mask, freqs_cis[:, :cap_pos_ids.shape[1]])
 
         for layer in self.noise_refiner:
-            padded_img_embed = layer(padded_img_embed, padded_img_mask, img_freqs_cis, t)
+            x = layer(x, None, freqs_cis[:, cap_pos_ids.shape[1]:], t)
 
-        if cap_mask is not None:
-            mask = torch.zeros(bsz, max_seq_len, dtype=dtype, device=device)
-            mask[:, :num_tokens] = cap_mask[:, :num_tokens]
-        else:
-            mask = None
+        padded_full_embed = torch.cat((cap_feats, x), dim=1)
 
-        padded_full_embed = torch.zeros(bsz, max_seq_len, self.dim, device=device, dtype=dtype)
-        for i in range(bsz):
-            padded_full_embed[i, :num_tokens] = cap_feats[i, :num_tokens]
-            padded_full_embed[i, num_tokens : num_tokens + img_len] = padded_img_embed[i, :img_len]
+        return padded_full_embed, freqs_cis
 
-        return padded_full_embed, mask, img_size, freqs_cis
-
-    def forward(self, x, timesteps, context, num_tokens=None, attention_mask=None, **kwargs):
+    def forward(self, x, timesteps, context, num_tokens=None, attention_mask=None, control=None, **kwargs):
         t = 1.0 - timesteps
         cap_feats = context
         cap_mask = attention_mask
@@ -367,28 +413,54 @@ class Lumina2DiT(nn.Module):
         pad_w = (self.patch_size - w % self.patch_size) % self.patch_size
         x = torch.nn.functional.pad(x, (0, pad_w, 0, pad_h), mode="circular")
 
+        control_latent = getattr(shared, 'ZITlatent', None) # already patchified
+        control_strength = getattr(shared, 'ZITstrength', None)
+        control_stop_sigma = getattr(shared, 'ZITstop', None)
+
         if self.dim == 2304: # Lumina 2
             t = self.t_embedder(t, dtype=x.dtype)
         else: # Z image
             t = self.t_embedder(t*1000.0, dtype=x.dtype)
         adaln_input = t
 
+        #cache this?
         if self.pad_tokens_multiple is not None:
             pad_t = (-context.shape[1]) % self.pad_tokens_multiple
             pad = context.new_zeros([bs, pad_t, context.shape[2]])
             context = torch.cat([context, pad], dim=1)
         cap_feats = self.cap_embedder(context)
+        #pad using cap_pad_token here? #self.cap_pad_token.repeat(bs, pad_t, 1).to(cap_feats)
+
 
         # entire batch will have same length context because of calc_cond_uncond_batch
         # (it seems the Lumina processing originally handled different lengths, but I've simplified it out as that'll never happen in this webUI)
         num_tokens = context.shape[1] # doesn't account for padding, but none is used
-        x, mask, img_size, freqs_cis = self.patchify_and_embed(x, cap_feats, cap_mask, t, num_tokens=num_tokens)
+        x, freqs_cis = self.patchify_and_embed(x, cap_feats, cap_mask, t, num_tokens=num_tokens)
         freqs_cis = freqs_cis.to(x.device)
 
+
+        if self.control and control_latent is not None and control_strength is not None:
+            control_latent = self.control_x_embedder(control_latent)
+            padded = self.x_pad_token.to(device=x.device, dtype=x.dtype, copy=True).unsqueeze(0).repeat(1, x.shape[1], 1)
+            padded[:, num_tokens:num_tokens+control_latent.shape[1]] = control_latent
+
+            for layer in self.control_noise_refiner:
+                padded = layer(padded, None, None, freqs_cis, adaln_input)
+            for layer in self.control_layers:
+                padded = layer(padded, x, None, freqs_cis, adaln_input)
+
+            hints = torch.unbind(padded)[:-1]
+        else:
+            hints = None
+
         for layer in self.layers:
-            x = layer(x, mask, freqs_cis, adaln_input)
+            x = layer(x, None, freqs_cis, adaln_input, hints, control_strength)
 
         x = self.final_layer(x, adaln_input)
-        x = self.unpatchify(x, img_size, num_tokens)[:, :, :h, :w]
+        x = self.unpatchify(x, [h, w], num_tokens)[:, :, :h, :w]
+
+        if control_stop_sigma is not None:
+            if timesteps < control_stop_sigma:
+                shared.ZITstrength = None
 
         return -x
