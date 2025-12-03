@@ -40,9 +40,25 @@ def load_lora(lora, to_load):
 
         return sd_out
 
+    # rename keys OFT
+    def convert_oft(sd):
+        new_lora = {}
+        for k, v in lora.items():
+            if k.startswith("oft_"):
+                name = "lora_" + k[4:]
+                new_lora[name] = lora[k]
+            else:
+                new_lora[k] = lora[k]
+        return new_lora
+
+
     if "img_in.lora_A.weight" in lora and "single_blocks.0.norm.key_norm.scale" in lora:
         lora = convert_lora_bfl_control(lora)
-        
+
+    if any(k.startswith("oft_") for k in lora.keys()):
+        lora = convert_oft(lora)
+
+
     patch_dict = {}
     loaded_keys = set()
     for x in to_load:
@@ -178,7 +194,7 @@ def load_lora(lora, to_load):
             loaded_keys.add(b1_name)
             loaded_keys.add(b2_name)
 
-        #oft (3), boft(4) - untested
+        #oft (3), boft(4)
         blocks_name = "{}.oft_blocks".format(x)
         rescale_name = "{}.rescale".format(x)
 
@@ -192,6 +208,13 @@ def load_lora(lora, to_load):
                 else:
                     rescale = None
                 patch_dict[to_load[x]] = ("oft" if blocks.ndim == 3 else "boft", (blocks, rescale, alpha, dora_scale))
+
+        #oftv2 - untested
+        oft_r_weight_name = "{}.oft_R.weight".format(x)
+        if oft_r_weight_name in lora.keys():
+            oft_r_weight = lora[oft_r_weight_name]
+            loaded_keys.add(oft_r_weight_name)
+            patch_dict[to_load[x]] = ("oftv2", (oft_r_weight, alpha, dora_scale))
 
 
         w_norm_name = "{}.w_norm".format(x)
@@ -307,10 +330,12 @@ def model_lora_keys_unet(model, key_map={}):
         if k.startswith("diffusion_model."):
             if k.endswith(".weight"):
                 key_lora = k[len("diffusion_model."):-len(".weight")].replace(".", "_")
+                # key_map["oft_unet_{}".format(key_lora)] = k
                 key_map["lora_unet_{}".format(key_lora)] = k
                 key_map["{}".format(k[:-len(".weight")])] = k #generic lora format without any weird key names
             else:
                 key_map["{}".format(k)] = k #generic lora format for not .weight without any weird key names
+
 
     diffusers_keys = utils.unet_to_diffusers(model.diffusion_model.config)
     for k in diffusers_keys:
