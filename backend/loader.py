@@ -277,7 +277,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 model_loader = lambda c: WanModel(**c)
             elif cls_name == "Lumina2Transformer2DModel":
                 from backend.nn.lumina2 import Lumina2DiT
-                model_loader = lambda c: Lumina2DiT(**c)
+                model_loader = lambda c: Lumina2DiT(**c, num_keys=len(state_dict))
 
             unet_config = guess.unet_config.copy()
             state_dict_parameters = memory_management.state_dict_parameters(state_dict)
@@ -702,6 +702,35 @@ def replace_state_dict(sd, asd, guess):
                     sd["model.diffusion_model." + k_o] = asd.pop(k_i)
 
             print ("Loaded ResAdapter for " + model_type)
+
+# zimage turbo controlnet
+    if "control_all_x_embedder.2-1.bias" in asd: #"control_layers.0.adaLN_modulation.0.bias"
+        sd["model.diffusion_model.control_x_embedder.bias"] = asd.pop("control_all_x_embedder.2-1.bias")
+        sd["model.diffusion_model.control_x_embedder.weight"] = asd.pop("control_all_x_embedder.2-1.weight")
+
+        for y in range(2):
+            sd[f"model.diffusion_model.control_noise_refiner.{y}.attention.k_norm.weight"] = asd.pop(f"control_noise_refiner.{y}.attention.norm_k.weight")
+            sd[f"model.diffusion_model.control_noise_refiner.{y}.attention.q_norm.weight"] = asd.pop(f"control_noise_refiner.{y}.attention.norm_q.weight")
+            sd[f"model.diffusion_model.control_noise_refiner.{y}.attention.out.weight"]    = asd.pop(f"control_noise_refiner.{y}.attention.to_out.0.weight")
+
+            q = asd.pop(f"control_noise_refiner.{y}.attention.to_q.weight")
+            k = asd.pop(f"control_noise_refiner.{y}.attention.to_k.weight")
+            v = asd.pop(f"control_noise_refiner.{y}.attention.to_v.weight")
+            sd[f"model.diffusion_model.control_noise_refiner.{y}.attention.qkv.weight"] = torch.cat((q, k, v), dim=0)
+
+        for y in range(6):
+            sd[f"model.diffusion_model.control_layers.{y}.attention.k_norm.weight"] = asd.pop(f"control_layers.{y}.attention.norm_k.weight")
+            sd[f"model.diffusion_model.control_layers.{y}.attention.q_norm.weight"] = asd.pop(f"control_layers.{y}.attention.norm_q.weight")
+            sd[f"model.diffusion_model.control_layers.{y}.attention.out.weight"]    = asd.pop(f"control_layers.{y}.attention.to_out.0.weight")
+
+            q = asd.pop(f"control_layers.{y}.attention.to_q.weight")
+            k = asd.pop(f"control_layers.{y}.attention.to_k.weight")
+            v = asd.pop(f"control_layers.{y}.attention.to_v.weight")
+            sd[f"model.diffusion_model.control_layers.{y}.attention.qkv.weight"] = torch.cat((q, k, v), dim=0)
+
+        for k, v in asd.items():
+            if k.startswith("control_"):
+                sd["model.diffusion_model." + k] = asd[k]
 
     return sd
 
