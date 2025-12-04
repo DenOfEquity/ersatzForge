@@ -366,7 +366,6 @@ class Lumina2DiT(nn.Module):
         dtype = x.dtype
 
         H, W = x.shape[2], x.shape[3]
-        img_len = (H // pH) * (W // pW)
 
         cap_pos_ids = torch.zeros(bsz, num_tokens, 3, dtype=torch.float32, device=device)
         cap_pos_ids[:, :, 0] = torch.arange(num_tokens, dtype=torch.float32, device=device) + 1.0
@@ -427,12 +426,13 @@ class Lumina2DiT(nn.Module):
             control_stop_sigma = getattr(shared, 'ZITstop', 0.0)
             if control_strength == 0.0:
                 control = None
-            if timesteps < control_stop_sigma:
+            elif timesteps[0] < control_stop_sigma:
                 control = None
+            elif bs > 1:
+                control = control.repeat(bs, 1, 1)
         else:
             control = None
             control_strength = 0.0
-            control_stop = 0.0
 
         if self.dim == 2304: # Lumina 2
             adaln_input = self.t_embedder(t, dtype=x.dtype)
