@@ -118,7 +118,7 @@ class JointTransformerBlock(nn.Module):
                     nn.Linear(min(dim, 1024), 4 * dim, bias=True),
                 )
 
-    def forward(self, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor, adaln_input: torch.Tensor=None, hints=None, strength=None):
+    def forward(self, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor, adaln_input: torch.Tensor=None, control=None, strength=None):
         if self.modulation:
             assert adaln_input is not None
             scale_msa, gate_msa, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_input).chunk(4, dim=1)
@@ -146,8 +146,9 @@ class JointTransformerBlock(nn.Module):
                     self.ffn_norm1(x),
                 )))
 
-        if self.block_id is not None and hints is not None and strength is not None:
-            x.add_(hints[self.block_id] * strength)
+        if self.block_id is not None and control is not None and strength is not None:
+            control_size = control[self.block_id].shape[1]
+            x[:, -control_size:] += control[self.block_id] * strength
 
         return x
 
@@ -232,10 +233,6 @@ class Lumina2DiT(nn.Module):
         self.patch_size = patch_size
         self.pad_tokens_multiple = pad_tokens_multiple
 
-        self.control_in_dim = 16
-        self.control_layers_places = [0, 5, 10, 15, 20, 25]
-        self.control_layers_mapping = {i: n for n, i in enumerate(self.control_layers_places)}
-
         self.x_embedder = nn.Linear(in_features=patch_size * patch_size * in_channels, out_features=dim, bias=True)
 
         self.noise_refiner = nn.ModuleList(
@@ -277,7 +274,9 @@ class Lumina2DiT(nn.Module):
             nn.RMSNorm(cap_feat_dim, eps=norm_eps, elementwise_affine=True),
             nn.Linear(cap_feat_dim, dim, bias=True),
         )
-        if num_keys > 455:
+        
+        #400 keys: lumina2, 455 keys: ZITurbo (maybe 1-3 less if pad tokens or sigmas not included)
+        if num_keys > 455:  # z-image-turbo + control
             self.control_layers = nn.ModuleList(
                 [
                     JointTransformerBlockControl(
@@ -296,7 +295,7 @@ class Lumina2DiT(nn.Module):
                 ]
             )
 
-            self.control_x_embedder = nn.Linear(1 * 2 * 2 * self.control_in_dim, dim, bias=True)
+            self.control_x_embedder = nn.Linear(1 * 2 * 2 * 16, dim, bias=True)
             self.control_noise_refiner = nn.ModuleList(
                 [
                     JointTransformerBlockControl(
@@ -313,8 +312,13 @@ class Lumina2DiT(nn.Module):
                     for layer_id in range(n_refiner_layers)
                 ]
             )
+            control_layers_places = [0, 5, 10, 15, 20, 25]
+            control_layers_mapping = {i: n for n, i in enumerate(control_layers_places)}
+
             self.control = True
         else: #controlnet not added
+            control_layers_places = []
+            control_layers_mapping = {}
             self.control = False
 
         self.layers = nn.ModuleList(
@@ -329,7 +333,7 @@ class Lumina2DiT(nn.Module):
                     norm_eps,
                     qk_norm,
                     z_modulation=z_modulation,
-                    block_id=self.control_layers_mapping[layer_id] if layer_id in self.control_layers_places else None,
+                    block_id=control_layers_mapping[layer_id] if layer_id in control_layers_places else None,
                 )
                 for layer_id in range(n_layers)
             ]
@@ -338,10 +342,9 @@ class Lumina2DiT(nn.Module):
         self.norm_final = nn.RMSNorm(dim, eps=norm_eps, elementwise_affine=True)
         self.final_layer = FinalLayer(dim, patch_size, self.out_channels, z_modulation=z_modulation)
 
-        if self.pad_tokens_multiple is not None: # load in detection and add to config?
-            # how to load from model here? keys are 'x_pad_token' and 'cap_pad_token'
+        if self.pad_tokens_multiple is not None:
             self.x_pad_token = nn.Parameter(torch.empty((1, dim)))
-            # self.cap_pad_token = nn.Parameter(torch.empty((1, dim)))
+            self.cap_pad_token = nn.Parameter(torch.empty((1, dim)))
 
 
     def unpatchify(self, x: torch.Tensor, img_size: tuple[int, int], cap_size: int) -> list[torch.Tensor]:
@@ -356,20 +359,14 @@ class Lumina2DiT(nn.Module):
 
         return x
 
-    def patchify_and_embed(self, x: torch.Tensor, cap_feats: torch.Tensor, cap_mask: torch.Tensor, t: torch.Tensor, num_tokens) -> tuple[torch.Tensor, torch.Tensor, list[tuple[int, int]], list[int], torch.Tensor]:
+    def patchify_and_embed(self, x: torch.Tensor, context: torch.Tensor, control: torch.Tensor, t: torch.Tensor, num_tokens) -> tuple[torch.Tensor, torch.Tensor, list[tuple[int, int]], list[int], torch.Tensor]:
         bsz = x.shape[0]
         pH = pW = self.patch_size
         device = x.device
         dtype = x.dtype
 
-        if cap_mask is not None:
-            num_tokens = cap_mask.sum(dim=1).item()
-            if not torch.is_floating_point(cap_mask):
-                cap_mask = (cap_mask - 1).to(dtype) * torch.finfo(dtype).max
-
         H, W = x.shape[2], x.shape[3]
         img_len = (H // pH) * (W // pW)
-
 
         cap_pos_ids = torch.zeros(bsz, num_tokens, 3, dtype=torch.float32, device=device)
         cap_pos_ids[:, :, 0] = torch.arange(num_tokens, dtype=torch.float32, device=device) + 1.0
@@ -385,82 +382,83 @@ class Lumina2DiT(nn.Module):
         position_ids[:,:, 1] = row_ids
         position_ids[:,:, 2] = col_ids
 
+        if control is not None:
+            control = self.control_x_embedder(control)
+
         if self.pad_tokens_multiple is not None:
             pad_extra = (-x.shape[1]) % self.pad_tokens_multiple
             if pad_extra:
-                x = torch.cat((x, self.x_pad_token.to(device=x.device, dtype=x.dtype, copy=True).unsqueeze(0).repeat(x.shape[0], pad_extra, 1)), dim=1)
+                pad = self.x_pad_token.to(device=x.device, dtype=x.dtype, copy=True).unsqueeze(0).repeat(x.shape[0], pad_extra, 1)
+                x = torch.cat((x, pad), dim=1)
+                if control is not None:
+                    control = torch.cat((control, pad), dim=1)
                 position_ids = torch.nn.functional.pad(position_ids, (0, 0, 0, pad_extra))
 
         freqs_cis = self.rope_embedder(torch.cat((cap_pos_ids, position_ids), dim=1)).movedim(1, 2).to(dtype)
 
+        if control is not None:
+            for layer in self.control_noise_refiner:
+                control = layer(control, None, None, freqs_cis[:, cap_pos_ids.shape[1]:], t)
+            for layer in self.control_layers:
+                control = layer(control, x, None, freqs_cis[:, cap_pos_ids.shape[1]:], t)
+            control = torch.unbind(control)[:-1]
+
         for layer in self.context_refiner:
-            cap_feats = layer(cap_feats, cap_mask, freqs_cis[:, :cap_pos_ids.shape[1]])
+            context = layer(context, None, freqs_cis[:, :cap_pos_ids.shape[1]])
 
         for layer in self.noise_refiner:
             x = layer(x, None, freqs_cis[:, cap_pos_ids.shape[1]:], t)
 
-        padded_full_embed = torch.cat((cap_feats, x), dim=1)
+        padded_full_embed = torch.cat((context, x), dim=1)
 
-        return padded_full_embed, freqs_cis
+        return padded_full_embed, control, freqs_cis
 
-    def forward(self, x, timesteps, context, num_tokens=None, attention_mask=None, control=None, **kwargs):
+    def forward(self, x, timesteps, context, num_tokens=None, attention_mask=None, **kwargs):
         t = 1.0 - timesteps
-        cap_feats = context
-        cap_mask = attention_mask
         bs, c, h, w = x.shape
 
         pad_h = (self.patch_size - h % self.patch_size) % self.patch_size
         pad_w = (self.patch_size - w % self.patch_size) % self.patch_size
         x = torch.nn.functional.pad(x, (0, pad_w, 0, pad_h), mode="circular")
 
-        control_latent = getattr(shared, 'ZITlatent', None) # already patchified
-        control_strength = getattr(shared, 'ZITstrength', None)
-        control_stop_sigma = getattr(shared, 'ZITstop', None)
+        if self.control:
+            control = getattr(shared, 'ZITlatent', None) # already patchified
+            control_strength = getattr(shared, 'ZITstrength', 0.0)
+            control_stop_sigma = getattr(shared, 'ZITstop', 0.0)
+            if control_strength == 0.0:
+                control = None
+            if timesteps < control_stop_sigma:
+                control = None
+        else:
+            control = None
+            control_strength = 0.0
+            control_stop = 0.0
 
         if self.dim == 2304: # Lumina 2
-            t = self.t_embedder(t, dtype=x.dtype)
+            adaln_input = self.t_embedder(t, dtype=x.dtype)
         else: # Z image
-            t = self.t_embedder(t*1000.0, dtype=x.dtype)
-        adaln_input = t
+            adaln_input = self.t_embedder(t*1000.0, dtype=x.dtype)
 
         #cache this?
         if self.pad_tokens_multiple is not None:
             pad_t = (-context.shape[1]) % self.pad_tokens_multiple
             pad = context.new_zeros([bs, pad_t, context.shape[2]])
             context = torch.cat([context, pad], dim=1)
-        cap_feats = self.cap_embedder(context)
+        context = self.cap_embedder(context)
         #pad using cap_pad_token here? #self.cap_pad_token.repeat(bs, pad_t, 1).to(cap_feats)
 
 
         # entire batch will have same length context because of calc_cond_uncond_batch
         # (it seems the Lumina processing originally handled different lengths, but I've simplified it out as that'll never happen in this webUI)
         num_tokens = context.shape[1] # doesn't account for padding, but none is used
-        x, freqs_cis = self.patchify_and_embed(x, cap_feats, cap_mask, t, num_tokens=num_tokens)
+        x, control, freqs_cis = self.patchify_and_embed(x, context, control, adaln_input, num_tokens=num_tokens)
         freqs_cis = freqs_cis.to(x.device)
 
 
-        if self.control and control_latent is not None and control_strength is not None:
-            control_latent = self.control_x_embedder(control_latent)
-            padded = self.x_pad_token.to(device=x.device, dtype=x.dtype, copy=True).unsqueeze(0).repeat(1, x.shape[1], 1)
-            padded[:, num_tokens:num_tokens+control_latent.shape[1]] = control_latent
-
-            for layer in self.control_noise_refiner:
-                padded = layer(padded, None, None, freqs_cis, adaln_input)
-            for layer in self.control_layers:
-                padded = layer(padded, x, None, freqs_cis, adaln_input)
-
-            hints = torch.unbind(padded)[:-1]
-        else:
-            hints = None
-
         for layer in self.layers:
-            x = layer(x, None, freqs_cis, adaln_input, hints, control_strength)
+            x = layer(x, None, freqs_cis, adaln_input, control, control_strength)
 
         x = self.final_layer(x, adaln_input)
         x = self.unpatchify(x, [h, w], num_tokens)[:, :, :h, :w]
-
-        if control_stop_sigma is not None:
-            if timesteps < control_stop_sigma:
-                shared.ZITstrength = None
 
         return -x
