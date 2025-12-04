@@ -13,6 +13,7 @@ from backend.misc.image_resize import adaptive_resize
 class ersatzZImageTurboControl(scripts.Script):
     sorting_priority = 0
     last_image_hash = None
+    last_latent_size = None
 
     def title(self):
         return "Z-Image-Turbo Control"
@@ -83,21 +84,23 @@ class ersatzZImageTurboControl(scripts.Script):
                 return
 
             x = kwargs["x"]
+            _, c, h, w = x.size()
             
             def calc_extra_mem(latent):
                 return latent.shape[0] * latent.shape[1] * latent.shape[2] * latent.element_size() * 1024
 
             this_image_hash = hash(str(list(image.getdata(band=None))).encode("utf-8"))
+            this_latent_size = (w, h)
 
-            if this_image_hash == self.last_image_hash:
+            if this_image_hash == self.last_image_hash and this_latent_size == self.last_latent_size:
                 print ("[Z-Image-Turbo Control] used cache")
                 shared.ZITstrength = strength
                 shared.ZITstop = stop
                 extra_mem = calc_extra_mem(shared.ZITlatent)
             else:
                 self.last_image_hash = this_image_hash
+                self.last_latent_size = this_latent_size
 
-                _, c, h, w = x.size()
                 input_device = x.device
                 input_dtype = x.dtype
 
