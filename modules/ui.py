@@ -89,21 +89,23 @@ def calc_resolution_hires(enable, width, height, hr_scale, hr_resize_x, hr_resiz
     else:
         pass
 
-    new_width = hr_resize_x - (hr_resize_x % 8) #   note: hardcoded latent size 8
-    new_height = hr_resize_y - (hr_resize_y % 8)
+    factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
+    new_width  = factor * ((hr_resize_x + (factor // 2)) // factor)
+    new_height = factor * ((hr_resize_y + (factor // 2)) // factor)
 
     return f"from <span class='resolution'>{width}×{height}</span> to <span class='resolution'>{new_width}×{new_height}</span>"
 
 
 def resize_from_to_html(width, height, scale_by):
-    target_width = int(float(width) * scale_by)
+    target_width  = int(float(width)  * scale_by)
     target_height = int(float(height) * scale_by)
 
     if not target_width or not target_height:
         return gr.Slider(info="(no image)")
 
-    target_width -= target_width % 8        #   note: hardcoded latent size 8
-    target_height -= target_height % 8
+    factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
+    target_width  = factor * ((target_width  + (factor // 2)) // factor)
+    target_height = factor * ((target_height + (factor // 2)) // factor)
 
     return gr.Slider(info=f"resize: from {width}×{height} to {target_width}×{target_height}")
 
@@ -272,8 +274,8 @@ def create_ui():
 
                                 with FormRow(elem_id="txt2img_hires_fix_row2", variant="compact"):
                                     hr_scale = gr.Slider(minimum=1.0, maximum=4.0, step=0.05, label="Upscale by", value=1.25, elem_id="txt2img_hr_scale")
-                                    hr_resize_x = gr.Slider(minimum=256, maximum=4096, step=8, label="Resize width to", value=0, elem_id="txt2img_hr_resize_x")
-                                    hr_resize_y = gr.Slider(minimum=256, maximum=4096, step=8, label="Resize height to", value=0, elem_id="txt2img_hr_resize_y")
+                                    hr_resize_x = gr.Slider(minimum=0, maximum=4096, step=8, label="Resize width to", value=0, elem_id="txt2img_hr_resize_x")
+                                    hr_resize_y = gr.Slider(minimum=0, maximum=4096, step=8, label="Resize height to", value=0, elem_id="txt2img_hr_resize_y")
 
                                 with FormRow(elem_id="txt2img_hires_fix_row_cfg", variant="compact"):
                                     hr_distilled_cfg = gr.Slider(minimum=0.0, maximum=30.0, step=0.1, label="HiRes Distilled CFG scale", value=3.5, elem_id="txt2img_hr_distilled_cfg")
@@ -855,4 +857,3 @@ def setup_ui_api(app):
 
     import fastapi.staticfiles
     app.mount("/webui-assets", fastapi.staticfiles.StaticFiles(directory=launch_utils.repo_dir('stable-diffusion-webui-assets')), name="webui-assets")
-

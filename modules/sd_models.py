@@ -282,6 +282,9 @@ class FakeInitialModel:
         r = len(prompt.strip('!,. ').replace(' ', ',').replace('.', ',').replace('!', ',').replace(',,', ',').replace(',,', ',').replace(',,', ',').replace(',,', ',').split(','))
         return r, math.ceil(max(r, 1) / self.chunk_length) * self.chunk_length
 
+    def is_webui_legacy_model(self):
+        return False
+
 
 class SdModelData:
     def __init__(self):

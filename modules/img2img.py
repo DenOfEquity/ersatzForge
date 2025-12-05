@@ -3,7 +3,6 @@ from contextlib import closing
 from pathlib import Path
 
 from PIL import Image, ImageOps, ImageFilter, UnidentifiedImageError
-import gradio as gr
 
 from modules import images, shared, scripts
 from modules.infotext_utils import create_override_settings_dict, parse_generation_parameters
@@ -63,8 +62,9 @@ def process_batch(p, input, output_dir, inpaint_mask_dir, args, to_scale=False, 
         img = ImageOps.exif_transpose(img)
 
         if to_scale:
-            p.width = int(img.width * scale_by)
-            p.height = int(img.height * scale_by)
+            factor = 8 if shared.sd_model.is_webui_legacy_model() else 16
+            p.width  = factor * ((int(img.width  * scale_by) + (factor // 2)) // factor)
+            p.height = factor * ((int(img.height * scale_by) + (factor // 2)) // factor)
 
         p.init_images = [img] * p.batch_size
 
@@ -205,9 +205,7 @@ def img2img_function(id_task: str, mode: int, prompt: str, negative_prompt: str,
         assert image, "Can't scale by because no image is selected"
 
         width = int(image.width * scale_by)
-        width -= width % 8
         height = int(image.height * scale_by)
-        height -= height % 8
 
     assert 0. <= denoising_strength <= 1., 'can only work with strength in [0.0, 1.0]'
 

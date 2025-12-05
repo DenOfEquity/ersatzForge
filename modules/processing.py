@@ -231,6 +231,11 @@ class StableDiffusionProcessing:
         # self.pixels_after_sampling = []
         self.modified_noise = None
 
+        # fix width and height
+        factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
+        self.width  = factor * ((self.width  + (factor // 2)) // factor)
+        self.height = factor * ((self.height + (factor // 2)) // factor)
+
     def fill_fields_from_opts(self):
         self.s_min_uncond = opts.s_min_uncond
         self.s_churn = opts.s_churn
@@ -1234,12 +1239,24 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 if src_ratio < dst_ratio:
                     self.hr_upscale_to_x = self.hr_resize_x
                     self.hr_upscale_to_y = self.hr_resize_x * self.height // self.width
+                    self.truncate_y = target_h
                 else:
                     self.hr_upscale_to_x = self.hr_resize_y * self.width // self.height
                     self.hr_upscale_to_y = self.hr_resize_y
+                    self.truncate_x = target_w
 
-                self.truncate_x = (self.hr_upscale_to_x - target_w) // opt_f
-                self.truncate_y = (self.hr_upscale_to_y - target_h) // opt_f
+        # fix width and height
+        factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
+        self.hr_upscale_to_x = factor * ((self.hr_upscale_to_x + (factor // 2)) // factor)
+        self.hr_upscale_to_y = factor * ((self.hr_upscale_to_y + (factor // 2)) // factor)
+        # finish truncate calculation
+        if self.truncate_x != 0:
+            crop = factor * ((self.truncate_x + (factor // 2)) // factor)
+            self.truncate_x = (self.hr_upscale_to_x - crop) // opt_f
+        if self.truncate_y != 0:
+            crop = factor * ((self.truncate_y + (factor // 2)) // factor)
+            self.truncate_y = (self.hr_upscale_to_y - crop) // opt_f
+
 
     def init(self, all_prompts, all_seeds, all_subseeds):
         if self.enable_hr:
@@ -1412,7 +1429,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 return
 
             if not isinstance(image, Image.Image):
-                image = sd_samplers.sample_to_image(image, index, approximation=0)
+                image = sd_samplers_common.sample_to_image(image, index, approximation=0)
 
             info = create_infotext(self, self.all_prompts, self.all_seeds, self.all_subseeds, [], iteration=self.iteration, position_in_batch=index)
             images.save_image(image, self.outpath_samples, "", seeds[index], prompts[index], opts.samples_format, info=info, p=self, suffix="-before-highres-fix")
@@ -1477,7 +1494,10 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         shared.state.nextjob()
 
-        samples = samples[:, :, self.truncate_y//2:samples.shape[2]-(self.truncate_y+1)//2, self.truncate_x//2:samples.shape[3]-(self.truncate_x+1)//2]
+        if self.truncate_x:
+            samples = samples[:, :, :, self.truncate_x//2:samples.shape[3]-(self.truncate_x+1)//2]
+        elif self.truncate_y:
+            samples = samples[:, :, self.truncate_y//2:samples.shape[2]-(self.truncate_y+1)//2, :]
 
         self.rng = rng.ImageRNG(samples.shape[1:], self.seeds, subseeds=self.subseeds, subseed_strength=self.subseed_strength, seed_resize_from_h=self.seed_resize_from_h, seed_resize_from_w=self.seed_resize_from_w)
         noise = self.rng.next()
