@@ -4,7 +4,6 @@ import backend.text_processing.textual_inversion as textual_inversion
 from modules.shared import cmd_opts
 from modules import ui_extra_networks, shared
 from modules.ui_extra_networks import quote_js
-import enum
 
 
 embedding_db = textual_inversion.EmbeddingDatabase(None)

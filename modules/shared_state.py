@@ -4,7 +4,7 @@ import threading
 import time
 import torch
 
-from modules import errors, shared, devices
+from modules import shared, devices
 from typing import Optional
 
 
