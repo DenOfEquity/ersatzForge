@@ -1,5 +1,5 @@
 a backup of my local (experimental, opinionated) changes to Forge2 webUI
-
+* broadly similiar package requirements to original Forge - no new Python, Numpy, etc. I'm using Torch 2.6 and CUDA 12.4 on a GTX1070.
 * auto selection of VAE and text encoders per model / UI setting
 * Chroma (based on https://github.com/croquelois/forgeChroma) and Chroma Radiance (based on https://github.com/maybleMyers/chromaforge)
 * extended Checkpoint Merger, including UI for nArn0's embedding convertor (based on https://github.com/nArn0/sdxl-embedding-converter)
@@ -17,8 +17,10 @@ a backup of my local (experimental, opinionated) changes to Forge2 webUI
 * PuLID (sdxl) (based on https://github.com/cubiq/PuLID_ComfyUI/)
 * nVidia Cosmos predict2 t2i (only tested 2B model)
 * Wan 2.2 14B (based on Haoming02's implementation in [ForgeNeo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo)) and 5B, 1 frame generation only
-* ELLA (https://github.com/TencentQQGYLab/ELLA), models downloaded automatically, enable in Settings
-* extra samplers: SA-Solver, ER-SDE, Adaptive-ODE (params in Settings), Fixed-ODE
+* ELLA (https://github.com/TencentQQGYLab/ELLA), models downloaded automatically for first use, enable in Settings
+* extra samplers: SA-Solver, ER-SDE, Adaptive-ODE (params in Settings), Fixed-ODE; and extra options/variants.
 * assorted extra functionality in built-in extensions, controlnet preprocessors
 * built-in latent manipulations such as Epsilon Scaling, CFG rescale, CFG normalization (see Settings)
 * dyPE high resolution generation for Flux (based on https://github.com/guyyariv/DyPE), works as far as I can test on my limited hardware
+* Lumina2
+* Z-Image-Turbo (1024x1024, fp8 model - 15s per iteration ⇒ 2:15 for 9 step generation on old laptop with 8GB VRAM GTX1070); including Union Control.
