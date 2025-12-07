@@ -7,7 +7,7 @@ from einops import rearrange
 
 from backend.attention import attention_function
 
-from backend.nn.flux import EmbedND
+from backend.nn.flux import EmbedND, FluxPosEmbed
 from backend.nn.mmditx import TimestepEmbedder
 
 from modules import shared
@@ -224,7 +224,14 @@ class Lumina2DiT(nn.Module):
         assert (dim // n_heads) == sum(axes_dims)
         self.axes_dims = axes_dims
         self.axes_lens = axes_lens
-        self.rope_embedder = EmbedND(theta=rope_theta, axes_dim=axes_dims)
+
+        if shared.opts.dynamicPE_lumina2 > 0:
+            self.rope_embedder = FluxPosEmbed(theta=rope_theta, axes_dim=axes_dims, base_resolution=shared.opts.dynamicPE_lumina2)
+            self.use_dynamicPE = True
+        else:
+            self.rope_embedder = EmbedND(theta=rope_theta, axes_dim=axes_dims)
+            self.use_dynamicPE = False
+
         self.dim = dim
         self.n_heads = n_heads
 
@@ -359,7 +366,7 @@ class Lumina2DiT(nn.Module):
 
         return x
 
-    def patchify_and_embed(self, x: torch.Tensor, context: torch.Tensor, control: torch.Tensor, t: torch.Tensor, num_tokens) -> tuple[torch.Tensor, torch.Tensor, list[tuple[int, int]], list[int], torch.Tensor]:
+    def patchify_and_embed(self, x: torch.Tensor, context: torch.Tensor, control: torch.Tensor, t: torch.Tensor, num_tokens, timestep=None) -> tuple[torch.Tensor, torch.Tensor, list[tuple[int, int]], list[int], torch.Tensor]:
         bsz = x.shape[0]
         pH = pW = self.patch_size
         device = x.device
@@ -376,7 +383,8 @@ class Lumina2DiT(nn.Module):
         H_tokens, W_tokens = H // pH, W // pW
         row_ids = torch.arange(H_tokens, dtype=torch.float32, device=device).view(-1, 1).repeat(1, W_tokens).flatten()
         col_ids = torch.arange(W_tokens, dtype=torch.float32, device=device).view(1, -1).repeat(H_tokens, 1).flatten()
-        position_ids = torch.zeros(bsz, x.shape[1], 3, dtype=torch.int32, device=device)
+
+        position_ids = torch.zeros(bsz, x.shape[1], 3, dtype=torch.float32, device=device)
         position_ids[:,:, 0] = num_tokens + 1
         position_ids[:,:, 1] = row_ids
         position_ids[:,:, 2] = col_ids
@@ -393,7 +401,20 @@ class Lumina2DiT(nn.Module):
                     control = torch.cat((control, pad), dim=1)
                 position_ids = torch.nn.functional.pad(position_ids, (0, 0, 0, pad_extra))
 
-        freqs_cis = self.rope_embedder(torch.cat((cap_pos_ids, position_ids), dim=1)).movedim(1, 2).to(dtype)
+        ids = torch.cat((cap_pos_ids, position_ids), dim=1)
+        if self.use_dynamicPE:
+            self.rope_embedder.set_timestep(timestep.item())
+            pes = []
+            for i in range(ids.shape[0]):
+                pe = self.rope_embedder(ids[i])
+
+                out = torch.stack([pe[0], -pe[1], pe[1], pe[0]], dim=-1).unsqueeze(0)
+                out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
+                pes.append(out.unsqueeze(1))
+            freqs_cis = torch.cat(pes, dim=0)
+        else:
+            freqs_cis = self.rope_embedder(ids)
+        freqs_cis = freqs_cis.movedim(1, 2).to(dtype)
 
         if control is not None:
             for layer in self.control_noise_refiner:
@@ -428,7 +449,7 @@ class Lumina2DiT(nn.Module):
                 control = None
             elif timesteps[0] < control_stop_sigma:
                 control = None
-            elif bs > 1:
+            if control is not None and bs > 1:
                 control = control.repeat(bs, 1, 1)
         else:
             control = None
@@ -451,7 +472,7 @@ class Lumina2DiT(nn.Module):
         # entire batch will have same length context because of calc_cond_uncond_batch
         # (it seems the Lumina processing originally handled different lengths, but I've simplified it out as that'll never happen in this webUI)
         num_tokens = context.shape[1] # doesn't account for padding, but none is used
-        x, control, freqs_cis = self.patchify_and_embed(x, context, control, adaln_input, num_tokens=num_tokens)
+        x, control, freqs_cis = self.patchify_and_embed(x, context, control, adaln_input, num_tokens=num_tokens, timestep=t)
         freqs_cis = freqs_cis.to(x.device)
 
 

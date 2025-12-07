@@ -25,7 +25,7 @@ def attention(q, k, v, pe):
     k = k.to(torch.float32).reshape(*_reshape)
     k = torch.add(torch.mul(pe[..., 0], k[..., 0]), torch.mul(pe[..., 1], k[..., 1]))
     k = k.reshape(*_shape).type_as(v)
-    
+
     x = attention_function(q, k, v, q.shape[1], skip_reshape=True)
     return x
 
@@ -226,7 +226,7 @@ def get_1d_rotary_pos_embed(
         freqs = freqs_linear * (1 - freqs_mask) + freqs_ntk * freqs_mask
 
         if dype:
-            gamma_0 = gamma_0 ** (2.0 * (current_timestep ** 2.0))
+            gamma_0 = gamma_0 ** (2.0 * (current_timestep ** 2.0)) # tweakable?
             gamma_1 = gamma_1 ** (2.0 * (current_timestep ** 2.0))
 
         low, high = find_correction_range(gamma_0, gamma_1, dim, theta, ori_max_pe_len)
@@ -571,8 +571,8 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_heads
 
-        if shared.opts.use_dynamicPE:
-            self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=shared.opts.dynamicPE_base)
+        if shared.opts.dynamicPE_flux > 0:
+            self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=shared.opts.dynamicPE_flux)
             self.use_dynamicPE = True
         else:
             self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
@@ -625,7 +625,7 @@ class IntegratedFluxTransformer2DModel(nn.Module):
 
         ids = torch.cat((txt_ids, img_ids), dim=1)
         del txt_ids, img_ids
-        
+
         if self.use_dynamicPE:
             self.pe_embedder.set_timestep(timestep.item())
             pes = []
