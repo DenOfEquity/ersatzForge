@@ -592,7 +592,7 @@ class DecodedSamples(list):
     already_decoded = True
 
 
-def decode_latent_batch(model, batch, target_device=None, check_for_nans=False):
+def decode_latent_batch(model, batch, target_device=None):
     samples = DecodedSamples()
     samples_pytorch = decode_first_stage(model, batch).to(target_device)
 
@@ -757,6 +757,11 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
             "Perlin octaves": opts.perlin_octaves,
             "Perlin persistence": opts.perlin_persist,
         })
+
+    if sd_models.model_data.sd_model.is_flux and opts.dynamicPE_flux > 0:
+        generation_params.update({ "dynamicPE flux": opts.dynamicPE_flux, })
+    if sd_models.model_data.sd_model.is_lumina2 and opts.dynamicPE_lumina2 > 0:
+        generation_params.update({ "dynamicPE lumina2": opts.dynamicPE_lumina2, })
 
     if opts.forge_unet_storage_dtype != 'Automatic':
         generation_params['Diffusion in Low Bits'] = opts.forge_unet_storage_dtype
@@ -1008,7 +1013,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
                 if opts.sd_vae_decode_method != 'Full':
                     p.extra_generation_params['VAE Decoder'] = opts.sd_vae_decode_method
-                x_samples_ddim = decode_latent_batch(p.sd_model, samples_ddim, target_device=devices.cpu, check_for_nans=True)
+                x_samples_ddim = decode_latent_batch(p.sd_model, samples_ddim, target_device=devices.cpu)
 
             x_samples_ddim = torch.stack(x_samples_ddim).to(torch.float32)
             x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
@@ -1380,7 +1385,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             devices.torch_gc()
 
             if self.latent_scale_mode is None:
-                decoded_samples = torch.stack(decode_latent_batch(self.sd_model, samples, target_device=devices.cpu, check_for_nans=True)).to(dtype=torch.float32)
+                decoded_samples = torch.stack(decode_latent_batch(self.sd_model, samples, target_device=devices.cpu)).to(dtype=torch.float32)
             else:
                 decoded_samples = None
 
@@ -1532,7 +1537,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         self.sampler = None
         devices.torch_gc()
 
-        decoded_samples = decode_latent_batch(self.sd_model, samples, target_device=devices.cpu, check_for_nans=True)
+        decoded_samples = decode_latent_batch(self.sd_model, samples, target_device=devices.cpu)
 
         self.is_hr_pass = False
         return decoded_samples

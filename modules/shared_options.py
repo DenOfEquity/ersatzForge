@@ -91,7 +91,6 @@ options_templates.update(options_section(('upscaling', "Upscaling", "postprocess
     "SWIN_tile_overlap": OptionInfo(8, "Tile overlap, in pixels for SwinIR. Low values = visible seam.", gr.Slider, {"minimum": 0, "maximum": 48, "step": 1}),
     "SWIN_torch_compile": OptionInfo(False, "Use torch.compile to accelerate SwinIR.").info("Takes longer on first run"),
 #can these tile size/overlap be shared?
-    "upscaler_for_img2img": OptionInfo(None, "Upscaler for img2img", gr.Dropdown, lambda: {"choices": [x.name for x in shared.sd_upscalers]}),
 }))
 
 options_templates.update(options_section(('face-restoration', "Face restoration", "postprocessing"), {
@@ -163,9 +162,16 @@ options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), 
     "sdxl_flow_shift": OptionInfo(3.0, "Flow Shift for SDXL flow match models. Relevant models are detected by name.", gr.Slider, {"minimum": 0.01, "maximum": 12.0, "step": 0.01}, infotext="SDXL Shift"),
 }))
 
-options_templates.update(options_section(('flux', "Flux", "sd"), {
-    "use_dynamicPE": OptionInfo(False, "Dynamic Position Extrapolation").info("allows generating at higher resolutions before repetitions / distortions / multi-images appear in the output. This Setting applies when the model is loaded. https://noamissachar.github.io/DyPE/"),
-    "dynamicPE_base": OptionInfo(1024, "Base resolution for dynamic PE", gr.Slider, {"minimum": 512, "maximum": 1536, "step": 64}).info("the resolution the model is trained at: 1024 would be reasonable for Flux; slightly higher (1280) seems effective too. This Setting applies when the model is loaded."),
+options_templates.update(options_section(('dyPE', "dynamicPE", "sd"), {
+    "dynamicPE_explanation": OptionHTML("""
+<strong>Dynamic Position Extrapolation for Ultra High Resolution Diffusion</strong> allows generating at higher resolutions before repetitions / distortions / multi-images appear in the output. <a href="https://noamissachar.github.io/DyPE/">official webpage</a>
+<br />
+<em>These Settings apply when the model is loaded.</em>
+<br />
+It's not magic, distortions are still possible.
+"""),
+    "dynamicPE_flux": OptionInfo(0, "Base resolution for dynamic PE for Flux", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="dynamicPE flux").info("1024 is reasonable for Flux; slightly higher (1280) seems effective too. This Setting applies when the model is loaded. 0: disabled"),
+    "dynamicPE_lumina2": OptionInfo(0, "Base resolution for dynamic PE for Lumina2 / Z-Image", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="dynamicPE lumina2").info("1408-1728 seems effective for Z-Image-Turbo. This Setting applies when the model is loaded. 0: disabled"),
 }))
 
 options_templates.update(options_section(('vae', "VAE", "sd"), {
@@ -182,6 +188,7 @@ For img2img, VAE is used to process user's input image before the sampling, and 
 }))
 
 options_templates.update(options_section(('img2img', "img2img", "sd"), {
+    "upscaler_for_img2img": OptionInfo(None, "Upscaler for img2img", gr.Dropdown, lambda: {"choices": [x.name for x in shared.sd_upscalers]}),
     "inpainting_mask_weight": OptionInfo(1.0, "Inpainting conditioning mask strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext='Conditional mask weight'),
     "initial_noise_multiplier": OptionInfo(1.0, "Noise multiplier for img2img", gr.Slider, {"minimum": 0.0, "maximum": 1.5, "step": 0.001}, infotext='Noise multiplier'),
     "img2img_extra_noise": OptionInfo(0.0, "Extra noise multiplier for img2img and hires fix", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext='Extra noise').info("0 = disabled (default); value will be clamped to <= 0.5 * denoising strength"),
@@ -273,7 +280,7 @@ options_templates.update(options_section(('ui', "User interface", "ui"), {
     "localization": OptionInfo("None", "Localization", gr.Dropdown, lambda: {"choices": ["None"] + list(localization.localizations.keys())}, refresh=lambda: localization.list_localizations(cmd_opts.localizations_dir)).needs_reload_ui(),
     "quick_setting_list": OptionInfo([], "Quicksettings list", ui_components.DropdownMulti, lambda: {"choices": list(shared.opts.data_labels.keys())}).js("info", "settingsHintsShowQuicksettings").info("setting entries that appear at the top of page rather than in settings tab").needs_reload_ui(),
     "ui_tab_order": OptionInfo([], "UI tab order", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)}).needs_reload_ui(),
-    "hidden_tabs": OptionInfo([], "Hidden UI tabs", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)}).needs_reload_ui(),
+    "hidden_tabs": OptionInfo([], "Hidden UI tabs", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)[2:]}).needs_reload_ui(),
     "tabs_without_quick_settings_bar": OptionInfo(["Spaces"], "UI tabs without Quicksettings bar (top row)", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)}),
     "ui_reorder_list": OptionInfo([], "UI item order for txt2img/img2img tabs", ui_components.DropdownMulti, lambda: {"choices": list(shared_items.ui_reorder_categories())}).info("selected items appear first").needs_reload_ui(),
     "gradio_theme": OptionInfo("Default", "Gradio theme", ui_components.DropdownEditable, lambda: {"choices": ["Default"] + shared_gradio_themes.gradio_hf_hub_themes}).info("you can also manually enter any of themes from the <a href='https://huggingface.co/spaces/gradio/theme-gallery'>gallery</a>.").needs_reload_ui(),
@@ -317,7 +324,7 @@ options_templates.update(options_section(('ui', "Live previews", "ui"), {
     "live_previews_image_format": OptionInfo("png", "Live preview file format", gr.Radio, {"choices": ["jpeg", "png", "webp"]}),
     "show_progress_grid": OptionInfo(True, "Show previews of all images generated in a batch as a grid"),
     "show_progress_every_n_steps": OptionInfo(10, "Live preview display period", gr.Slider, {"minimum": -1, "maximum": 32, "step": 1}).info("in sampling steps - show new live preview image every N sampling steps; -1 = only show after completion of batch; 0 = disable live previews"),
-    "show_progress_type": OptionInfo("Approx NN", "Live preview method", gr.Radio, {"choices": ["Approx NN", "Approx cheap", "TAESD"]}).info("Approx NN: fast preview; TAESD = high-quality preview; Approx cheap = fastest but low-quality preview"),
+    "show_progress_type": OptionInfo("Approx NN", "Live preview method", gr.Radio, {"choices": ["Approx NN", "Approx cheap", "TAESD"]}).info("Approx NN: fast preview; Approx cheap = fastest but low-quality preview; TAESD = high-quality preview"),
     "live_preview_refresh_period": OptionInfo(1000, "Progressbar and preview update period", gr.Number, {"minimum": 100, "maximum": 999999, "step": 1}).info("in milliseconds"),
     "js_live_preview_in_modal_lightbox": OptionInfo(False, "Show Live preview in full page image viewer"),
     "prevent_screen_sleep_during_generation": OptionInfo(True, "Prevent screen sleep during generation"),
