@@ -231,11 +231,6 @@ class StableDiffusionProcessing:
         # self.pixels_after_sampling = []
         self.modified_noise = None
 
-        # fix width and height
-        factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
-        self.width  = factor * ((self.width  + (factor // 2)) // factor)
-        self.height = factor * ((self.height + (factor // 2)) // factor)
-
     def fill_fields_from_opts(self):
         self.s_min_uncond = opts.s_min_uncond
         self.s_churn = opts.s_churn
@@ -814,6 +809,11 @@ def manage_model(p: StableDiffusionProcessing):
         opt_f = int(2 ** (len(shared.sd_model.forge_objects.vae.down_block_types) - 1))
     else:
         opt_f = 8
+
+    # fix width and height
+    factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
+    p.width  = factor * ((p.width  + (factor // 2)) // factor)
+    p.height = factor * ((p.height + (factor // 2)) // factor)
 
     if need_global_unload and not just_reloaded:
         memory_management.unload_all_models()
