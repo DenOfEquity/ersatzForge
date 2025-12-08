@@ -206,7 +206,7 @@ class ersatzOtherControl(scripts.Script):
         if selected_tab == 0 and (kontext_image1 is not None or kontext_image2 is not None) and params.sd_model.is_flux:
             imgs_data  = str(list(kontext_image1.getdata(band=None))) if kontext_image1 is not None else ""
             imgs_data += str(list(kontext_image2.getdata(band=None))) if kontext_image2 is not None else ""
-            kontext_image_hash = hash(imgs_data.encode("utf-8"))
+            kontext_image_hash = hash(imgs_data)
             kontext_latent_size = (w, h)
 
             if kontext_image_hash == self.kontext_image_hash and kontext_latent_size == self.kontext_latent_size and self.kontext_resize == (kontext_sizing, kontext_reduce):
@@ -296,7 +296,7 @@ class ersatzOtherControl(scripts.Script):
 
                         k_ids.append(repeat(k_id, "h w c -> b (h w) c", b=1)) # moved batch into patched_flux_forward
 
-                ersatzOtherControl.kontext_latent = torch.cat(k_latents, dim=1).to(device=input_device, dtype=input_dtype)
+                ersatzOtherControl.kontext_latent = torch.cat(k_latents, dim=1).contiguous().to(device=input_device, dtype=input_dtype)
                 ersatzOtherControl.kontext_ids = torch.cat(k_ids, dim=1).to(device=input_device, dtype=input_dtype)
 
                 del k_latent, k_id
@@ -313,7 +313,7 @@ class ersatzOtherControl(scripts.Script):
             # def calc_extra_mem(latent):
                 # return latent.shape[0] * latent.shape[1] * latent.shape[2] * latent.element_size() * 1024
 
-            zitc_image_hash = hash(str(list(zitc_image.getdata(band=None))).encode("utf-8"))
+            zitc_image_hash = hash(str(list(zitc_image.getdata(band=None))))
             zitc_latent_size = (w, h)
 
             if zitc_image_hash == self.zitc_image_hash and zitc_latent_size == self.zitc_latent_size:
@@ -353,9 +353,8 @@ class ersatzOtherControl(scripts.Script):
                 z_latent = torch.nn.functional.pad(z_latent, (0, pad_w, 0, pad_h), mode="circular")
 
                 z_latent = rearrange(z_latent, 'b c (h ph) (w pw) -> b (h w) (ph pw c)', ph=2, pw=2)
-                z_latent = z_latent.to(input_device, input_dtype)
 
-                shared.ZITlatent = z_latent
+                shared.ZITlatent = z_latent.contiguous().to(input_device, input_dtype)
                 shared.ZITstrength = zitc_strength
                 shared.ZITstop = zitc_stop
 
