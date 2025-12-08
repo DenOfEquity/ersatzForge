@@ -309,10 +309,11 @@ def sampling_function_inner(model, x, timestep, uncond, cond, cond_scale, model_
         cfg_result = uncond_pred + (cond_pred - uncond_pred) * cond_scale
 
     if opts.cfg_normalization > 0.0 and cond_scale > 1.0:
-        cond_norm = torch.norm(cond_pred, dim=-1, keepdim=True)
-        cfg_norm = torch.norm(cfg_result, dim=-1, keepdim=True)
-        x_rescaled = cfg_result * (cond_norm / cfg_norm)
-        cfg_result = torch.lerp (cfg_result, x_rescaled, opts.cfg_normalization)
+        for i in range(len(cond_pred)):
+            cond_norm = torch.norm(cond_pred[i], dim=-1, keepdim=True)
+            cfg_norm = torch.norm(cfg_result[i], dim=-1, keepdim=True)
+            x_rescaled = cfg_result[i] * (cond_norm / cfg_norm)
+            cfg_result[i] = torch.lerp(cfg_result[i], x_rescaled, opts.cfg_normalization)
 
     if opts.cfg_rescale > 0.0 and cond_scale > 1.0:
         cond_std = torch.std(cond_pred, dim=(1,2,3), keepdim=True)
