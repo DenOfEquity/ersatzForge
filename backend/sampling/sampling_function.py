@@ -295,7 +295,7 @@ def sampling_function_inner(model, x, timestep, uncond, cond, cond_scale, model_
             t_0 = opts.sigma_max or model.predictor.sigmas[-1]
         else:
             t_0 = model.predictor.sigmas[-1]
-        scale = 1.0 - (1.0 - opts.prediction_scaling) * ((timestep / t_0) ** 0.5)
+        scale = 1.0 - (1.0 - opts.prediction_scaling) * ((timestep[0] / t_0) ** 0.5)
         cond_pred *= scale  
         uncond_pred *= scale  
 
@@ -327,7 +327,7 @@ def sampling_function_inner(model, x, timestep, uncond, cond, cond_scale, model_
                 t_0 = opts.sigma_max or model.predictor.sigmas[-1]
             else:
                 t_0 = model.predictor.sigmas[-1]
-            scale = 1.0 - (1.0 - opts.epsilon_scaling) * ((timestep / t_0) ** 0.5)
+            scale = 1.0 - (1.0 - opts.epsilon_scaling) * ((timestep[0] / t_0) ** 0.5)
             diff /= scale        
         else:
             diff /= opts.epsilon_scaling
