@@ -658,16 +658,22 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
         if short_filename or seed is None:
             file_decoration = ""
         elif hasattr(p, 'override_settings'):
-            file_decoration = p.override_settings.get("samples_filename_pattern")
+            if grid:
+                file_decoration = p.override_settings.get("grid_filename_pattern")
+            else:
+                file_decoration = p.override_settings.get("samples_filename_pattern")
         else:
             file_decoration = None
 
         if file_decoration is None:
-            file_decoration = opts.samples_filename_pattern or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
+            if grid:
+                file_decoration = opts.grid_filename_pattern or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
+            else:
+                file_decoration = opts.samples_filename_pattern or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
 
         file_decoration = namegen.apply(file_decoration) + suffix
 
-        add_number = opts.save_images_add_number or file_decoration == ''
+        add_number = opts.save_images_add_number or file_decoration == ""
 
         if file_decoration != "" and add_number:
             file_decoration = f"-{file_decoration}"
@@ -706,12 +712,14 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
 
         filename = filename_without_extension + extension
         without_extension = filename_without_extension
-        if shared.opts.save_images_replace_action != "Replace":
-            n = 0
-            while os.path.exists(filename):
-                n += 1
-                without_extension = f"{filename_without_extension}-{n}"
-                filename = without_extension + extension
+
+        # add number suffix if file already exists
+        n = 0
+        while os.path.exists(filename):
+            n += 1
+            without_extension = f"{filename_without_extension}-{n}"
+            filename = without_extension + extension
+
         os.replace(temp_file_path, filename)
         return without_extension
 
