@@ -642,14 +642,14 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
 
     # WebP and JPG formats have maximum dimension limits of 16383 and 65535 respectively. switch to PNG which has a much higher limit
     if (image.height > 65535 or image.width > 65535) and extension.lower() in ("jpg", "jpeg") or (image.height > 16383 or image.width > 16383) and extension.lower() == "webp":
-        print('Image dimensions too large; saving as PNG')
+        print("Image dimensions too large; saving as PNG")
         extension = "png"
 
     if save_to_dirs is None:
         save_to_dirs = (grid and opts.grid_save_to_dirs) or (not grid and opts.save_to_dirs and not no_prompt)
 
     if save_to_dirs:
-        dirname = namegen.apply(opts.directories_filename_pattern or "[prompt_words]").lstrip(' ').rstrip('\\ /')
+        dirname = namegen.apply(opts.directories_filename_pattern or "[prompt_words]").lstrip(" ").rstrip("\\ /")
         path = os.path.join(path, dirname)
 
     os.makedirs(path, exist_ok=True)
@@ -657,7 +657,7 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
     if forced_filename is None:
         if short_filename or seed is None:
             file_decoration = ""
-        elif hasattr(p, 'override_settings'):
+        elif hasattr(p, "override_settings"):
             if grid:
                 file_decoration = p.override_settings.get("grid_filename_pattern")
             else:
@@ -667,27 +667,16 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
 
         if file_decoration is None:
             if grid:
-                file_decoration = opts.grid_filename_pattern or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
+                file_decoration = opts.grid_filename_pattern or basename or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
             else:
-                file_decoration = opts.samples_filename_pattern or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
+                file_decoration = opts.samples_filename_pattern or basename or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
 
-        file_decoration = namegen.apply(file_decoration) + suffix
-
-        add_number = opts.save_images_add_number or file_decoration == ""
-
-        if file_decoration != "" and add_number:
-            file_decoration = f"-{file_decoration}"
-
-        if add_number:
-            basecount = get_next_sequence_number(path, basename)
-            fullfn = None
-            for i in range(500):
-                fn = f"{basecount + i:05}" if basename == '' else f"{basename}-{basecount + i:04}"
-                fullfn = os.path.join(path, f"{fn}{file_decoration}.{extension}")
-                if not os.path.exists(fullfn):
-                    break
+        initial_filename = namegen.apply(file_decoration)
+        if initial_filename == file_decoration:
+            basecount = get_next_sequence_number(path, initial_filename)
+            fullfn = os.path.join(path, f"{initial_filename}-{basecount:05}{suffix}.{extension}")
         else:
-            fullfn = os.path.join(path, f"{file_decoration}.{extension}")
+            fullfn = os.path.join(path, f"{initial_filename}{suffix}.{extension}")
     else:
         fullfn = os.path.join(path, f"{forced_filename}.{extension}")
 
@@ -724,7 +713,7 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
         return without_extension
 
     fullfn_without_extension, extension = os.path.splitext(params.filename)
-    if hasattr(os, 'statvfs'):
+    if hasattr(os, "statvfs"):
         max_name_len = os.statvfs(path).f_namemax
         fullfn_without_extension = fullfn_without_extension[:max_name_len - max(4, len(extension))]
         params.filename = fullfn_without_extension + extension

@@ -463,7 +463,7 @@ def create_ui():
                             img2img_selected_tab = gr.State(value=0)
 
                             with gr.TabItem('img2img', id='img2img', elem_id="img2img_img2img_tab") as tab_img2img:
-                                init_img = ForgeCanvas(elem_id="img2img_image", height=512, scribble_color=opts.img2img_inpaint_sketch_default_brush_color)
+                                init_img = ForgeCanvas(elem_id="img2img_image", height=512, scribble_color="#ffffff")
                                 i2i_method = gr.Radio(choices=['img2img', 'sketch', 'inpaint', 'inpaint+', 'lama (no save)', 'MAT (no save)'], value='img2img', show_label=False)
 
                             with gr.TabItem('Inpaint upload', id='inpaint_upload', elem_id="img2img_inpaint_upload_tab") as tab_inpaint_upload:
