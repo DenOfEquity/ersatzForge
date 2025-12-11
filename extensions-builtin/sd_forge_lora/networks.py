@@ -84,28 +84,26 @@ def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=No
         list_available_networks()
         networks_on_disk = [available_networks.get(name, None) if name.lower() in forbidden_network_aliases else available_network_aliases.get(name, None) for name in names]
 
-    for _i, (network_on_disk, name) in enumerate(zip(networks_on_disk, names)):
-        if network_on_disk is None:
-            print (f"[LoRA] Not found: {name}")
-            loaded_networks.append(None)
+    for i in range(len(names)):
+        if networks_on_disk[i] is None:
+            print (f"[LoRA] Not found: {names[i]}")
             continue
         try:
-            net = load_network(name, network_on_disk)
-            net.mentioned_name = name
-            network_on_disk.read_hash()
+            net = load_network(names[i], networks_on_disk[i])
+            net.mentioned_name = names[i]
+            networks_on_disk[i].read_hash()
             loaded_networks.append(net)
         except Exception as e:
             print (f"[LoRA] {e}")
-            loaded_networks.append(None)
-            continue
+            networks_on_disk[i] = None
 
     online_mode = dynamic_args.get("online_lora", False)
     if current_sd.forge_objects.unet.model.storage_dtype in [torch.float32, torch.float16, torch.bfloat16]:
         online_mode = False
 
     compiled_lora_targets = []
-    for ln, a, b, c in zip(loaded_networks, networks_on_disk, unet_multipliers, te_multipliers):
-        if ln is not None:
+    for a, b, c in zip(networks_on_disk, unet_multipliers, te_multipliers):
+        if a is not None:
             compiled_lora_targets.append([a.filename, b, c, online_mode])
 
     compiled_lora_targets_hash = str(compiled_lora_targets)
