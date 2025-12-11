@@ -45,7 +45,7 @@ class ExtraNetworkLora(extra_networks.ExtraNetwork):
                 p.lora_hashes = {}
 
             for item in networks.loaded_networks:
-                if item.network_on_disk.shorthash and item.mentioned_name:
+                if item is not None and item.network_on_disk.shorthash and item.mentioned_name:
                     p.lora_hashes[item.mentioned_name.translate(self.remove_symbols)] = item.network_on_disk.shorthash
 
             if p.lora_hashes:

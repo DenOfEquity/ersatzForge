@@ -8,8 +8,9 @@ from ui_edit_user_metadata import LoraUserMetadataEditor
 
 class ExtraNetworksPageLora(ui_extra_networks.ExtraNetworksPage):
     def __init__(self):
-        super().__init__('Lora')
+        super().__init__("LoRA")
         self.allow_prompt = True
+        self.allow_negative_prompt = True
 
     def refresh(self):
         networks.list_available_networks()

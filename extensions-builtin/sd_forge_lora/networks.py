@@ -23,7 +23,7 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
 
     if len(lora_unmatch) > 12:
         # print (lora_unmatch.keys())
-        print(f'[LORA] apparent version mismatch ({len(lora_unmatch)} keys) for {model_flag}: {filename}')
+        print(f"[LORA] apparent version mismatch ({len(lora_unmatch)} keys) for {model_flag}: {filename}")
 
     del lora, lora_unmatch
 
@@ -34,18 +34,18 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
         loaded_keys = new_model.add_patches(filename=filename, patches=lora_unet, strength_patch=strength_model, online_mode=online_mode)
         skipped_keys = [item for item in lora_unet if item not in loaded_keys]
         if len(skipped_keys) > 12:
-            print(f'[LORA] Mismatch {filename} for {model_flag}-UNet with {len(skipped_keys)} keys mismatched in {len(loaded_keys)} keys')
+            print(f"[LORA] Mismatch {filename} for {model_flag}-UNet with {len(skipped_keys)} keys mismatched in {len(loaded_keys)} keys")
         else:
-            print(f'[LORA] Loaded {filename} for {model_flag}-UNet with {len(loaded_keys)} keys at weight {strength_model} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}')
+            print(f"[LORA] Loaded {filename} for {model_flag}-UNet with {len(loaded_keys)} keys at weight {strength_model} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
             model = new_model
 
     if new_clip is not None and len(lora_clip) > 0:
         loaded_keys = new_clip.add_patches(filename=filename, patches=lora_clip, strength_patch=strength_clip, online_mode=online_mode)
         skipped_keys = [item for item in lora_clip if item not in loaded_keys]
         if len(skipped_keys) > 12:
-            print(f'[LORA] Mismatch {filename} for {model_flag}-CLIP with {len(skipped_keys)} keys mismatched in {len(loaded_keys)} keys')
+            print(f"[LORA] Mismatch {filename} for {model_flag}-CLIP with {len(skipped_keys)} keys mismatched in {len(loaded_keys)} keys")
         else:
-            print(f'[LORA] Loaded {filename} for {model_flag}-CLIP with {len(loaded_keys)} keys at weight {strength_clip} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}')
+            print(f"[LORA] Loaded {filename} for {model_flag}-CLIP with {len(loaded_keys)} keys at weight {strength_clip} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
             clip = new_clip
 
     return model, clip
@@ -85,23 +85,28 @@ def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=No
         networks_on_disk = [available_networks.get(name, None) if name.lower() in forbidden_network_aliases else available_network_aliases.get(name, None) for name in names]
 
     for _i, (network_on_disk, name) in enumerate(zip(networks_on_disk, names)):
+        if network_on_disk is None:
+            print (f"[LoRA] Not found: {name}")
+            loaded_networks.append(None)
+            continue
         try:
             net = load_network(name, network_on_disk)
+            net.mentioned_name = name
+            network_on_disk.read_hash()
+            loaded_networks.append(net)
         except Exception as e:
-            errors.display(e, f"loading network {network_on_disk.filename}")
+            print (f"[LoRA] {e}")
+            loaded_networks.append(None)
             continue
-        net.mentioned_name = name
-        network_on_disk.read_hash()
-        loaded_networks.append(net)
 
-    online_mode = dynamic_args.get('online_lora', False)
-
+    online_mode = dynamic_args.get("online_lora", False)
     if current_sd.forge_objects.unet.model.storage_dtype in [torch.float32, torch.float16, torch.bfloat16]:
         online_mode = False
 
     compiled_lora_targets = []
-    for a, b, c in zip(networks_on_disk, unet_multipliers, te_multipliers):
-        compiled_lora_targets.append([a.filename, b, c, online_mode])
+    for ln, a, b, c in zip(loaded_networks, networks_on_disk, unet_multipliers, te_multipliers):
+        if ln is not None:
+            compiled_lora_targets.append([a.filename, b, c, online_mode])
 
     compiled_lora_targets_hash = str(compiled_lora_targets)
 
