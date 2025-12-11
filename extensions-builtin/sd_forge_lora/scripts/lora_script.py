@@ -5,7 +5,6 @@ from fastapi import FastAPI
 
 import network
 import networks
-import lora  # noqa:F401
 import extra_networks_lora
 import ui_extra_networks_lora
 from modules import script_callbacks, ui_extra_networks, extra_networks, shared
@@ -22,9 +21,9 @@ script_callbacks.on_before_ui(before_ui)
 script_callbacks.on_infotext_pasted(networks.infotext_pasted)
 
 shared.options_templates.update(shared.options_section(('extra_networks', "Extra Networks"), {
-    "lora_preferred_name": shared.OptionInfo("Alias from file", "When adding to prompt, refer to Lora by", gr.Radio, {"choices": ["Alias from file", "Filename"]}),
-    "lora_add_hashes_to_infotext": shared.OptionInfo(True, "Add Lora hashes to infotext"),
-    "lora_filter_disabled": shared.OptionInfo(True, "Always show all networks on the Lora page").info("otherwise, those detected as for incompatible version of Stable Diffusion will be hidden"),
+    "lora_preferred_name": shared.OptionInfo("Alias from file", "When adding to prompt, refer to LoRA by", gr.Radio, {"choices": ["Alias from file", "Filename"]}),
+    "lora_add_hashes_to_infotext": shared.OptionInfo(True, "Add LoRA hashes to infotext"),
+    "lora_filter_disabled": shared.OptionInfo(True, "Always show all networks on the LoRA tab").info("otherwise, filter based on current UI preset (networks for unknown models are always shown"),
 }))
 
 
