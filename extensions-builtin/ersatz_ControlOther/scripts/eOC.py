@@ -124,7 +124,6 @@ class ersatzOtherControl(scripts.Script):
 
                         k_image1.change(fn=get_dims, inputs=k_image1, outputs=[k_image1_info, k_image1_send, k_image1_dims], show_progress="hidden")
                         k_image2.change(fn=get_dims, inputs=k_image2, outputs=[k_image2_info, k_image2_send, k_image2_dims], show_progress="hidden")
-
                         k_image1_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, k_image1_dims], outputs=None)
                         k_image2_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, k_image2_dims], outputs=None)
 
@@ -150,7 +149,6 @@ class ersatzOtherControl(scripts.Script):
                                 z_image1_dims = gradio.Textbox(visible=False, value="0")
 
                         z_image1.change(fn=get_dims, inputs=z_image1, outputs=[z_image1_info, z_image1_send, z_image1_dims], show_progress="hidden")
-
                         z_image1_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z_image1_dims], outputs=None)
 
 
@@ -178,7 +176,7 @@ class ersatzOtherControl(scripts.Script):
                     kontext_sizing = kontext_sizing,
                     kontext_reduce = kontext_reduce,
                 ))
-            if selected_tab == 1 and zitc_image is not None and zitc_strength > 0.0 and zitc_stop > 0.0 and params.sd_model.is_lumina2:
+            if selected_tab == 1 and zitc_image is not None and zitc_strength > 0.0 and zitc_stop < 1.0 and params.sd_model.is_lumina2:
                 if getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
                     params.extra_generation_params.update(dict(
                         eOC_enabled  = enabled,
@@ -211,7 +209,6 @@ class ersatzOtherControl(scripts.Script):
 
             if kontext_image_hash == self.kontext_image_hash and kontext_latent_size == self.kontext_latent_size and self.kontext_resize == (kontext_sizing, kontext_reduce):
                 print ("[Kontext] used cache")
-                # tune this? *1.65 ?
             else:
                 self.kontext_image_hash = kontext_image_hash
                 self.kontext_latent_size = kontext_latent_size
@@ -308,7 +305,7 @@ class ersatzOtherControl(scripts.Script):
             params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
 
-        if selected_tab == 1 and zitc_image is not None and zitc_strength > 0.0 and zitc_stop > 0.0 and params.sd_model.is_lumina2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
+        if selected_tab == 1 and zitc_image is not None and zitc_strength > 0.0 and zitc_stop < 1.0 and params.sd_model.is_lumina2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
 
             # def calc_extra_mem(latent):
                 # return latent.shape[0] * latent.shape[1] * latent.shape[2] * latent.element_size() * 1024
@@ -379,3 +376,4 @@ class ersatzOtherControl(scripts.Script):
                 # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
 
         return
+
