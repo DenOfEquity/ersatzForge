@@ -9,6 +9,7 @@ from modules.ui_components import InputAccordion, ToolButton
 from modules.sd_samplers_common import images_tensor_to_samples
 from backend.misc.image_resize import adaptive_resize
 from backend.nn.flux import IntegratedFluxTransformer2DModel
+from modules_forge.forge_canvas.canvas import ForgeCanvas
 
 
 def patched_flux_forward(self, x, timestep, context, y, guidance=None, **kwargs):
@@ -151,9 +152,26 @@ class ersatzOtherControl(scripts.Script):
                         z_image1.change(fn=get_dims, inputs=z_image1, outputs=[z_image1_info, z_image1_send, z_image1_dims], show_progress="hidden")
                         z_image1_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z_image1_dims], outputs=None)
 
+                with gradio.Tab("Z-Image-Turbo Control v2") as zitc2:
+                    gradio.Markdown("Select the control model in the **Additional modules** menu. Include pre-processed reference image here. v2 needs more Steps.")
+                    with gradio.Row():
+                        z2_image1 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
+                        z2_inpaint = ForgeCanvas(height=264, contrast_scribbles=shared.opts.img2img_inpaint_mask_high_contrast, scribble_color=shared.opts.img2img_inpaint_mask_brush_color, scribble_color_fixed=True, scribble_alpha=75, scribble_alpha_fixed=True, scribble_softness_fixed=True)
+
+                    with gradio.Row():
+                        zitc2_str = gradio.Slider(value=0.8, minimum=0.0, maximum=2.0, step=0.01, label="strength")
+                        zitc2_stop = gradio.Slider(value=0.75, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
+                        z2_image1_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
+                        z2_image1_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                        z2_image1_dims = gradio.Textbox(visible=False, value="0")
+
+                    z2_image1.change(fn=get_dims, inputs=z2_image1, outputs=[z2_image1_info, z2_image1_send, z2_image1_dims], show_progress="hidden")
+                    z2_image1_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z2_image1_dims], outputs=None)
+
 
             fkon.select(fn=lambda: 0, inputs=None, outputs=selected_tab, show_progress="hidden")
             zitc.select(fn=lambda: 1, inputs=None, outputs=selected_tab, show_progress="hidden")
+            zitc2.select(fn=lambda: 2, inputs=None, outputs=selected_tab, show_progress="hidden")
 
 
         self.infotext_fields = [
@@ -162,13 +180,15 @@ class ersatzOtherControl(scripts.Script):
             (zitc_stop, "zitc_stop"),
             (kontext_sizing, "kontext_sizing"),
             (kontext_reduce, "kontext_reduce"),
+            (zitc2_str,  "zitc2_strength"),
+            (zitc2_stop, "zitc2_stop"),
         ]
 
-        return enabled, selected_tab, z_image1, zitc_str, zitc_stop, k_image1, k_image2, kontext_sizing, kontext_reduce
+        return enabled, selected_tab, z_image1, zitc_str, zitc_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, z2_image1, z2_inpaint.background, z2_inpaint.foreground, zitc2_str, zitc2_stop
 
 
     def process(self, params, *script_args, **kwargs):
-        enabled, selected_tab, zitc_image, zitc_strength, zitc_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce = script_args
+        enabled, selected_tab, zitc_image, zitc_strength, zitc_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce, z2_image, z2_inpaint, z2_mask, zitc2_strength, zitc2_stop = script_args
         if enabled:
             if selected_tab == 0 and (kontext_image1 is not None or kontext_image2 is not None) and params.sd_model.is_flux:
                 params.extra_generation_params.update(dict(
@@ -185,10 +205,19 @@ class ersatzOtherControl(scripts.Script):
                     ))
                 else:
                     print ("[Z-Image-Turbo Control] Control model not loaded.")
+            if selected_tab == 2 and (z2_image is not None or z2_inpaint is not None) and zitc2_strength > 0.0 and zitc_stop < 1.0 and params.sd_model.is_lumina2:
+                if getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
+                    params.extra_generation_params.update(dict(
+                        eOC_enabled  = enabled,
+                        zitc2_strength = zitc2_strength,
+                        zitc2_stop     = zitc2_stop,
+                    ))
+                else:
+                    print ("[Z-Image-Turbo Control v2] Control model not loaded.")
 
 
     def process_before_every_sampling(self, params, *script_args, **kwargs):
-        enabled, selected_tab, zitc_image, zitc_strength, zitc_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce = script_args
+        enabled, selected_tab, zitc_image, zitc_strength, zitc_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce, z2_image, z2_inpaint, z2_mask, zitc2_strength, zitc2_stop = script_args
 
         if not enabled:
             return
@@ -200,6 +229,35 @@ class ersatzOtherControl(scripts.Script):
         n, c, h, w = x.size()
         input_device = x.device
         input_dtype = x.dtype
+
+        def pil_to_latent(image, width, height, pad, mode_text, mask=None):
+            if isinstance (image, str):
+                image = decode_base64_to_image(image).convert('RGB')
+            image = numpy.array(image.convert('RGB')) / 255.0
+            image = numpy.transpose(image, (2, 0, 1))
+            image = torch.tensor(image).unsqueeze(0)
+
+            if image.shape[3] != width or image.shape[2] != height:
+                print (f"[{mode_text}] resizing and center-cropping input to: ", width, height)
+                image = adaptive_resize(image, width, height, "lanczos", "center")
+            else:
+                print (f"[{mode_text}] no image resize needed")
+
+            if mask is not None:
+                # noise = torch.randn_like(image).abs()
+                # noise /= noise.max()
+                # image = image * mask.to(image) + noise * (1.0 - mask.to(image))
+                image *= mask.to(image)
+
+            latent = images_tensor_to_samples(image, None, None)
+
+            if pad > 1:
+                pad_h = latent.shape[2] % pad
+                pad_w = latent.shape[3] % pad
+                latent = torch.nn.functional.pad(latent, (0, pad_w, 0, pad_h), mode="circular")
+
+            return latent
+
 
         if selected_tab == 0 and (kontext_image1 is not None or kontext_image2 is not None) and params.sd_model.is_flux:
             imgs_data  = str(list(kontext_image1.getdata(band=None))) if kontext_image1 is not None else ""
@@ -221,28 +279,20 @@ class ersatzOtherControl(scripts.Script):
 
                 for image in [kontext_image1, kontext_image2]:
                     if image is not None:
-                        if isinstance (image, str):
-                            k_image = decode_base64_to_image(image).convert('RGB')
-                        else:
-                            k_image = image.convert('RGB')
-                        k_image = numpy.array(k_image) / 255.0
-                        k_image = numpy.transpose(k_image, (2, 0, 1))
-                        k_image = torch.tensor(k_image).unsqueeze(0)
-
                         # it seems that the img_id is always 1 for the context images
 
                         # resize and combine here instead of in the forward function
                         # only go through the resize process if image is not already desired size
                         match kontext_sizing:
                             case "no change":
-                                k_width = k_image.shape[3]
-                                k_height = k_image.shape[2]
+                                k_width = image.size[0]
+                                k_height = image.size[1]
                             case "to output":
                                 k_width = w * 8
                                 k_height = h * 8
                             case "to BFL recommended":  # this snippet from ComfyUI
-                                k_width = k_image.shape[3]
-                                k_height = k_image.shape[2]
+                                k_width = image.size[0]
+                                k_height = image.size[1]
                                 aspect_ratio = k_width / k_height
                                 _, k_width, k_height = min((abs(aspect_ratio - w / h), w, h) for w, h in PREFERRED_KONTEXT_RESOLUTIONS)
 
@@ -250,21 +300,7 @@ class ersatzOtherControl(scripts.Script):
                             k_width //= 2
                             k_height //= 2
 
-                        if k_image.shape[3] != k_width or k_image.shape[2] != k_height:
-                            print ("[Kontext] resizing and center-cropping input to: ", k_width, k_height)
-                            k_image = adaptive_resize(k_image, k_width, k_height, "lanczos", "center")
-                        else:
-                            print ("[Kontext] no image resize needed")
-
-                        # VAE encode each input image - combined image could be large
-                        k_latent = images_tensor_to_samples(k_image, None, None)
-
-                        # pad if needed - latent width and height must be multiple of 2
-                        # could just adjust the resize to be *16, but the padding might be better for images that need only one extra row/col
-                        patch_size = 2
-                        pad_h = k_latent.shape[2] % patch_size
-                        pad_w = k_latent.shape[3] % patch_size
-                        k_latent = torch.nn.functional.pad(k_latent, (0, pad_w, 0, pad_h), mode="circular")
+                        k_latent = pil_to_latent(image, k_width, k_height, 2, "Kontext")
 
                         k_latents.append(rearrange(k_latent, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch_size, pw=patch_size))
                         # imgs are combined in rearranged dimension 1 - so width/height can be independant of main latent and other inputs
@@ -322,32 +358,7 @@ class ersatzOtherControl(scripts.Script):
                 self.zitc_image_hash = zitc_image_hash
                 self.zitc_latent_size = zitc_latent_size
 
-                if isinstance (zitc_image, str):
-                    z_image = decode_base64_to_image(zitc_image).convert("RGB")
-                else:
-                    z_image = zitc_image.convert("RGB")
-
-                z_image = numpy.array(z_image) / 255.0
-                z_image = numpy.transpose(z_image, (2, 0, 1))
-                z_image = torch.tensor(z_image).unsqueeze(0)
-
-                # only go through the resize process if image is not already desired size
-                z_width = w * 8
-                z_height = h * 8
-
-                if z_image.shape[3] != z_width or z_image.shape[2] != z_height:
-                    print ("[Z-Image-Turbo Control] resizing and center-cropping input to: ", z_width, z_height)
-                    z_image = adaptive_resize(z_image, z_width, z_height, "lanczos", "center")
-                else:
-                    print ("[Z-Image-Turbo Control] no image resize needed")
-
-                z_latent = images_tensor_to_samples(z_image, None, None)
-
-                # pad if needed - latent width and height must be multiple of 2
-                patch_size = 2
-                pad_h = z_latent.shape[2] % patch_size
-                pad_w = z_latent.shape[3] % patch_size
-                z_latent = torch.nn.functional.pad(z_latent, (0, pad_w, 0, pad_h), mode="circular")
+                z_latent = pil_to_latent(zitc_image, w*8, h*8, 2, "Z-Image-Turbo Control")
 
                 z_latent = rearrange(z_latent, 'b c (h ph) (w pw) -> b (h w) (ph pw c)', ph=2, pw=2)
 
@@ -355,10 +366,42 @@ class ersatzOtherControl(scripts.Script):
                 shared.ZITstrength = zitc_strength
                 shared.ZITstop = zitc_stop
 
-                # extra_mem = calc_extra_mem(k_latent)
 
-            # print ("[Z-Image-Turbo Control] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
-            # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
+        if selected_tab == 2 and (z2_image is not None or z2_inpaint is not None) and params.sd_model.is_lumina2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
+            if z2_inpaint is not None and z2_mask is not None:
+                if isinstance (z2_mask, str):
+                    z2_mask = decode_base64_to_image(z2_mask)
+
+                mask = z2_mask.getchannel("A").convert("L").resize((w*8, h*8))
+                mask_A = mask.resize((w, h)).point(lambda v: 0 if v > 128 else 1)
+                mask_A = numpy.array(mask_A)
+                mask_A = torch.tensor(mask_A).unsqueeze(0).unsqueeze(0)
+                z_mask = mask_A
+
+                mask_I = mask.point(lambda v: 0 if v > 128 else 1)
+                mask_I = numpy.array(mask_I)
+                mask_I = torch.tensor(mask_I).unsqueeze(0).unsqueeze(0)
+
+                z_inpaint = pil_to_latent(z2_inpaint, w*8, h*8, 2, "Z-Image-Turbo Control v2")#, mask=mask_I)
+            else:
+                z_inpaint = torch.zeros([1, 16, h, w])
+                z_mask = torch.zeros([1, 1, h, w])
+
+            if z2_image is not None:
+                z_control = pil_to_latent(z2_image, w*8, h*8, 2, "Z-Image-Turbo Control v2")
+            else:
+                z_control = torch.zeros([1, 16, h, w])
+
+            z_control = torch.cat([z_control.to(x), z_mask.to(x), z_inpaint.to(x)], dim=1)
+            z_control = rearrange(z_control, 'b c (h ph) (w pw) -> b (h w) (ph pw c)', ph=2, pw=2).to(input_device, input_dtype)
+
+            shared.ZITlatent = z_control
+            shared.ZITstrength = zitc2_strength
+            shared.ZITstop = zitc2_stop
+
+            extra_mem = n * z_control.shape[1] * z_control.shape[2] * x.element_size() * 1024 * 1.2
+            print ("[Z-Image-Turbo Control v2] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
+            params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
         return
 
@@ -366,14 +409,14 @@ class ersatzOtherControl(scripts.Script):
         enabled, selected_tab = args[0], args[1]
         if enabled:
             if selected_tab == 0:
-                # self.kontext_latent = None
-                # self.kontext_ids = None
                 IntegratedFluxTransformer2DModel.forward = ersatzOtherControl.original_kontext_forward
                 params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
             if selected_tab == 1:
                 shared.ZITstrength = 0.0
                 shared.ZITstop = 0.0
-                # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
+            if selected_tab == 2:
+                shared.ZITstrength = 0.0
+                shared.ZITstop = 0.0
+                params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
 
         return
-
