@@ -718,7 +718,8 @@ def replace_state_dict(sd, asd, guess):
             v = asd.pop(f"control_noise_refiner.{y}.attention.to_v.weight")
             sd[f"model.diffusion_model.control_noise_refiner.{y}.attention.qkv.weight"] = torch.cat((q, k, v), dim=0)
 
-        for y in range(6):
+        layers = 15 if "control_layers.14.adaLN_modulation.0.bias" in asd else 6
+        for y in range(layers):
             sd[f"model.diffusion_model.control_layers.{y}.attention.k_norm.weight"] = asd.pop(f"control_layers.{y}.attention.norm_k.weight")
             sd[f"model.diffusion_model.control_layers.{y}.attention.q_norm.weight"] = asd.pop(f"control_layers.{y}.attention.norm_q.weight")
             sd[f"model.diffusion_model.control_layers.{y}.attention.out.weight"]    = asd.pop(f"control_layers.{y}.attention.to_out.0.weight")
