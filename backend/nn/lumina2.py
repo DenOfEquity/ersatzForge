@@ -13,6 +13,9 @@ from backend.nn.mmditx import TimestepEmbedder
 from modules import shared
 
 
+# fp16 fix overflow by downscaling github.com/comfyanonymous/ComfyUI/pull/11187 by vanDuven
+
+
 class JointAttention(nn.Module):
     def __init__(self, dim: int, n_heads: int, n_kv_heads: int, qk_norm: bool):
         super().__init__()
@@ -34,7 +37,9 @@ class JointAttention(nn.Module):
     @staticmethod
     def apply_rotary_emb(x_in: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
         t_ = x_in.reshape(*x_in.shape[:-1], -1, 1, 2)
-        t_out = freqs_cis[..., 0] * t_[..., 0] + freqs_cis[..., 1] * t_[..., 1]
+        # t_out = freqs_cis[..., 0] * t_[..., 0] + freqs_cis[..., 1] * t_[..., 1]
+        t_out = torch.mul(freqs_cis[..., 0], t_[..., 0])
+        t_out.addcmul_(freqs_cis[..., 1], t_[..., 1])
         return t_out.reshape(*x_in.shape)
 
     def forward(self, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
@@ -51,11 +56,11 @@ class JointAttention(nn.Module):
         )
         xq = xq.view(bsz, seqlen, self.n_local_heads, self.head_dim)
         xq = self.q_norm(xq)
-        xq = JointAttention.apply_rotary_emb(xq, freqs_cis=freqs_cis)
+        xq = JointAttention.apply_rotary_emb(xq, freqs_cis)
 
         xk = xk.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
         xk = self.k_norm(xk)
-        xk = JointAttention.apply_rotary_emb(xk, freqs_cis=freqs_cis)
+        xk = JointAttention.apply_rotary_emb(xk, freqs_cis)
 
         xv = xv.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
 
@@ -64,6 +69,9 @@ class JointAttention(nn.Module):
             xk = xk.unsqueeze(3).repeat(1, 1, 1, n_rep, 1).flatten(2, 3)
             xv = xv.unsqueeze(3).repeat(1, 1, 1, n_rep, 1).flatten(2, 3)
         output = attention_function(xq.movedim(1, 2), xk.movedim(1, 2), xv.movedim(1, 2), self.n_local_heads, None, skip_reshape=True)
+
+        if output.dtype == torch.float16:
+            output.div_(4)
 
         return self.out(output)
 
@@ -83,7 +91,10 @@ class FeedForward(nn.Module):
         return F.silu(x1) * x3
 
     def forward(self, x):
-        return self.w2(self._forward_silu_gating(self.w1(x), self.w3(x)))
+        if x.dtype == torch.float16:
+            return self.w2(self._forward_silu_gating(self.w1(x), self.w3(x).div_(32)))
+        else:
+            return self.w2(self._forward_silu_gating(self.w1(x), self.w3(x)))
 
 
 class JointTransformerBlock(nn.Module):
@@ -156,23 +167,25 @@ class JointTransformerBlock(nn.Module):
 class JointTransformerBlockControl(JointTransformerBlock):
     def __init__(self, layer_id: int, dim: int, n_heads: int, n_kv_heads: int, multiple_of: int, ffn_dim_multiplier: float, norm_eps: float, qk_norm: bool, modulation=True, z_modulation=False, block_id=None, control=False):
         super().__init__(layer_id, dim, n_heads, n_kv_heads, multiple_of, ffn_dim_multiplier, norm_eps, qk_norm, modulation, z_modulation)
-        if control and layer_id < 6:
-            if layer_id == 0:
+        self.block_id = block_id
+        if control and block_id is not None:
+            if block_id == 0:
                 self.before_proj = nn.Linear(self.dim, self.dim)
             self.after_proj = nn.Linear(self.dim, self.dim)
 
 
     def forward(self, c: torch.Tensor, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor, adaln_input: torch.Tensor=None):
-        if self.layer_id == 0:
-            c = self.before_proj(c) + x
-            all_c = []
-        elif self.layer_id < 6:
-            all_c = list(torch.unbind(c))
-            c = all_c.pop(-1)
+        if self.block_id is not None:
+            if self.block_id == 0:
+                c = self.before_proj(c) + x
+                all_c = []
+            else:
+                all_c = list(torch.unbind(c))
+                c = all_c.pop(-1)
 
         c = super().forward(c, x_mask, freqs_cis, adaln_input)
         
-        if self.layer_id < 6:
+        if self.block_id is not None:
             c_skip = self.after_proj(c)
             all_c += [c_skip, c]
             c = torch.stack(all_c)
@@ -242,23 +255,6 @@ class Lumina2DiT(nn.Module):
 
         self.x_embedder = nn.Linear(in_features=patch_size * patch_size * in_channels, out_features=dim, bias=True)
 
-        self.noise_refiner = nn.ModuleList(
-            [
-                JointTransformerBlock(
-                    layer_id,
-                    dim,
-                    n_heads,
-                    n_kv_heads,
-                    multiple_of,
-                    ffn_dim_multiplier,
-                    norm_eps,
-                    qk_norm,
-                    modulation=True,
-                    z_modulation=z_modulation,
-                )
-                for layer_id in range(n_refiner_layers)
-            ]
-        )
         self.context_refiner = nn.ModuleList(
             [
                 JointTransformerBlock(
@@ -283,7 +279,20 @@ class Lumina2DiT(nn.Module):
         )
         
         #400 keys: lumina2, 455 keys: ZITurbo (maybe 1-3 less if pad tokens or sigmas not included)
+        self.add_control_noise_refiner = False
         if num_keys > 455:  # z-image-turbo + control
+            if num_keys > 575:  #version 2
+                layers = 15
+                control_layers_places = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28]
+                control_refiner_places = [0, 1]
+                self.control_x_embedder = nn.Linear(1 * 2 * 2 * 33, dim, bias=True)
+                self.add_control_noise_refiner = True
+            else:
+                layers = 6
+                control_layers_places = [0, 5, 10, 15, 20, 25]
+                control_refiner_places = []
+                self.control_x_embedder = nn.Linear(1 * 2 * 2 * 16, dim, bias=True)
+
             self.control_layers = nn.ModuleList(
                 [
                     JointTransformerBlockControl(
@@ -297,16 +306,16 @@ class Lumina2DiT(nn.Module):
                         qk_norm,
                         z_modulation=z_modulation,
                         control=True,
+                        block_id=i,
                     )
-                    for i in range(6)
+                    for i in control_layers_places
                 ]
             )
 
-            self.control_x_embedder = nn.Linear(1 * 2 * 2 * 16, dim, bias=True)
             self.control_noise_refiner = nn.ModuleList(
                 [
                     JointTransformerBlockControl(
-                        layer_id+1000,
+                        layer_id + 1000,
                         dim,
                         n_heads,
                         n_kv_heads,
@@ -315,19 +324,40 @@ class Lumina2DiT(nn.Module):
                         norm_eps,
                         qk_norm,
                         z_modulation=z_modulation,
+                        control=True if self.add_control_noise_refiner else False,
+                        block_id=layer_id if self.add_control_noise_refiner else None,
                     )
                     for layer_id in range(n_refiner_layers)
                 ]
             )
-            control_layers_places = [0, 5, 10, 15, 20, 25]
             control_layers_mapping = {i: n for n, i in enumerate(control_layers_places)}
-
+            control_refiner_mapping = {i: n for n, i in enumerate(control_refiner_places)}
             self.control = True
         else: #controlnet not added
             control_layers_places = []
             control_layers_mapping = {}
+            control_refiner_places = []
+            control_refiner_mapping = ()
             self.control = False
 
+        self.noise_refiner = nn.ModuleList(
+            [
+                JointTransformerBlock(
+                    layer_id + 1000,
+                    dim,
+                    n_heads,
+                    n_kv_heads,
+                    multiple_of,
+                    ffn_dim_multiplier,
+                    norm_eps,
+                    qk_norm,
+                    modulation=True,
+                    z_modulation=z_modulation,
+                    block_id=control_refiner_mapping[layer_id] if layer_id in control_refiner_places else None,
+                )
+                for layer_id in range(n_refiner_layers)
+            ]
+        )
         self.layers = nn.ModuleList(
             [
                 JointTransformerBlock(
@@ -416,18 +446,35 @@ class Lumina2DiT(nn.Module):
             freqs_cis = self.rope_embedder(ids)
         freqs_cis = freqs_cis.movedim(1, 2).to(dtype)
 
+        refiner_hints = None
+        strength = None
         if control is not None:
-            for layer in self.control_noise_refiner:
-                control = layer(control, None, None, freqs_cis[:, cap_pos_ids.shape[1]:], t)
-            for layer in self.control_layers:
-                control = layer(control, x, None, freqs_cis[:, cap_pos_ids.shape[1]:], t)
+            if self.add_control_noise_refiner:
+                # refiner_hints, control, control_context_item_seqlens = self.forward_control_2_0_refiner(
+                # x, context, control, freqs_cis=freqs_cis[:, cap_pos_ids.shape[1]:], adaln_input=t, t=timestep)
+
+                # refiner_hints = control
+                # for layer in self.control_noise_refiner:
+                    # refiner_hints = layer(refiner_hints, x, None, freqs_cis[:, num_tokens:], t)
+                # refiner_hints = torch.unbind(refiner_hints)[:-1]
+
+                for layer in self.control_layers:
+                    control = layer(control, x, None, freqs_cis[:, num_tokens:], t)
+                refiner_hints = torch.unbind(control)[:-1]
+                strength = 1.0
+            else:
+                for layer in self.control_noise_refiner:
+                    control = layer(control, x, None, freqs_cis[:, num_tokens:], t)
+
+                for layer in self.control_layers:
+                    control = layer(control, x, None, freqs_cis[:, num_tokens:], t)
             control = torch.unbind(control)[:-1]
 
         for layer in self.context_refiner:
-            context = layer(context, None, freqs_cis[:, :cap_pos_ids.shape[1]])
+            context = layer(context, None, freqs_cis[:, :num_tokens])
 
         for layer in self.noise_refiner:
-            x = layer(x, None, freqs_cis[:, cap_pos_ids.shape[1]:], t)
+            x = layer(x, None, freqs_cis[:, num_tokens:], t, refiner_hints, strength=strength)
 
         padded_full_embed = torch.cat((context, x), dim=1)
 
