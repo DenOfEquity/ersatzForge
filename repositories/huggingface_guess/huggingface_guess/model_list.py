@@ -624,6 +624,8 @@ class Zimage(Lumina2):
         "shift": 3.0,
     }
 
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
+
     def clip_target(self, state_dict={}):
         return {"qwen3_4b": "text_encoder"}
 
