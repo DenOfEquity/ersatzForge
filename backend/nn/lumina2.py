@@ -446,35 +446,20 @@ class Lumina2DiT(nn.Module):
             freqs_cis = self.rope_embedder(ids)
         freqs_cis = freqs_cis.movedim(1, 2).to(dtype)
 
-        refiner_hints = None
-        strength = None
         if control is not None:
-            if self.add_control_noise_refiner:
-                # refiner_hints, control, control_context_item_seqlens = self.forward_control_2_0_refiner(
-                # x, context, control, freqs_cis=freqs_cis[:, cap_pos_ids.shape[1]:], adaln_input=t, t=timestep)
-
-                # refiner_hints = control
-                # for layer in self.control_noise_refiner:
-                    # refiner_hints = layer(refiner_hints, x, None, freqs_cis[:, num_tokens:], t)
-                # refiner_hints = torch.unbind(refiner_hints)[:-1]
-
-                for layer in self.control_layers:
-                    control = layer(control, x, None, freqs_cis[:, num_tokens:], t)
-                refiner_hints = torch.unbind(control)[:-1]
-                strength = 1.0
-            else:
+            if not self.add_control_noise_refiner:
                 for layer in self.control_noise_refiner:
                     control = layer(control, x, None, freqs_cis[:, num_tokens:], t)
 
-                for layer in self.control_layers:
-                    control = layer(control, x, None, freqs_cis[:, num_tokens:], t)
+            for layer in self.control_layers:
+                control = layer(control, x, None, freqs_cis[:, num_tokens:], t)
             control = torch.unbind(control)[:-1]
+
+        for layer in self.noise_refiner:
+            x = layer(x, None, freqs_cis[:, num_tokens:], t, control, strength=2.0)
 
         for layer in self.context_refiner:
             context = layer(context, None, freqs_cis[:, :num_tokens])
-
-        for layer in self.noise_refiner:
-            x = layer(x, None, freqs_cis[:, num_tokens:], t, refiner_hints, strength=strength)
 
         padded_full_embed = torch.cat((context, x), dim=1)
 
@@ -518,7 +503,7 @@ class Lumina2DiT(nn.Module):
 
         # entire batch will have same length context because of calc_cond_uncond_batch
         # (it seems the Lumina processing originally handled different lengths, but I've simplified it out as that'll never happen in this webUI)
-        num_tokens = context.shape[1] # doesn't account for padding, but none is used
+        num_tokens = context.shape[1] # doesn't account for padding
         x, control, freqs_cis = self.patchify_and_embed(x, context, control, adaln_input, num_tokens=num_tokens, timestep=t)
         freqs_cis = freqs_cis.to(x.device)
 
