@@ -137,58 +137,43 @@ class ersatzOtherControl(scripts.Script):
                     swap12.click(fn=kontext_swap, inputs=[k_image1, k_image2], outputs=[k_image1, k_image2])
 
                 with gradio.Tab("Z-Image-Turbo Control") as zitc:
-                    gradio.Markdown("Select the control model in the **Additional modules** menu. Include pre-processed reference image here.")
+                    gradio.Markdown("Select the control model in the **Additional modules** menu. Include pre-processed reference image, or inpaint image, here. NeverOOM recommended for low-VRAM.")
                     with gradio.Row():
                         with gradio.Column():
-                            z_image1 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
+                            z_image = ForgeCanvas(height=300, contrast_scribbles=True, scribble_alpha=50)
                         with gradio.Column():
-                            zitc_str = gradio.Slider(value=1.0, minimum=0.0, maximum=2.0, step=0.01, label="strength")
-                            zitc_stop = gradio.Slider(value=0.75, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
+                            z_version = gradio.Radio(value="v1", choices=["v1", "v2", "v2 inpaint"], label="Mode")
+                            z_mask_mode = gradio.Radio(value="unmasked", choices=["masked", "unmasked"], label="Target area")
+                            z_strength = gradio.Slider(value=1.0, minimum=0.0, maximum=2.0, step=0.01, label="strength")
+                            z_stop = gradio.Slider(value=0.75, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
                             with gradio.Row():
-                                z_image1_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
-                                z_image1_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                z_image1_dims = gradio.Textbox(visible=False, value="0")
+                                z_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
+                                z_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                z_image_dims = gradio.Textbox(visible=False, value="0")
 
-                        z_image1.change(fn=get_dims, inputs=z_image1, outputs=[z_image1_info, z_image1_send, z_image1_dims], show_progress="hidden")
-                        z_image1_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z_image1_dims], outputs=None)
-
-                with gradio.Tab("Z-Image-Turbo Control v2") as zitc2:
-                    gradio.Markdown("Select the control model in the **Additional modules** menu. Include pre-processed reference image here. v2 needs more Steps.")
-                    with gradio.Row():
-                        z2_image1 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
-                        z2_inpaint = ForgeCanvas(height=264, contrast_scribbles=shared.opts.img2img_inpaint_mask_high_contrast, scribble_color=shared.opts.img2img_inpaint_mask_brush_color, scribble_color_fixed=True, scribble_alpha=75, scribble_alpha_fixed=True, scribble_softness_fixed=True)
-
-                    with gradio.Row():
-                        zitc2_str = gradio.Slider(value=0.8, minimum=0.0, maximum=2.0, step=0.01, label="strength")
-                        zitc2_stop = gradio.Slider(value=0.75, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
-                        z2_image1_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
-                        z2_image1_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                        z2_image1_dims = gradio.Textbox(visible=False, value="0")
-
-                    z2_image1.change(fn=get_dims, inputs=z2_image1, outputs=[z2_image1_info, z2_image1_send, z2_image1_dims], show_progress="hidden")
-                    z2_image1_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z2_image1_dims], outputs=None)
+                        z_image.background.change(fn=get_dims, inputs=[z_image.background], outputs=[z_image_info, z_image_send, z_image_dims], show_progress="hidden")
+                        z_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z_image_dims], outputs=None)
 
 
             fkon.select(fn=lambda: 0, inputs=None, outputs=selected_tab, show_progress="hidden")
             zitc.select(fn=lambda: 1, inputs=None, outputs=selected_tab, show_progress="hidden")
-            zitc2.select(fn=lambda: 2, inputs=None, outputs=selected_tab, show_progress="hidden")
 
 
         self.infotext_fields = [
             (enabled,  lambda d: d.get("eOC_enabled", False)),
-            (zitc_str,  "zitc_strength"),
-            (zitc_stop, "zitc_stop"),
+            (z_version,  "z_version"),
+            (z_mask_mode,  "zitc_mask_mode"),
+            (z_strength,  "zitc_strength"),
+            (z_stop, "zitc_stop"),
             (kontext_sizing, "kontext_sizing"),
             (kontext_reduce, "kontext_reduce"),
-            (zitc2_str,  "zitc2_strength"),
-            (zitc2_stop, "zitc2_stop"),
         ]
 
-        return enabled, selected_tab, z_image1, zitc_str, zitc_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, z2_image1, z2_inpaint.background, z2_inpaint.foreground, zitc2_str, zitc2_stop
+        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce
 
 
     def process(self, params, *script_args, **kwargs):
-        enabled, selected_tab, zitc_image, zitc_strength, zitc_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce, z2_image, z2_inpaint, z2_mask, zitc2_strength, zitc2_stop = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce = script_args
         if enabled:
             if selected_tab == 0 and (kontext_image1 is not None or kontext_image2 is not None) and params.sd_model.is_flux:
                 params.extra_generation_params.update(dict(
@@ -196,28 +181,21 @@ class ersatzOtherControl(scripts.Script):
                     kontext_sizing = kontext_sizing,
                     kontext_reduce = kontext_reduce,
                 ))
-            if selected_tab == 1 and zitc_image is not None and zitc_strength > 0.0 and zitc_stop < 1.0 and params.sd_model.is_lumina2:
+            if selected_tab == 1 and z_image is not None and z_strength > 0.0 and z_stop < 1.0 and params.sd_model.is_lumina2:
                 if getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
                     params.extra_generation_params.update(dict(
                         eOC_enabled  = enabled,
-                        zitc_strength = zitc_strength,
-                        zitc_stop     = zitc_stop,
+                        z_version = z_version,
+                        z_mask_mode = z_mask_mode,
+                        z_strength = z_strength,
+                        z_stop     = z_stop,
                     ))
                 else:
                     print ("[Z-Image-Turbo Control] Control model not loaded.")
-            if selected_tab == 2 and (z2_image is not None or z2_inpaint is not None) and zitc2_strength > 0.0 and zitc_stop < 1.0 and params.sd_model.is_lumina2:
-                if getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
-                    params.extra_generation_params.update(dict(
-                        eOC_enabled  = enabled,
-                        zitc2_strength = zitc2_strength,
-                        zitc2_stop     = zitc2_stop,
-                    ))
-                else:
-                    print ("[Z-Image-Turbo Control v2] Control model not loaded.")
 
 
     def process_before_every_sampling(self, params, *script_args, **kwargs):
-        enabled, selected_tab, zitc_image, zitc_strength, zitc_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce, z2_image, z2_inpaint, z2_mask, zitc2_strength, zitc2_stop = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce = script_args
 
         if not enabled:
             return
@@ -244,16 +222,13 @@ class ersatzOtherControl(scripts.Script):
                 print (f"[{mode_text}] no image resize needed")
 
             if mask is not None:
-                # noise = torch.randn_like(image).abs()
-                # noise /= noise.max()
-                # image = image * mask.to(image) + noise * (1.0 - mask.to(image))
                 image *= mask.to(image)
 
             latent = images_tensor_to_samples(image, None, None)
 
             if pad > 1:
-                pad_h = latent.shape[2] % pad
-                pad_w = latent.shape[3] % pad
+                pad_h = (pad - h % pad) % pad
+                pad_w = (pad - w % pad) % pad
                 latent = torch.nn.functional.pad(latent, (0, pad_w, 0, pad_h), mode="circular")
 
             return latent
@@ -300,14 +275,15 @@ class ersatzOtherControl(scripts.Script):
                             k_width //= 2
                             k_height //= 2
 
-                        k_latent = pil_to_latent(image, k_width, k_height, 2, "Kontext")
+                        patch_size = 2
+                        k_latent = pil_to_latent(image, k_width, k_height, patch_size, "Kontext")
 
                         k_latents.append(rearrange(k_latent, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch_size, pw=patch_size))
                         # imgs are combined in rearranged dimension 1 - so width/height can be independant of main latent and other inputs
 
                         latentH = k_latent.shape[2]
                         latentW = k_latent.shape[3]
-                       
+
                         kh_len = ((latentH + (patch_size // 2)) // patch_size)
                         kw_len = ((latentW + (patch_size // 2)) // patch_size)
 
@@ -341,67 +317,59 @@ class ersatzOtherControl(scripts.Script):
             params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
 
-        if selected_tab == 1 and zitc_image is not None and zitc_strength > 0.0 and zitc_stop < 1.0 and params.sd_model.is_lumina2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
+        if selected_tab == 1 and z_image is not None and z_strength > 0.0 and z_stop < 1.0 and params.sd_model.is_lumina2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
 
-            # def calc_extra_mem(latent):
-                # return latent.shape[0] * latent.shape[1] * latent.shape[2] * latent.element_size() * 1024
-
-            zitc_image_hash = hash(str(list(zitc_image.getdata(band=None))))
+            zitc_image_hash = hash(str(list(z_image.getdata(band=None))) + str(list(z_mask.getdata(band=None))) + z_version + z_mask_mode)
             zitc_latent_size = (w, h)
 
             if zitc_image_hash == self.zitc_image_hash and zitc_latent_size == self.zitc_latent_size:
                 print ("[Z-Image-Turbo Control] used cache")
-                shared.ZITstrength = zitc_strength
-                shared.ZITstop = zitc_stop
+                shared.ZITstrength = z_strength
+                shared.ZITstop = z_stop
                 # extra_mem = calc_extra_mem(shared.ZITlatent)
             else:
                 self.zitc_image_hash = zitc_image_hash
                 self.zitc_latent_size = zitc_latent_size
 
-                z_latent = pil_to_latent(zitc_image, w*8, h*8, 2, "Z-Image-Turbo Control")
+                if isinstance (z_mask, str):
+                    z_mask = decode_base64_to_image(z_mask)
+
+                z_mask = z_mask.getchannel("A").convert("L")
+                if z_mask_mode == "masked":
+                    z_mask = z_mask.point(lambda v: 1 if v > 128 else 0)
+                else:
+                    z_mask = z_mask.point(lambda v: 0 if v > 128 else 1)
+                z_mask = numpy.array(z_mask.convert("RGB"))
+                z_mask = numpy.transpose(z_mask, (2, 0, 1))
+                z_mask = torch.tensor(z_mask).unsqueeze(0)
+
+                if z_mask.shape[3] != w*8 or z_mask.shape[2] != h*8:
+                    z_mask = adaptive_resize(z_mask, w*8, h*8, "lanczos", "center") #does this handle one channel?
+
+                match z_version:
+                    case "v1":  #mask the control image
+                        z_latent = pil_to_latent(z_image, w*8, h*8, 2, "Z-Image-Turbo Control: " + z_version, mask=z_mask)
+                    case "v2":  #mask the control image, empty inpaint and mask
+                        z_control = pil_to_latent(z_image, w*8, h*8, 2, "Z-Image-Turbo Control: " + z_version, mask=z_mask)
+                        z_mask = torch.zeros([1, 1, h, w])
+                        z_inpaint = torch.zeros([1, 16, h, w])
+                        z_latent = torch.cat([z_control.to(x), z_mask.to(x), z_inpaint.to(x)], dim=1)
+                    case "v2 inpaint":# mask the inpaint image, empty control
+                        z_control = torch.zeros([1, 16, h, w])
+                        # i_mask = (4.0 - z_mask) * 0.25
+                        z_inpaint = pil_to_latent(z_image, w*8, h*8, 2, "Z-Image-Turbo Control: " + z_version)#, mask=i_mask)
+                        z_mask = torch.nn.functional.interpolate(1.0 - z_mask[:, 0:1, :, :], size=(h, w), mode="nearest")
+                        z_latent = torch.cat([z_control.to(x), z_mask.to(x), z_inpaint.to(x)], dim=1)
 
                 z_latent = rearrange(z_latent, 'b c (h ph) (w pw) -> b (h w) (ph pw c)', ph=2, pw=2)
 
                 shared.ZITlatent = z_latent.contiguous().to(input_device, input_dtype)
-                shared.ZITstrength = zitc_strength
-                shared.ZITstop = zitc_stop
+                shared.ZITstrength = z_strength
+                shared.ZITstop = z_stop
 
-
-        if selected_tab == 2 and (z2_image is not None or z2_inpaint is not None) and params.sd_model.is_lumina2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
-            if z2_inpaint is not None and z2_mask is not None:
-                if isinstance (z2_mask, str):
-                    z2_mask = decode_base64_to_image(z2_mask)
-
-                mask = z2_mask.getchannel("A").convert("L").resize((w*8, h*8))
-                mask_A = mask.resize((w, h)).point(lambda v: 0 if v > 128 else 1)
-                mask_A = numpy.array(mask_A)
-                mask_A = torch.tensor(mask_A).unsqueeze(0).unsqueeze(0)
-                z_mask = mask_A
-
-                mask_I = mask.point(lambda v: 0 if v > 128 else 1)
-                mask_I = numpy.array(mask_I)
-                mask_I = torch.tensor(mask_I).unsqueeze(0).unsqueeze(0)
-
-                z_inpaint = pil_to_latent(z2_inpaint, w*8, h*8, 2, "Z-Image-Turbo Control v2")#, mask=mask_I)
-            else:
-                z_inpaint = torch.zeros([1, 16, h, w])
-                z_mask = torch.zeros([1, 1, h, w])
-
-            if z2_image is not None:
-                z_control = pil_to_latent(z2_image, w*8, h*8, 2, "Z-Image-Turbo Control v2")
-            else:
-                z_control = torch.zeros([1, 16, h, w])
-
-            z_control = torch.cat([z_control.to(x), z_mask.to(x), z_inpaint.to(x)], dim=1)
-            z_control = rearrange(z_control, 'b c (h ph) (w pw) -> b (h w) (ph pw c)', ph=2, pw=2).to(input_device, input_dtype)
-
-            shared.ZITlatent = z_control
-            shared.ZITstrength = zitc2_strength
-            shared.ZITstop = zitc2_stop
-
-            extra_mem = n * z_control.shape[1] * z_control.shape[2] * x.element_size() * 1024 * 1.2
-            print ("[Z-Image-Turbo Control v2] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
-            params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
+            # extra_mem = n * z_latent.shape[1] * z_latent.shape[2] * x.element_size() * 1024 * 1.2
+            # print ("[Z-Image-Turbo Control] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
+            # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
         return
 
@@ -414,9 +382,6 @@ class ersatzOtherControl(scripts.Script):
             if selected_tab == 1:
                 shared.ZITstrength = 0.0
                 shared.ZITstop = 0.0
-            if selected_tab == 2:
-                shared.ZITstrength = 0.0
-                shared.ZITstop = 0.0
-                params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
+                # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
 
         return
