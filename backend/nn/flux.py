@@ -101,7 +101,6 @@ class EmbedND(nn.Module):
 
 # dynamic PE  - https://github.com/guyyariv/DyPE - MIT license
 # minor adjustments only to cat of cos and sin and rearranging pe result to match this FLux implementation
-import numpy as np
 def find_correction_factor(num_rotations, dim, base, max_position_embeddings):
     return (dim * math.log(max_position_embeddings/(num_rotations * 2 * math.pi)))/(2 * math.log(base)) #Inverse dim formula to find number of rotations
 
@@ -110,9 +109,9 @@ def find_correction_range(low_ratio, high_ratio, dim, base, ori_max_pe_len):
     """
     Find the correction range for NTK-by-parts interpolation.
     """
-    low = np.floor(find_correction_factor(low_ratio, dim, base, ori_max_pe_len))
-    high = np.ceil(find_correction_factor(high_ratio, dim, base, ori_max_pe_len))
-    return max(low, 0), min(high, dim-1) #Clamp values just in case
+    low = math.floor(find_correction_factor(low_ratio, dim, base, ori_max_pe_len))
+    high = math.ceil(find_correction_factor(high_ratio, dim, base, ori_max_pe_len))
+    return low, high # values clamped later
 
 
 def linear_ramp_mask(min, max, dim):
@@ -130,10 +129,9 @@ def find_newbase_ntk(dim, base, scale):
     """
     return base * (scale ** (dim / (dim - 2)))
 
-from typing import Union, List
 def get_1d_rotary_pos_embed(
         dim: int,
-        pos: Union[np.ndarray, int],
+        pos,
         theta: float = 10000.0,
         linear_factor=1.0,
         ntk_factor=1.0,
@@ -151,8 +149,8 @@ def get_1d_rotary_pos_embed(
     Args:
         dim (`int`):
             Dimension of the frequency tensor.
-        pos (`np.ndarray` or `int`):
-            Position indices for the frequency tensor. [S] or scalar.
+        pos:
+            Position indices for the frequency tensor. [S]
         theta (`float`, *optional*, defaults to 10000.0):
             Scaling factor for frequency computation.
         linear_factor (`float`, *optional*, defaults to 1.0):
@@ -177,11 +175,6 @@ def get_1d_rotary_pos_embed(
             returns tuple of (cos, sin) tensors.
     """
     assert dim % 2 == 0
-
-    if isinstance(pos, int):
-        pos = torch.arange(pos)
-    if isinstance(pos, np.ndarray):
-        pos = torch.from_numpy(pos)
 
     device = pos.device
 
@@ -261,7 +254,7 @@ class FluxPosEmbed(nn.Module):
     def __init__(
             self,
             theta: int,
-            axes_dim: List[int],
+            axes_dim: list[int],
             base_resolution: int = 1024,
             method: str = 'yarn',
             dype: bool = True,
@@ -284,10 +277,8 @@ class FluxPosEmbed(nn.Module):
         n_axes = ids.shape[-1]
         cos_out = []
         sin_out = []
-        pos = ids.float()
-        is_mps = ids.device.type == "mps"
-        is_npu = ids.device.type == "npu"
-        freqs_dtype = torch.float32 if (is_mps or is_npu) else torch.float64
+        pos = ids.to(torch.float32)
+        freqs_dtype = torch.float32
 
         for i in range(n_axes):
             common_kwargs = {
