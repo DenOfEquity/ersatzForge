@@ -277,7 +277,13 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 model_loader = lambda c: WanModel(**c)
             elif cls_name == "Lumina2Transformer2DModel":
                 from backend.nn.lumina2 import Lumina2DiT
-                model_loader = lambda c: Lumina2DiT(**c, num_keys=len(state_dict))
+                # detect broken control fun 2.0, via Comfy
+                broken = False
+                ref_weight = state_dict.get("control_noise_refiner.0.after_proj.weight", None)
+                if ref_weight is not None and torch.count_nonzero(ref_weight.cuda()) == 0:
+                    broken = True
+
+                model_loader = lambda c: Lumina2DiT(**c, num_keys=len(state_dict), Z_image_control_2_0_broken=broken)
 
             unet_config = guess.unet_config.copy()
             state_dict_parameters = memory_management.state_dict_parameters(state_dict)
