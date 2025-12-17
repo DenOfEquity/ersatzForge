@@ -232,18 +232,18 @@ class Lumina2DiT(nn.Module):
         z_modulation: bool = False,
         pad_tokens_multiple = None,
         num_keys: int = None,
+        Z_image_control_2_0_broken = False,
     ):
         super().__init__()
         assert (dim // n_heads) == sum(axes_dims)
         self.axes_dims = axes_dims
         self.axes_lens = axes_lens
 
-        if shared.opts.dynamicPE_lumina2 > 0:
-            self.rope_embedder = FluxPosEmbed(theta=rope_theta, axes_dim=axes_dims, base_resolution=shared.opts.dynamicPE_lumina2)
-            self.use_dynamicPE = True
+        self.use_dynamicPE = shared.opts.dynamicPE_lumina2
+        if self.use_dynamicPE > 0:
+            self.rope_embedder = FluxPosEmbed(theta=rope_theta, axes_dim=axes_dims, base_resolution=self.use_dynamicPE)
         else:
             self.rope_embedder = EmbedND(theta=rope_theta, axes_dim=axes_dims)
-            self.use_dynamicPE = False
 
         self.dim = dim
         self.n_heads = n_heads
@@ -280,6 +280,7 @@ class Lumina2DiT(nn.Module):
         
         #400 keys: lumina2, 455 keys: ZITurbo (maybe 1-3 less if pad tokens or sigmas not included)
         self.add_control_noise_refiner = False
+        self.add_control_noise_refiner_correct = Z_image_control_2_0_broken
         if num_keys > 455:  # z-image-turbo + control
             if num_keys > 575:  #version 2
                 layers = 15
@@ -413,6 +414,16 @@ class Lumina2DiT(nn.Module):
         H_tokens, W_tokens = H // pH, W // pW
         row_ids = torch.arange(H_tokens, dtype=torch.float32, device=device).view(-1, 1).repeat(1, W_tokens).flatten()
         col_ids = torch.arange(W_tokens, dtype=torch.float32, device=device).view(1, -1).repeat(H_tokens, 1).flatten()
+        # if not self.use_dynamicPE and shared.opts.rope_scaling:
+            # h_scale = 1.0
+            # w_scale = 1.0
+            # limit = 2048 // 16
+            # if H_tokens > limit:
+                # h_scale = limit / H_tokens
+            # if W_tokens > limit:
+                # w_scale = limit / W_tokens
+            # row_ids *= min(h_scale, w_scale)
+            # col_ids *= min(h_scale, w_scale)
 
         position_ids = torch.zeros(bsz, x.shape[1], 3, dtype=torch.float32, device=device)
         position_ids[:,:, 0] = num_tokens + 1
@@ -446,7 +457,14 @@ class Lumina2DiT(nn.Module):
             freqs_cis = self.rope_embedder(ids)
         freqs_cis = freqs_cis.movedim(1, 2).to(dtype)
 
+        hints = None
         if control is not None:
+            if self.add_control_noise_refiner and self.add_control_noise_refiner_correct: # v2.1
+                hints = control
+                for layer in self.control_noise_refiner:
+                    hints = layer(hints, x, None, freqs_cis[:, num_tokens:], t)
+                hints = torch.unbind(hints)[:-1]
+               
             if not self.add_control_noise_refiner:
                 for layer in self.control_noise_refiner:
                     control = layer(control, x, None, freqs_cis[:, num_tokens:], t)
@@ -456,7 +474,7 @@ class Lumina2DiT(nn.Module):
             control = torch.unbind(control)[:-1]
 
         for layer in self.noise_refiner:
-            x = layer(x, None, freqs_cis[:, num_tokens:], t, control, strength=2.0)
+            x = layer(x, None, freqs_cis[:, num_tokens:], t, hints or control, strength=2.0)
 
         for layer in self.context_refiner:
             context = layer(context, None, freqs_cis[:, :num_tokens])
@@ -499,7 +517,6 @@ class Lumina2DiT(nn.Module):
             context = torch.cat([context, pad], dim=1)
         context = self.cap_embedder(context)
         #pad using cap_pad_token here? #self.cap_pad_token.repeat(bs, pad_t, 1).to(cap_feats)
-
 
         # entire batch will have same length context because of calc_cond_uncond_batch
         # (it seems the Lumina processing originally handled different lengths, but I've simplified it out as that'll never happen in this webUI)
