@@ -68,6 +68,7 @@ def detect_unet_config(state_dict, key_prefix):
             dit_config["z_modulation"] = True
             if '{}cap_pad_token'.format(key_prefix) in state_dict_keys:
                 dit_config["pad_tokens_multiple"] = 32
+                state_dict.pop("{}model_sampling.sigmas".format(key_prefix), None)
         return dit_config
 
     if '{}joint_blocks.0.context_block.attn.qkv.weight'.format(key_prefix) in state_dict_keys:  # mmdit model
@@ -251,6 +252,7 @@ def detect_unet_config(state_dict, key_prefix):
         dit_config = {}
         dit_config["image_model"] = "chromaDCT"
         dit_config["in_channels"] = 3
+        dit_config["use_x0"] = True if "{}__x0__".format(key_prefix) in state_dict_keys else False
         return dit_config
 
     if '{}double_blocks.0.img_attn.norm.key_norm.scale'.format(key_prefix) in state_dict_keys:  # Flux / Chroma
