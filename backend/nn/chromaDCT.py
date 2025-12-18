@@ -204,6 +204,7 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
     def __init__(self, **config):
         super().__init__()
 
+        self.use_x0 = use_x0
         # just hardcode these params
         self.in_channels = 3
         self.out_channels = 3
@@ -377,6 +378,11 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
 
         return img_dct
 
+    def _apply_x0_residual(self, predicted, noisy, timesteps):
+        # non zero during training to prevent 0 div
+        eps = 0.0
+        return (noisy - predicted) / (timesteps.view(-1,1,1,1) + eps)
+
     def forward(self, x, timestep, context, **kwargs):
         """
         Forge-compatible forward method that adapts to the expected interface.
@@ -426,5 +432,9 @@ class IntegratedChromaDCTTransformer2DModel(nn.Module):
             timestep=timestep,
             guidance=guidance,
         )
+
+        # If x0 variant → v-pred, just return this instead
+        if self.use_x0:
+            result = self._apply_x0_residual(result, x, timestep)
 
         return result
