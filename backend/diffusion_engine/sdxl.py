@@ -57,7 +57,6 @@ class StableDiffusionXL(ForgeDiffusionEngine):
             embedding_dir=dynamic_args['embedding_dir'],
             embedding_key='clip_l',
             embedding_expected_shape=768,
-            emphasis_name=dynamic_args['emphasis_name'],
             text_projection=False,
             minimal_clip_skip=2,
             clip_skip=2,
@@ -71,7 +70,6 @@ class StableDiffusionXL(ForgeDiffusionEngine):
             embedding_dir=dynamic_args['embedding_dir'],
             embedding_key='clip_g',
             embedding_expected_shape=1280,
-            emphasis_name=dynamic_args['emphasis_name'],
             text_projection=True,
             minimal_clip_skip=2,
             clip_skip=2,
@@ -94,7 +92,9 @@ class StableDiffusionXL(ForgeDiffusionEngine):
                 return s * timestep / (1 + (s - 1) * timestep)
 
             ts = sigma((torch.arange(1, 10000 + 1, 1) / 10000), opts.sdxl_flow_shift)
-            self.forge_objects.unet.model.predictor.sigmas = ts
+            # self.forge_objects.unet.model.predictor.sigmas = ts
+            self.forge_objects.unet.model.predictor.shift = opts.sdxl_flow_shift
+            self.forge_objects.unet.model.predictor.register_buffer("sigmas", ts)
 
         self.text_processing_engine_l.clip_skip = clip_skip
         self.text_processing_engine_g.clip_skip = clip_skip
@@ -210,7 +210,6 @@ class StableDiffusionXLRefiner(ForgeDiffusionEngine):
             embedding_dir=dynamic_args['embedding_dir'],
             embedding_key='clip_g',
             embedding_expected_shape=1280,
-            emphasis_name=dynamic_args['emphasis_name'],
             text_projection=True,
             minimal_clip_skip=2,
             clip_skip=2,

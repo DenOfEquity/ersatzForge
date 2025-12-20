@@ -59,7 +59,6 @@ class Flux(ForgeDiffusionEngine):
             embedding_dir=dynamic_args['embedding_dir'],
             embedding_key='clip_l',
             embedding_expected_shape=768,
-            emphasis_name=dynamic_args['emphasis_name'],
             text_projection=False,
             minimal_clip_skip=1,
             clip_skip=1,
@@ -70,7 +69,6 @@ class Flux(ForgeDiffusionEngine):
         self.text_processing_engine_t5 = T5TextProcessingEngine(
             text_encoder=clip.cond_stage_model.t5xxl,
             tokenizer=clip.tokenizer.t5xxl,
-            emphasis_name=dynamic_args['emphasis_name'],
         )
 
         self.is_flux = True

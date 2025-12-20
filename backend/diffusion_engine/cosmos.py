@@ -6,7 +6,6 @@ from backend.patcher.clip import CLIP
 from backend.patcher.vae import VAE
 from backend.patcher.unet import UnetPatcher
 from backend.text_processing.t5_engine import T5TextProcessingEngine
-from backend.args import dynamic_args
 from backend.modules.k_prediction import PredictionCosmosRFlow
 from backend import memory_management
 
@@ -39,7 +38,6 @@ class Cosmos(ForgeDiffusionEngine):
         self.text_processing_engine_t5 = T5TextProcessingEngine(
             text_encoder=clip.cond_stage_model.t5xxl,
             tokenizer=clip.tokenizer.t5xxl,
-            emphasis_name=dynamic_args['emphasis_name'],
             min_length=1,
         )
 
@@ -51,7 +49,7 @@ class Cosmos(ForgeDiffusionEngine):
 
     def set_clip_skip(self, clip_skip):
         pass
-        
+
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
@@ -62,7 +60,7 @@ class Cosmos(ForgeDiffusionEngine):
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt):
         token_count = len(self.text_processing_engine_t5.tokenize([prompt])[0])
-        return token_count, max(510, token_count)
+        return token_count, -1
 
     @torch.inference_mode()
     def encode_first_stage(self, x):
