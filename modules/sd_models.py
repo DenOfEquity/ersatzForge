@@ -370,7 +370,7 @@ def forge_model_reload():
     if model_data.forge_hash == current_hash and model_data.sd_model is not None:
         return model_data.sd_model, False
 
-    print('Loading Model: ' + str(model_data.forge_loading_parameters))
+    print("Loading Model: " + str(model_data.forge_loading_parameters))
 
     timer = Timer()
 
@@ -379,24 +379,25 @@ def forge_model_reload():
         model_data.sd_model = None
 
         memory_management.unload_all_models()
-        memory_management.soft_empty_cache()
+        memory_management.current_loaded_models = []
+        memory_management.soft_empty_cache() # should be redundant
         gc.collect()
 
     timer.record("unload existing model")
 
-    checkpoint_info = model_data.forge_loading_parameters['checkpoint_info']
+    checkpoint_info = model_data.forge_loading_parameters["checkpoint_info"]
 
     if checkpoint_info is None:
-        raise ValueError('You do not have any model! Please download at least one model in [models/Stable-diffusion].')
+        raise ValueError("You do not have any model! Please download at least one model in [models/Stable-diffusion].")
 
     state_dict = checkpoint_info.filename
-    additional_state_dicts = model_data.forge_loading_parameters.get('additional_modules', [])
+    additional_state_dicts = model_data.forge_loading_parameters.get("additional_modules", [])
 
     timer.record("cache state dict")
 
-    dynamic_args['forge_unet_storage_dtype'] = model_data.forge_loading_parameters.get('unet_storage_dtype', None)
-    dynamic_args['embedding_dir'] = cmd_opts.embeddings_dir
-    dynamic_args['emphasis_name'] = opts.emphasis
+    dynamic_args["forge_unet_storage_dtype"] = model_data.forge_loading_parameters.get("unet_storage_dtype", None)
+    dynamic_args["embedding_dir"] = cmd_opts.embeddings_dir
+    dynamic_args["sdxl_flow_models"] = opts.sdxl_flow_models
     model_data.sd_model = forge_loader(state_dict, additional_state_dicts=additional_state_dicts)
     timer.record("forge model load")
 
