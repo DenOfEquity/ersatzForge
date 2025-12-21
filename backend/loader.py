@@ -848,8 +848,14 @@ def forge_loader(sd, additional_state_dicts=None):
             huggingface_components['scheduler'].config.prediction_type = prediction_types.get(estimated_config.model_type.name, huggingface_components['scheduler'].config.prediction_type)
 
     # SDXL flow models
-    flow_names = ['bigaspv25', 'nyaflow', 'snakebite2']  # use lowercase, could be a Setting for a list of matching names but not enough models to bother
-    backend.args.dynamic_args.update({'SDXL_flow' : True if any([name in sd.lower() for name in flow_names]) else False})
+    backend.args.dynamic_args.update({'SDXL_flow' : False})
+    model_filename = sd.lower()
+    flow_names = backend.args.dynamic_args.get("sdxl_flow_models", "").split(",")
+    for name in flow_names:
+        n = name.strip()
+        if len(n) >= 4 and n in model_filename:
+            backend.args.dynamic_args.update({'SDXL_flow' : True})
+            break
 
     for M in possible_models:
         if any(isinstance(estimated_config, x) for x in M.matched_guesses):
