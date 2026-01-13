@@ -281,14 +281,21 @@ class Lumina2DiT(nn.Module):
         #400 keys: lumina2, 455 keys: ZITurbo (maybe 1-3 less if pad tokens or sigmas not included)
         self.add_control_noise_refiner = False
         self.add_control_noise_refiner_correct = Z_image_control_2_0_broken
-        if num_keys > 455:  # z-image-turbo + control
+        if num_keys > 400:  # z-image-turbo + control
             if num_keys > 575:  #version 2
                 layers = 15
                 control_layers_places = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28]
                 control_refiner_places = [0, 1]
                 self.control_x_embedder = nn.Linear(1 * 2 * 2 * 33, dim, bias=True)
                 self.add_control_noise_refiner = True
-            else:
+            elif num_keys > 455: # v2.1 lite
+                layers = 3
+                control_layers_places = [0, 10, 20]
+                control_refiner_places = [0, 1]
+                self.control_x_embedder = nn.Linear(1 * 2 * 2 * 33, dim, bias=True)
+                self.add_control_noise_refiner = True
+                self.add_control_noise_refiner_correct = True
+            else: #version 1
                 layers = 6
                 control_layers_places = [0, 5, 10, 15, 20, 25]
                 control_refiner_places = []
@@ -474,7 +481,7 @@ class Lumina2DiT(nn.Module):
             control = torch.unbind(control)[:-1]
 
         for layer in self.noise_refiner:
-            x = layer(x, None, freqs_cis[:, num_tokens:], t, hints or control, strength=2.0)
+            x = layer(x, None, freqs_cis[:, num_tokens:], t, hints or control, strength=1.0)
 
         for layer in self.context_refiner:
             context = layer(context, None, freqs_cis[:, :num_tokens])
@@ -493,7 +500,7 @@ class Lumina2DiT(nn.Module):
 
         if self.control:
             control = getattr(shared, 'ZITlatent', None) # already patchified
-            control_strength = getattr(shared, 'ZITstrength', 0.0)
+            control_strength = getattr(shared, 'ZITstrength', 0.0)# * float(timesteps[0])
             control_stop_sigma = getattr(shared, 'ZITstop', 0.0)
             if control_strength == 0.0:
                 control = None

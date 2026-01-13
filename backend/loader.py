@@ -30,6 +30,7 @@ from backend.diffusion_engine.cosmos import Cosmos
 from backend.diffusion_engine.wan import Wan
 from backend.diffusion_engine.lumina2 import Lumina2, Zimage
 
+
 possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux, Cosmos, Wan, Zimage, Lumina2]
 
 
@@ -724,7 +725,13 @@ def replace_state_dict(sd, asd, guess):
             v = asd.pop(f"control_noise_refiner.{y}.attention.to_v.weight")
             sd[f"model.diffusion_model.control_noise_refiner.{y}.attention.qkv.weight"] = torch.cat((q, k, v), dim=0)
 
-        layers = 15 if "control_layers.14.adaLN_modulation.0.bias" in asd else 6
+        if "control_layers.14.adaLN_modulation.0.bias" in asd:
+            layers = 15
+        elif "control_layers.5.adaLN_modulation.0.bias" in asd:
+            layers = 6
+        else:
+            layers = 3
+
         for y in range(layers):
             sd[f"model.diffusion_model.control_layers.{y}.attention.k_norm.weight"] = asd.pop(f"control_layers.{y}.attention.norm_k.weight")
             sd[f"model.diffusion_model.control_layers.{y}.attention.q_norm.weight"] = asd.pop(f"control_layers.{y}.attention.norm_q.weight")
