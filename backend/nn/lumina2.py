@@ -281,25 +281,25 @@ class Lumina2DiT(nn.Module):
         #400 keys: lumina2, 455 keys: ZITurbo (maybe 1-3 less if pad tokens or sigmas not included)
         self.add_control_noise_refiner = False
         self.add_control_noise_refiner_correct = Z_image_control_2_0_broken
-        if num_keys > 400:  # z-image-turbo + control
-            if num_keys > 575:  #version 2
+        if num_keys in [535, 574, 715]:  # z-image-turbo + control
+            if num_keys == 715:  #version 2
                 layers = 15
                 control_layers_places = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28]
                 control_refiner_places = [0, 1]
                 self.control_x_embedder = nn.Linear(1 * 2 * 2 * 33, dim, bias=True)
                 self.add_control_noise_refiner = True
-            elif num_keys > 455: # v2.1 lite
+            elif num_keys == 574: #version 1
+                layers = 6
+                control_layers_places = [0, 5, 10, 15, 20, 25]
+                control_refiner_places = []
+                self.control_x_embedder = nn.Linear(1 * 2 * 2 * 16, dim, bias=True)
+            elif num_keys == 535: # v2.1 lite
                 layers = 3
                 control_layers_places = [0, 10, 20]
                 control_refiner_places = [0, 1]
                 self.control_x_embedder = nn.Linear(1 * 2 * 2 * 33, dim, bias=True)
                 self.add_control_noise_refiner = True
                 self.add_control_noise_refiner_correct = True
-            else: #version 1
-                layers = 6
-                control_layers_places = [0, 5, 10, 15, 20, 25]
-                control_refiner_places = []
-                self.control_x_embedder = nn.Linear(1 * 2 * 2 * 16, dim, bias=True)
 
             self.control_layers = nn.ModuleList(
                 [
