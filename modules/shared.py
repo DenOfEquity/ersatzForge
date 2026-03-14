@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 cmd_opts = shared_cmd_options.cmd_opts
 parser = shared_cmd_options.parser
 
-parallel_processing_allowed = True
 styles_filename = cmd_opts.styles_file = cmd_opts.styles_file if len(cmd_opts.styles_file) > 0 else [os.path.join(data_path, 'styles.csv'), os.path.join(data_path, 'styles_integrated.csv')]
 config_filename = cmd_opts.ui_settings_file
 hide_dirs = {"visible": not cmd_opts.hide_ui_dir_config}

@@ -122,10 +122,6 @@ def images_tensor_to_samples(image, approximation=None, model=None):
 def store_latent(decoded):
     state.current_latent = decoded
 
-    if opts.show_progress_every_n_steps > 0 and shared.state.sampling_step % opts.show_progress_every_n_steps == 0:
-        if not shared.parallel_processing_allowed:
-            shared.state.assign_current_image(sample_to_image(decoded))
-
 
 def is_sampler_using_eta_noise_seed_delta(p):
     """returns whether sampler from config will use eta noise seed delta for image creation"""

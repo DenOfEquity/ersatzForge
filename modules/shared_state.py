@@ -24,7 +24,7 @@ class State:
     sampling_steps = 0
     current_latent = None
     current_image = None
-    current_image_sampling_step = 0
+    current_image_sampling_step = -1
     id_live_preview = 0
     textinfo = None
     time_start = None
@@ -92,7 +92,7 @@ class State:
 
         self.job_no += 1
         self.sampling_step = 0
-        self.current_image_sampling_step = 0
+        self.current_image_sampling_step = -1
 
     def dict(self):
         obj = {
@@ -118,7 +118,7 @@ class State:
         self.job_timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         self.current_latent = None
         self.current_image = None
-        self.current_image_sampling_step = 0
+        self.current_image_sampling_step = -1
         self.id_live_preview = 0
         self.skipped = False
         self.interrupted = False
@@ -139,10 +139,7 @@ class State:
     @torch.inference_mode()
     def set_current_image(self):
         """if enough sampling steps have been made after the last call to this, sets self.current_image from self.current_latent, and modifies self.id_live_preview accordingly"""
-        if not shared.parallel_processing_allowed:
-            return
-
-        if self.sampling_step - self.current_image_sampling_step >= shared.opts.show_progress_every_n_steps and shared.opts.show_progress_every_n_steps > 0:
+        if shared.opts.show_progress_every_n_steps > 0 and self.sampling_step - self.current_image_sampling_step >= shared.opts.show_progress_every_n_steps:
             self.do_set_current_image()
 
     @torch.inference_mode()
