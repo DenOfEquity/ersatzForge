@@ -135,7 +135,7 @@ def turbo_scheduler(n, sigma_min, sigma_max, inner_model, device):
     unet = inner_model.inner_model.forge_objects.unet
     timesteps = torch.flip(torch.arange(1, n + 1) * float(1000.0 / n) - 1, (0,)).round().to(torch.int64).clip(0, 999)
     sigmas = unet.model.predictor.sigma(timesteps)
-    
+
     if isinstance(inner_model.predictor, Prediction):
         lo = sigmas[-1].clone()
         hi = sigmas[0].clone() - lo
@@ -144,7 +144,7 @@ def turbo_scheduler(n, sigma_min, sigma_max, inner_model, device):
         sigmas /= hi
         sigmas *= (sigma_max-sigma_min)
         sigmas += sigma_min
-    
+
     sigmas = torch.cat([sigmas, sigmas.new_zeros([1])])
     return sigmas.to(device)
 
@@ -179,6 +179,7 @@ def get_align_your_steps_sigmas_GITS(n, sigma_min, sigma_max, device):
         sigmas.append(0.0)
 
     return torch.FloatTensor(sigmas).to(device)
+
 
 def ays_11_sigmas(n, sigma_min, sigma_max, device='cpu'):
     # https://research.nvidia.com/labs/toronto-ai/AlignYourSteps/howto.html
@@ -255,6 +256,7 @@ def sigmoid_offset_sigmas(n, sigma_min, sigma_max, inner_model, device):
             sigs[x] += sigma_min
 
     sigs.append(0.0)
+
     return torch.FloatTensor(sigs).to(device)
 
 
@@ -269,7 +271,7 @@ def bong_tangent_scheduler(n, sigma_min, sigma_max, inner_model, device):
         sscale = start - end
 
         sigmas = [((0.5 * ((2 / math.pi) * math.atan(-slope * (x-pivot))+1)) - smin) * (1 / srange) * sscale + end    for x in range(steps)]
-        
+
         return sigmas
 
     start = 1.0
@@ -298,7 +300,7 @@ def bong_tangent_scheduler(n, sigma_min, sigma_max, inner_model, device):
 
     tan_sigmas_1 = get_bong_tangent_sigmas(stage_1_len, slope_1, pivot_1, start, middle)
     tan_sigmas_2 = get_bong_tangent_sigmas(stage_2_len, slope_2, pivot_2 - stage_1_len, middle, end)
-    
+
     tan_sigmas_1 = tan_sigmas_1[:-1]
 
     tan_sigmas = tan_sigmas_1 + tan_sigmas_2
@@ -323,13 +325,81 @@ def bong_tangent_scheduler(n, sigma_min, sigma_max, inner_model, device):
     return torch.FloatTensor(sigs).to(device)
 
 
+def linear_quadratic_scheduler(n, sigma_min, sigma_max, inner_model, device):
+    threshold_noise = 0.025 # option?
+
+    if n == 1:
+        sigma_schedule = [1.0]
+    else:
+        linear_steps = n // 2
+        quadratic_steps = n - linear_steps
+
+        linear_sigma_schedule = [i * threshold_noise / linear_steps for i in range(linear_steps)]
+        threshold_noise_step_diff = linear_steps - threshold_noise * n
+        quadratic_coef = threshold_noise_step_diff / (linear_steps * quadratic_steps**2)
+        linear_coef = threshold_noise / linear_steps - 2 * threshold_noise_step_diff / (quadratic_steps**2)
+        const = quadratic_coef * (linear_steps**2)
+        quadratic_sigma_schedule = [quadratic_coef * (i**2) + linear_coef * i + const for i in range(linear_steps, n)]
+        sigma_schedule = linear_sigma_schedule + quadratic_sigma_schedule
+        sigma_schedule = [1.0 - x for x in sigma_schedule]
+
+    if isinstance(inner_model.predictor, Prediction):
+        if n == 1:
+            sigs = [sigma_max]
+        else:
+            sigs = []
+            lo = sigma_schedule[-1]
+            hi = sigma_schedule[0] - lo
+            for x in range(len(sigma_schedule)):
+                sigma = sigma_schedule[x]
+                sigma -= lo
+                sigma /= hi
+                sigma *= (sigma_max-sigma_min)
+                sigma += sigma_min
+                sigs.append(sigma)
+    else:
+        sigs = sigma_schedule
+
+    sigs += [0.0]
+    return torch.FloatTensor(sigs).to(device)
+
+
+def linear_actual_scheduler(n, sigma_min, sigma_max, inner_model, device):
+    if n == 1:
+        sigma_schedule = [1.0]
+    else:
+        nmin = (math.pi / math.e) / n
+        delta = (1.0 - nmin) / (n - 1)
+        sigma_schedule = [nmin + delta * (n - 1 - i) for i in range(n)]
+
+    if isinstance(inner_model.predictor, Prediction):
+        if n == 1:
+            sigs = [sigma_max]
+        else:
+            sigs = []
+            lo = sigma_schedule[-1]
+            hi = sigma_schedule[0] - lo
+            for x in range(len(sigma_schedule)):
+                sigma = sigma_schedule[x]
+                sigma -= lo
+                sigma /= hi
+                sigma *= (sigma_max-sigma_min)
+                sigma += sigma_min
+                sigs.append(sigma)
+    else:
+        sigs = sigma_schedule
+
+    sigs += [0.0]
+    return torch.FloatTensor(sigs).to(device)
+
+
 schedulers = [
     Scheduler('automatic', 'Automatic', None),
     Scheduler('uniform', 'Uniform', uniform, need_inner_model=True),
     Scheduler('karras', 'Karras', k_diffusion.sampling.get_sigmas_karras, default_rho=7.0),
     Scheduler('exponential', 'Exponential', k_diffusion.sampling.get_sigmas_exponential),
     Scheduler('polyexponential', 'Polyexponential', k_diffusion.sampling.get_sigmas_polyexponential, default_rho=1.0),
-    Scheduler('sgm_uniform', 'SGM Uniform', sgm_uniform, need_inner_model=True, aliases=["SGMUniform"]),
+    Scheduler('sgm_uniform', 'SGM Uniform', sgm_uniform, need_inner_model=True, aliases=['SGMUniform']),
     Scheduler('kl_optimal', 'KL Optimal', kl_optimal),
     Scheduler('simple', 'Simple', simple_scheduler, need_inner_model=True),
     Scheduler('normal', 'Normal', normal_scheduler, need_inner_model=True),
@@ -337,10 +407,12 @@ schedulers = [
     Scheduler('beta', 'Beta', beta_scheduler, need_inner_model=True),
     Scheduler('turbo', 'Turbo', turbo_scheduler, need_inner_model=True),
     Scheduler('align_your_steps_GITS', 'Align Your Steps GITS', get_align_your_steps_sigmas_GITS),
-    Scheduler('align_your_steps_11', 'Align Your Steps 11', ays_11_sigmas),
+    Scheduler('align_your_steps_11', 'Align Your Steps 11', ays_11_sigmas, aliases=['Align Your Steps']),
     Scheduler('align_your_steps_32', 'Align Your Steps 32', ays_32_sigmas),
     Scheduler('sigmoid_offset', 'Sigmoid Offset', sigmoid_offset_sigmas, need_inner_model=True),
     Scheduler('bong_tangent', 'Bong Tangent', bong_tangent_scheduler, need_inner_model=True),
+    Scheduler('linear_actual', 'Linear Actual', linear_actual_scheduler, need_inner_model=True),
+    Scheduler('linear_quadratic', 'Linear Quadratic', linear_quadratic_scheduler, need_inner_model=True),
 ]
 
 schedulers_map = {**{x.name: x for x in schedulers}, **{x.label: x for x in schedulers}}
