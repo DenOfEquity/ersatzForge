@@ -40,7 +40,6 @@ dir_path = os.path.dirname(__file__)
 
 def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_path, state_dict):
     config_path = os.path.join(repo_path, component_name)
-    # print (lib_name, cls_name, component_name)
 
     if component_name in ['feature_extractor', 'safety_checker']:
         return None
@@ -278,6 +277,42 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 model_loader = lambda c: WanModel(**c)
             elif cls_name == "Lumina2Transformer2DModel":
                 from backend.nn.lumina2 import Lumina2DiT
+                
+                # convert diffusers
+                if "noise_refiner.0.attention.norm_k.weight" in state_dict:
+                    MAP_BASIC = [
+                        ("final_layer.linear.weight", "all_final_layer.2-1.linear.weight"),
+                        ("final_layer.linear.bias", "all_final_layer.2-1.linear.bias"),
+                        ("final_layer.adaLN_modulation.1.weight", "all_final_layer.2-1.adaLN_modulation.1.weight"),
+                        ("final_layer.adaLN_modulation.1.bias", "all_final_layer.2-1.adaLN_modulation.1.bias"),
+                        ("x_embedder.weight", "all_x_embedder.2-1.weight"),
+                        ("x_embedder.bias", "all_x_embedder.2-1.bias"),
+                    ]
+
+                    for c, diffusers in MAP_BASIC:
+                        state_dict[c] = state_dict.pop(diffusers)
+
+                    for y in ["context_refiner.0", "context_refiner.1", "noise_refiner.0", "noise_refiner.1"]:
+                        state_dict[f"{y}.attention.k_norm.weight"] = state_dict.pop(f"{y}.attention.norm_k.weight")
+                        state_dict[f"{y}.attention.q_norm.weight"] = state_dict.pop(f"{y}.attention.norm_q.weight")
+                        state_dict[f"{y}.attention.out.weight"]    = state_dict.pop(f"{y}.attention.to_out.0.weight")
+
+                        q = state_dict.pop(f"{y}.attention.to_q.weight")
+                        k = state_dict.pop(f"{y}.attention.to_k.weight")
+                        v = state_dict.pop(f"{y}.attention.to_v.weight")
+                        state_dict[f"{y}.attention.qkv.weight"] = torch.cat((q, k, v), dim=0)
+
+                    for y in range(30):
+                        state_dict[f"layers.{y}.attention.k_norm.weight"] = state_dict.pop(f"layers.{y}.attention.norm_k.weight")
+                        state_dict[f"layers.{y}.attention.q_norm.weight"] = state_dict.pop(f"layers.{y}.attention.norm_q.weight")
+                        state_dict[f"layers.{y}.attention.out.weight"]    = state_dict.pop(f"layers.{y}.attention.to_out.0.weight")
+
+                        q = state_dict.pop(f"layers.{y}.attention.to_q.weight")
+                        k = state_dict.pop(f"layers.{y}.attention.to_k.weight")
+                        v = state_dict.pop(f"layers.{y}.attention.to_v.weight")
+                        state_dict[f"layers.{y}.attention.qkv.weight"] = torch.cat((q, k, v), dim=0)
+
+                
                 # detect broken control fun 2.0, via Comfy
                 broken = False
                 ref_weight = state_dict.get("control_noise_refiner.0.after_proj.weight", None)
