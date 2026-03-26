@@ -69,6 +69,10 @@ def detect_unet_config(state_dict, key_prefix):
             if '{}cap_pad_token'.format(key_prefix) in state_dict_keys:
                 dit_config["pad_tokens_multiple"] = 32
                 state_dict.pop("{}model_sampling.sigmas".format(key_prefix), None)
+            # if '{}edit_key'.format(key_prefix) in state_dict_keys:
+                # dit_config["image_model"] = "ZimageOmni"
+                # dit_config["edit"] = True
+            
         return dit_config
 
     if '{}joint_blocks.0.context_block.attn.qkv.weight'.format(key_prefix) in state_dict_keys:  # mmdit model
@@ -107,39 +111,6 @@ def detect_unet_config(state_dict, key_prefix):
             unet_config["context_processor_layers"] = count_blocks(state_dict_keys, '{}context_processor.layers.'.format(key_prefix) + '{}.')
         return unet_config
 
-    if '{}clf.1.weight'.format(key_prefix) in state_dict_keys:  # stable cascade
-        unet_config = {}
-        text_mapper_name = '{}clip_txt_mapper.weight'.format(key_prefix)
-        if text_mapper_name in state_dict_keys:
-            unet_config['stable_cascade_stage'] = 'c'
-            w = state_dict[text_mapper_name]
-            if w.shape[0] == 1536:  # stage c lite
-                unet_config['c_cond'] = 1536
-                unet_config['c_hidden'] = [1536, 1536]
-                unet_config['nhead'] = [24, 24]
-                unet_config['blocks'] = [[4, 12], [12, 4]]
-            elif w.shape[0] == 2048:  # stage c full
-                unet_config['c_cond'] = 2048
-        elif '{}clip_mapper.weight'.format(key_prefix) in state_dict_keys:
-            unet_config['stable_cascade_stage'] = 'b'
-            w = state_dict['{}down_blocks.1.0.channelwise.0.weight'.format(key_prefix)]
-            if w.shape[-1] == 640:
-                unet_config['c_hidden'] = [320, 640, 1280, 1280]
-                unet_config['nhead'] = [-1, -1, 20, 20]
-                unet_config['blocks'] = [[2, 6, 28, 6], [6, 28, 6, 2]]
-                unet_config['block_repeat'] = [[1, 1, 1, 1], [3, 3, 2, 2]]
-            elif w.shape[-1] == 576:  # stage b lite
-                unet_config['c_hidden'] = [320, 576, 1152, 1152]
-                unet_config['nhead'] = [-1, 9, 18, 18]
-                unet_config['blocks'] = [[2, 4, 14, 4], [4, 14, 4, 2]]
-                unet_config['block_repeat'] = [[1, 1, 1, 1], [2, 2, 2, 2]]
-        return unet_config
-
-    if '{}transformer.rotary_pos_emb.inv_freq'.format(key_prefix) in state_dict_keys:  # stable audio dit
-        unet_config = {}
-        unet_config["audio_model"] = "dit1.0"
-        return unet_config
-
     if '{}double_layers.0.attn.w1q.weight'.format(key_prefix) in state_dict_keys:  # aura flow dit
         unet_config = {}
         unet_config["max_seq"] = state_dict['{}positional_encoding'.format(key_prefix)].shape[1]
@@ -150,9 +121,14 @@ def detect_unet_config(state_dict, key_prefix):
         unet_config["n_layers"] = double_layers + single_layers
         return unet_config
 
-    if '{}blocks.0.mlp.layer1.weight'.format(key_prefix) in state_dict_keys:  # Cosmos predict2
+    if '{}blocks.0.mlp.layer1.weight'.format(key_prefix) in state_dict_keys:  # Cosmos predict2 / Anima
         dit_config = {}
-        dit_config["image_model"] = "cosmos_predict2"
+
+        if "{}llm_adapter.blocks.0.cross_attn.q_proj.weight".format(key_prefix) in state_dict_keys:
+            dit_config["image_model"] = "anima"
+        else:
+            dit_config["image_model"] = "cosmos_predict2"
+
         dit_config["max_img_h"] = 240
         dit_config["max_img_w"] = 240
         dit_config["max_frames"] = 128
@@ -234,19 +210,6 @@ def detect_unet_config(state_dict, key_prefix):
         if flf_weight is not None:
             dit_config["flf_pos_embed_token_number"] = flf_weight.shape[1]
         return dit_config
-
-    if '{}mlp_t5.0.weight'.format(key_prefix) in state_dict_keys:  # Hunyuan DiT
-        unet_config = {}
-        unet_config["image_model"] = "hydit"
-        unet_config["depth"] = count_blocks(state_dict_keys, '{}blocks.'.format(key_prefix) + '{}.')
-        unet_config["hidden_size"] = state_dict['{}x_embedder.proj.weight'.format(key_prefix)].shape[0]
-        if unet_config["hidden_size"] == 1408 and unet_config["depth"] == 40:  # DiT-g/2
-            unet_config["mlp_ratio"] = 4.3637
-        if state_dict['{}extra_embedder.0.weight'.format(key_prefix)].shape[1] == 3968:
-            unet_config["size_cond"] = True
-            unet_config["use_style_cond"] = True
-            unet_config["image_model"] = "hydit1"
-        return unet_config
 
     if '{}nerf_image_embedder.embedder.0.bias'.format(key_prefix) in state_dict_keys: #ChromaDCT
         dit_config = {}

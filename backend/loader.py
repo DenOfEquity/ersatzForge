@@ -29,9 +29,10 @@ from backend.diffusion_engine.chromaDCT import ChromaDCT
 from backend.diffusion_engine.cosmos import Cosmos
 from backend.diffusion_engine.wan import Wan
 from backend.diffusion_engine.lumina2 import Lumina2, Zimage
+from backend.diffusion_engine.anima import Anima
 
 
-possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux, Cosmos, Wan, Zimage, Lumina2]
+possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux, Cosmos, Wan, Zimage, Lumina2, Anima]
 
 
 logging.getLogger("diffusers").setLevel(logging.ERROR)
@@ -148,9 +149,12 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
         if cls_name == "Qwen3Model":
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have Qwen3 state dict!"
 
-            from backend.nn.llm.llama import Qwen3_4B
-
             config = read_arbitrary_config(config_path)
+
+            if config["hidden_size"] == 2560:
+                from backend.nn.llm.llama import Qwen3_4B as Qwen3
+            else:
+                from backend.nn.llm.llama import Qwen3_06B as Qwen3
 
             storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
@@ -168,11 +172,11 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
                     with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
-                        model = Qwen3_4B(config)
+                        model = Qwen3(config)
             else:
                 with modeling_utils.no_init_weights():
                     with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
-                        model = Qwen3_4B(config)
+                        model = Qwen3(config)
 
             load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[])
 
@@ -711,9 +715,14 @@ def replace_state_dict(sd, asd, guess):
                 continue
             sd[f"{text_encoder_key_prefix}gemma2_2b.{k}"] = v
 
-    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 4B (Z Image)
+    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 4B (Z Image), 06B (Anima)
+        size = asd["model.layers.0.post_attention_layernorm.weight"].shape[0]
+        if size == 1024:
+            size_str = "06b"
+        else:
+            size_str = "4b"
         for k, v in asd.items():
-            sd[f"{text_encoder_key_prefix}qwen3_4b.{k}"] = v
+            sd[f"{text_encoder_key_prefix}qwen3_{size_str}.{k}"] = v
 
 
     # ResAdapter (bytedance) unet patch (sd1.5 or sdxl)
@@ -819,6 +828,13 @@ def split_state_dict(sd, additional_state_dicts: list = None):
         state_dict[v] = try_filter_state_dict(sd, [k + '.'])
 
     state_dict['ignore'] = sd
+
+    if "Anima" in guess.huggingface_repo:
+        # move LLMAdapter from transformer to text_encoder
+        keys = list(state_dict["transformer"].keys())
+        for k in keys:
+            if k.startswith("llm_adapter"):
+                state_dict["text_encoder"][k] = state_dict["transformer"].pop(k)
 
     print_dict = {k: len(v) for k, v in state_dict.items()}
     print(f'StateDict Keys: {print_dict}')

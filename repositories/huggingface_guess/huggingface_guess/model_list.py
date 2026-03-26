@@ -594,7 +594,7 @@ class Lumina2(BASE):
     unet_extra_config = {}
     latent_format = latent.Flux
 
-    supported_inference_dtypes = [torch.bfloat16, torch.float32]
+    supported_inference_dtypes = [torch.bfloat16, torch.float32]#, torch.float16
 
     vae_key_prefix = ["vae."]
     text_encoder_key_prefix = ["text_encoders."]
@@ -630,4 +630,30 @@ class Zimage(Lumina2):
         return {"qwen3_4b": "text_encoder"}
 
 
-models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage]#, WAN21_I2V]
+class Anima(BASE):
+    huggingface_repo = "Anima"
+
+    unet_config = {
+        "image_model": "anima",
+        "in_channels": 16,
+    }
+
+    sampling_settings = {
+        "multiplier": 1.0,
+        "shift": 3.0,
+    }
+
+    unet_extra_config = {}
+    latent_format = latent.Wan21
+
+    memory_usage_factor = 1.32
+
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
+
+    unet_target = "transformer"
+
+    def clip_target(self, state_dict={}):
+        return {"qwen3_06b": "text_encoder"}
+
+
+models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima]#, WAN21_I2V]

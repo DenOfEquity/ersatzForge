@@ -29,34 +29,17 @@ from backend.attention import attention_function
 # limitations under the License.
 
 
-class RMSNorm(torch.nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-5) -> None:
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
-
-    def reset_parameters(self) -> None:
-        torch.nn.init.ones_(self.weight)
-
-    def _norm(self, x: torch.Tensor) -> torch.Tensor:
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        output = self._norm(x.to(torch.float32)).type_as(x)
-        return output * self.weight
-
-
 class VideoPositionEmb(nn.Module):
-    def forward(self, x_B_T_H_W_C: torch.Tensor, fps=Optional[torch.Tensor], device=None, dtype=None) -> torch.Tensor:
+    def forward(self, x_B_T_H_W_C: torch.Tensor, fps=Optional[torch.Tensor], device=None) -> torch.Tensor:
         """
         It delegates the embedding generation to generate_embeddings function.
         """
         B_T_H_W_C = x_B_T_H_W_C.shape
-        embeddings = self.generate_embeddings(B_T_H_W_C, fps=fps, device=device, dtype=dtype)
+        embeddings = self.generate_embeddings(B_T_H_W_C, fps=fps, device=device)
 
         return embeddings
 
-    def generate_embeddings(self, B_T_H_W_C: torch.Size, fps=Optional[torch.Tensor], device=None):
+    def generate_embeddings(self, B_T_H_W_C: torch.Size, fps=Optional[torch.Tensor]):
         raise NotImplementedError
 
 
@@ -73,7 +56,6 @@ class VideoRopePosition3DEmb(VideoPositionEmb):
         w_extrapolation_ratio: float = 1.0,
         t_extrapolation_ratio: float = 1.0,
         enable_fps_modulation: bool = True,
-        device=None,
         **kwargs,  # used for compatibility with other positional embeddings; unused in this class
     ):
         del kwargs
@@ -90,12 +72,12 @@ class VideoRopePosition3DEmb(VideoPositionEmb):
         assert dim == dim_h + dim_w + dim_t, f"bad dim: {dim} != {dim_h} + {dim_w} + {dim_t}"
         self.register_buffer(
             "dim_spatial_range",
-            torch.arange(0, dim_h, 2, device=device)[: (dim_h // 2)].float() / dim_h,
+            torch.arange(0, dim_h, 2)[: (dim_h // 2)].to(torch.float32) / dim_h,
             persistent=False,
         )
         self.register_buffer(
             "dim_temporal_range",
-            torch.arange(0, dim_t, 2, device=device)[: (dim_t // 2)].float() / dim_t,
+            torch.arange(0, dim_t, 2)[: (dim_t // 2)].to(torch.float32) / dim_t,
             persistent=False,
         )
 
@@ -111,7 +93,6 @@ class VideoRopePosition3DEmb(VideoPositionEmb):
         w_ntk_factor: Optional[float] = None,
         t_ntk_factor: Optional[float] = None,
         device=None,
-        dtype=None,
     ):
         """
         Generate embeddings for the given input size.
@@ -176,8 +157,6 @@ class LearnablePosEmbAxis(VideoPositionEmb):
         len_h: int,
         len_w: int,
         len_t: int,
-        device=None,
-        dtype=None,
         **kwargs,
     ):
         """
@@ -189,16 +168,16 @@ class LearnablePosEmbAxis(VideoPositionEmb):
         self.interpolation = interpolation
         assert self.interpolation in ["crop"], f"Unknown interpolation method {self.interpolation}"
 
-        self.pos_emb_h = nn.Parameter(torch.empty(len_h, model_channels, device=device, dtype=dtype))
-        self.pos_emb_w = nn.Parameter(torch.empty(len_w, model_channels, device=device, dtype=dtype))
-        self.pos_emb_t = nn.Parameter(torch.empty(len_t, model_channels, device=device, dtype=dtype))
+        self.pos_emb_h = nn.Parameter(torch.empty(len_h, model_channels))
+        self.pos_emb_w = nn.Parameter(torch.empty(len_w, model_channels))
+        self.pos_emb_t = nn.Parameter(torch.empty(len_t, model_channels))
 
-    def generate_embeddings(self, B_T_H_W_C: torch.Size, fps=Optional[torch.Tensor], device=None, dtype=None) -> torch.Tensor:
+    def generate_embeddings(self, B_T_H_W_C: torch.Size, fps=Optional[torch.Tensor]) -> torch.Tensor:
         B, T, H, W, _ = B_T_H_W_C
         if self.interpolation == "crop":
-            emb_h_H = self.pos_emb_h[:H].to(device=device, dtype=dtype)
-            emb_w_W = self.pos_emb_w[:W].to(device=device, dtype=dtype)
-            emb_t_T = self.pos_emb_t[:T].to(device=device, dtype=dtype)
+            emb_h_H = self.pos_emb_h[:H]
+            emb_w_W = self.pos_emb_w[:W]
+            emb_t_T = self.pos_emb_t[:T]
             emb = (
                 repeat(emb_t_T, "t d-> b t h w d", b=B, h=H, w=W)
                 + repeat(emb_h_H, "h d-> b t h w d", b=B, t=T, w=W)
@@ -213,23 +192,13 @@ class LearnablePosEmbAxis(VideoPositionEmb):
         return emb / norm.to(emb.dtype)
 
 
-def apply_rotary_pos_emb(
-    t: torch.Tensor,
-    freqs: torch.Tensor,
-) -> torch.Tensor:
-    t_ = t.reshape(*t.shape[:-1], 2, -1).movedim(-2, -1).unsqueeze(-2).float()
-    t_out = freqs[..., 0] * t_[..., 0] + freqs[..., 1] * t_[..., 1]
-    t_out = t_out.movedim(-1, -2).reshape(*t.shape).type_as(t)
-    return t_out
-
-
 # ---------------------- Feed Forward Network -----------------------
 class GPT2FeedForward(nn.Module):
-    def __init__(self, d_model: int, d_ff: int, device=None, dtype=None) -> None:
+    def __init__(self, d_model: int, d_ff: int) -> None:
         super().__init__()
         self.activation = nn.GELU()
-        self.layer1 = nn.Linear(d_model, d_ff, bias=False, device=device, dtype=dtype)
-        self.layer2 = nn.Linear(d_ff, d_model, bias=False, device=device, dtype=dtype)
+        self.layer1 = nn.Linear(d_model, d_ff, bias=False)
+        self.layer2 = nn.Linear(d_ff, d_model, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.layer1(x)
@@ -306,8 +275,6 @@ class Attention(nn.Module):
         n_heads: int = 8,
         head_dim: int = 64,
         dropout: float = 0.0,
-        device=None,
-        dtype=None,
     ) -> None:
         super().__init__()
         logging.debug(
@@ -322,19 +289,26 @@ class Attention(nn.Module):
         self.n_heads = n_heads
         self.head_dim = head_dim
 
-        self.q_proj = nn.Linear(query_dim, inner_dim, bias=False, device=device, dtype=dtype)
-        self.q_norm = RMSNorm(self.head_dim, eps=1e-6)
+        self.q_proj = nn.Linear(query_dim, inner_dim, bias=False)
+        self.q_norm = nn.RMSNorm(self.head_dim, eps=1e-6)
 
-        self.k_proj = nn.Linear(context_dim, inner_dim, bias=False, device=device, dtype=dtype)
-        self.k_norm = RMSNorm(self.head_dim, eps=1e-6)
+        self.k_proj = nn.Linear(context_dim, inner_dim, bias=False)
+        self.k_norm = nn.RMSNorm(self.head_dim, eps=1e-6)
 
-        self.v_proj = nn.Linear(context_dim, inner_dim, bias=False, device=device, dtype=dtype)
+        self.v_proj = nn.Linear(context_dim, inner_dim, bias=False)
         self.v_norm = nn.Identity()
 
-        self.output_proj = nn.Linear(inner_dim, query_dim, bias=False, device=device, dtype=dtype)
+        self.output_proj = nn.Linear(inner_dim, query_dim, bias=False)
         self.output_dropout = nn.Dropout(dropout) if dropout > 1e-4 else nn.Identity()
 
         self.attn_op = torch_attention_op
+
+    @staticmethod
+    def apply_rotary_pos_emb(t: torch.Tensor, freqs: torch.Tensor) -> torch.Tensor:
+        t_ = t.reshape(*t.shape[:-1], 2, -1).movedim(-2, -1).unsqueeze(-2).to(torch.float32)
+        t_out = freqs[..., 0] * t_[..., 0] + freqs[..., 1] * t_[..., 1]
+        t_out = t_out.movedim(-1, -2).reshape(*t.shape).type_as(t)
+        return t_out
 
     def compute_qkv(
         self,
@@ -358,8 +332,8 @@ class Attention(nn.Module):
             k = self.k_norm(k)
 
             if self.is_selfattn and rope_emb is not None:  # only apply to self-attention!
-                q = apply_rotary_pos_emb(q, rope_emb)
-                k = apply_rotary_pos_emb(k, rope_emb)
+                q = self.apply_rotary_pos_emb(q, rope_emb)
+                k = self.apply_rotary_pos_emb(k, rope_emb)
             return q, k, v
 
         q, k, v = apply_norm_and_rotary_pos_emb(q, k, v, rope_emb)
@@ -392,13 +366,13 @@ class Timesteps(nn.Module):
 
     def forward(self, timesteps_B_T: torch.Tensor) -> torch.Tensor:
         assert timesteps_B_T.ndim == 2, f"Expected 2D input, got {timesteps_B_T.ndim}"
-        timesteps = timesteps_B_T.flatten().float()
+        timesteps = timesteps_B_T.flatten().to(torch.float32)
         half_dim = self.num_channels // 2
         exponent = -math.log(10000) * torch.arange(half_dim, dtype=torch.float32, device=timesteps.device)
         exponent = exponent / (half_dim - 0.0)
 
         emb = torch.exp(exponent)
-        emb = timesteps[:, None].float() * emb[None, :]
+        emb = timesteps[:, None].to(torch.float32) * emb[None, :]
 
         sin_emb = torch.sin(emb)
         cos_emb = torch.cos(emb)
@@ -408,20 +382,20 @@ class Timesteps(nn.Module):
 
 
 class TimestepEmbedding(nn.Module):
-    def __init__(self, in_features: int, out_features: int, use_adaln_lora: bool = False, device=None, dtype=None):
+    def __init__(self, in_features: int, out_features: int, use_adaln_lora: bool = False):
         super().__init__()
         logging.debug(
             f"Using AdaLN LoRA Flag:  {use_adaln_lora}. We enable bias if no AdaLN LoRA for backward compatibility."
         )
         self.in_dim = in_features
         self.out_dim = out_features
-        self.linear_1 = nn.Linear(in_features, out_features, bias=not use_adaln_lora, device=device, dtype=dtype)
+        self.linear_1 = nn.Linear(in_features, out_features, bias=not use_adaln_lora)
         self.activation = nn.SiLU()
         self.use_adaln_lora = use_adaln_lora
         if use_adaln_lora:
-            self.linear_2 = nn.Linear(out_features, 3 * out_features, bias=False, device=device, dtype=dtype)
+            self.linear_2 = nn.Linear(out_features, 3 * out_features, bias=False)
         else:
-            self.linear_2 = nn.Linear(out_features, out_features, bias=False, device=device, dtype=dtype)
+            self.linear_2 = nn.Linear(out_features, out_features, bias=False)
 
     def forward(self, sample: torch.Tensor) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         emb = self.linear_1(sample)
@@ -459,7 +433,6 @@ class PatchEmbed(nn.Module):
         temporal_patch_size: int,
         in_channels: int = 3,
         out_channels: int = 768,
-        device=None, dtype=None
     ):
         super().__init__()
         # self.spatial_patch_size = spatial_patch_size
@@ -473,7 +446,7 @@ class PatchEmbed(nn.Module):
                 n=spatial_patch_size,
             ),
             nn.Linear(
-                in_channels * spatial_patch_size * spatial_patch_size * temporal_patch_size, out_channels, bias=False, device=device, dtype=dtype
+                in_channels * spatial_patch_size * spatial_patch_size * temporal_patch_size, out_channels, bias=False,
             ),
         )
 
@@ -515,12 +488,11 @@ class FinalLayer(nn.Module):
         out_channels: int,
         use_adaln_lora: bool = False,
         adaln_lora_dim: int = 256,
-        device=None, dtype=None
     ):
         super().__init__()
         self.layer_norm = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.linear = nn.Linear(
-            hidden_size, spatial_patch_size * spatial_patch_size * temporal_patch_size * out_channels, bias=False, device=device, dtype=dtype
+            hidden_size, spatial_patch_size * spatial_patch_size * temporal_patch_size * out_channels, bias=False
         )
         self.hidden_size = hidden_size
         n_adaln_chunks = 2
@@ -529,12 +501,12 @@ class FinalLayer(nn.Module):
         if use_adaln_lora:
             self.adaln_modulation = nn.Sequential(
                 nn.SiLU(),
-                nn.Linear(hidden_size, adaln_lora_dim, bias=False, device=device, dtype=dtype),
-                nn.Linear(adaln_lora_dim, n_adaln_chunks * hidden_size, bias=False, device=device, dtype=dtype),
+                nn.Linear(hidden_size, adaln_lora_dim, bias=False),
+                nn.Linear(adaln_lora_dim, n_adaln_chunks * hidden_size, bias=False),
             )
         else:
             self.adaln_modulation = nn.Sequential(
-                nn.SiLU(), nn.Linear(hidden_size, n_adaln_chunks * hidden_size, bias=False, device=device, dtype=dtype)
+                nn.SiLU(), nn.Linear(hidden_size, n_adaln_chunks * hidden_size, bias=False)
             )
 
     def forward(
@@ -597,41 +569,39 @@ class Block(nn.Module):
         mlp_ratio: float = 4.0,
         use_adaln_lora: bool = False,
         adaln_lora_dim: int = 256,
-        device=None,
-        dtype=None,
     ):
         super().__init__()
 
-        self.layer_norm_self_attn = nn.LayerNorm(x_dim, elementwise_affine=False, eps=1e-6, device=device, dtype=dtype)
-        self.self_attn = Attention(x_dim, None, num_heads, x_dim // num_heads, device=device, dtype=dtype)
+        self.layer_norm_self_attn = nn.LayerNorm(x_dim, elementwise_affine=False, eps=1e-6)
+        self.self_attn = Attention(x_dim, None, num_heads, x_dim // num_heads)
 
-        self.layer_norm_cross_attn = nn.LayerNorm(x_dim, elementwise_affine=False, eps=1e-6, device=device, dtype=dtype)
-        self.cross_attn = Attention(x_dim, context_dim, num_heads, x_dim // num_heads, device=device, dtype=dtype)
+        self.layer_norm_cross_attn = nn.LayerNorm(x_dim, elementwise_affine=False, eps=1e-6)
+        self.cross_attn = Attention(x_dim, context_dim, num_heads, x_dim // num_heads)
 
-        self.layer_norm_mlp = nn.LayerNorm(x_dim, elementwise_affine=False, eps=1e-6, device=device, dtype=dtype)
-        self.mlp = GPT2FeedForward(x_dim, int(x_dim * mlp_ratio), device=device, dtype=dtype)
+        self.layer_norm_mlp = nn.LayerNorm(x_dim, elementwise_affine=False, eps=1e-6)
+        self.mlp = GPT2FeedForward(x_dim, int(x_dim * mlp_ratio))
 
         self.use_adaln_lora = use_adaln_lora
         if self.use_adaln_lora:
             self.adaln_modulation_self_attn = nn.Sequential(
                 nn.SiLU(),
-                nn.Linear(x_dim, adaln_lora_dim, bias=False, device=device, dtype=dtype),
-                nn.Linear(adaln_lora_dim, 3 * x_dim, bias=False, device=device, dtype=dtype),
+                nn.Linear(x_dim, adaln_lora_dim, bias=False),
+                nn.Linear(adaln_lora_dim, 3 * x_dim, bias=False),
             )
             self.adaln_modulation_cross_attn = nn.Sequential(
                 nn.SiLU(),
-                nn.Linear(x_dim, adaln_lora_dim, bias=False, device=device, dtype=dtype),
-                nn.Linear(adaln_lora_dim, 3 * x_dim, bias=False, device=device, dtype=dtype),
+                nn.Linear(x_dim, adaln_lora_dim, bias=False),
+                nn.Linear(adaln_lora_dim, 3 * x_dim, bias=False),
             )
             self.adaln_modulation_mlp = nn.Sequential(
                 nn.SiLU(),
-                nn.Linear(x_dim, adaln_lora_dim, bias=False, device=device, dtype=dtype),
-                nn.Linear(adaln_lora_dim, 3 * x_dim, bias=False, device=device, dtype=dtype),
+                nn.Linear(x_dim, adaln_lora_dim, bias=False),
+                nn.Linear(adaln_lora_dim, 3 * x_dim, bias=False),
             )
         else:
-            self.adaln_modulation_self_attn = nn.Sequential(nn.SiLU(), nn.Linear(x_dim, 3 * x_dim, bias=False, device=device, dtype=dtype))
-            self.adaln_modulation_cross_attn = nn.Sequential(nn.SiLU(), nn.Linear(x_dim, 3 * x_dim, bias=False, device=device, dtype=dtype))
-            self.adaln_modulation_mlp = nn.Sequential(nn.SiLU(), nn.Linear(x_dim, 3 * x_dim, bias=False, device=device, dtype=dtype))
+            self.adaln_modulation_self_attn = nn.Sequential(nn.SiLU(), nn.Linear(x_dim, 3 * x_dim, bias=False))
+            self.adaln_modulation_cross_attn = nn.Sequential(nn.SiLU(), nn.Linear(x_dim, 3 * x_dim, bias=False))
+            self.adaln_modulation_mlp = nn.Sequential(nn.SiLU(), nn.Linear(x_dim, 3 * x_dim, bias=False))
 
     def forward(
         self,
@@ -801,12 +771,8 @@ class MiniTrainDIT(nn.Module):
         extra_w_extrapolation_ratio: float = 1.0,
         extra_t_extrapolation_ratio: float = 1.0,
         rope_enable_fps_modulation: bool = True,
-        image_model=None,
-        device=None,
-        dtype=None,
     ) -> None:
         super().__init__()
-        self.dtype = dtype
         self.max_img_h = max_img_h
         self.max_img_w = max_img_w
         self.max_frames = max_frames
@@ -833,12 +799,12 @@ class MiniTrainDIT(nn.Module):
         self.extra_t_extrapolation_ratio = extra_t_extrapolation_ratio
         self.rope_enable_fps_modulation = rope_enable_fps_modulation
 
-        self.build_pos_embed(device=device, dtype=dtype)
+        self.build_pos_embed()
         self.use_adaln_lora = use_adaln_lora
         self.adaln_lora_dim = adaln_lora_dim
         self.t_embedder = nn.Sequential(
             Timesteps(model_channels),
-            TimestepEmbedding(model_channels, model_channels, use_adaln_lora=use_adaln_lora, device=device, dtype=dtype),
+            TimestepEmbedding(model_channels, model_channels, use_adaln_lora=use_adaln_lora),
         )
 
         in_channels = in_channels + 1 if concat_padding_mask else in_channels
@@ -847,7 +813,6 @@ class MiniTrainDIT(nn.Module):
             temporal_patch_size=patch_temporal,
             in_channels=in_channels,
             out_channels=model_channels,
-            device=device, dtype=dtype,
         )
 
         self.blocks = nn.ModuleList(
@@ -859,7 +824,6 @@ class MiniTrainDIT(nn.Module):
                     mlp_ratio=mlp_ratio,
                     use_adaln_lora=use_adaln_lora,
                     adaln_lora_dim=adaln_lora_dim,
-                    device=device, dtype=dtype,
                 )
                 for _ in range(num_blocks)
             ]
@@ -872,12 +836,11 @@ class MiniTrainDIT(nn.Module):
             out_channels=self.out_channels,
             use_adaln_lora=self.use_adaln_lora,
             adaln_lora_dim=self.adaln_lora_dim,
-            device=device, dtype=dtype,
         )
 
-        self.t_embedding_norm = RMSNorm(model_channels, eps=1e-6)
+        self.t_embedding_norm = nn.RMSNorm(model_channels, eps=1e-6)
 
-    def build_pos_embed(self, device=None, dtype=None) -> None:
+    def build_pos_embed(self) -> None:
         if self.pos_emb_cls == "rope3d":
             cls_type = VideoRopePosition3DEmb
         else:
@@ -898,7 +861,6 @@ class MiniTrainDIT(nn.Module):
             w_extrapolation_ratio=self.rope_w_extrapolation_ratio,
             t_extrapolation_ratio=self.rope_t_extrapolation_ratio,
             enable_fps_modulation=self.rope_enable_fps_modulation,
-            device=device,
         )
         self.pos_embedder = cls_type(
             **kwargs,  # type: ignore
@@ -908,8 +870,6 @@ class MiniTrainDIT(nn.Module):
             kwargs["h_extrapolation_ratio"] = self.extra_h_extrapolation_ratio
             kwargs["w_extrapolation_ratio"] = self.extra_w_extrapolation_ratio
             kwargs["t_extrapolation_ratio"] = self.extra_t_extrapolation_ratio
-            kwargs["device"] = device
-            kwargs["dtype"] = dtype
             self.extra_pos_embedder = LearnablePosEmbAxis(
                 **kwargs,  # type: ignore
             )
@@ -1030,3 +990,167 @@ class MiniTrainDIT(nn.Module):
         x_B_T_H_W_O = self.final_layer(x_B_T_H_W_D, t_embedding_B_T_D, adaln_lora_B_T_3D=adaln_lora_B_T_3D)
         x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)
         return x_B_C_Tt_Hp_Wp.squeeze(2)
+
+
+## this following stuff for Anima
+
+def rotate_half(x):
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
+
+
+def LLM_apply_rotary_pos_emb(x, cos, sin, unsqueeze_dim=1):
+    cos = cos.unsqueeze(unsqueeze_dim)
+    sin = sin.unsqueeze(unsqueeze_dim)
+    x_embed = (x * cos) + (rotate_half(x) * sin)
+    return x_embed
+
+
+class LLM_RotaryEmbedding(nn.Module):
+    def __init__(self, head_dim):
+        super().__init__()
+        self.rope_theta = 10000
+        inv_freq = 1.0 / (self.rope_theta ** (torch.arange(0, head_dim, 2, dtype=torch.int64).to(dtype=torch.float) / head_dim))
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+    @torch.no_grad()
+    def forward(self, x, position_ids):
+        inv_freq_expanded = self.inv_freq[None, :, None].to(torch.float32).expand(position_ids.shape[0], -1, 1).to(x.device)
+        position_ids_expanded = position_ids[:, None, :].to(torch.float32)
+
+        device_type = x.device.type if isinstance(x.device.type, str) and x.device.type != "mps" else "cpu"
+        with torch.autocast(device_type=device_type, enabled=False):  # Force float32
+            freqs = (inv_freq_expanded.to(torch.float32) @ position_ids_expanded.to(torch.float32)).transpose(1, 2)
+            emb = torch.cat((freqs, freqs), dim=-1)
+            cos = emb.cos()
+            sin = emb.sin()
+
+        return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
+
+
+class LLM_Attention(nn.Module):
+    def __init__(self, query_dim, context_dim, n_heads, head_dim):
+        super().__init__()
+
+        inner_dim = head_dim * n_heads
+        self.n_heads = n_heads
+        self.head_dim = head_dim
+        self.query_dim = query_dim
+        self.context_dim = context_dim
+
+        self.q_proj = nn.Linear(query_dim, inner_dim, bias=False)
+        self.q_norm = nn.RMSNorm(self.head_dim, eps=1e-6)
+
+        self.k_proj = nn.Linear(context_dim, inner_dim, bias=False)
+        self.k_norm = nn.RMSNorm(self.head_dim, eps=1e-6)
+
+        self.v_proj = nn.Linear(context_dim, inner_dim, bias=False)
+
+        self.o_proj = nn.Linear(inner_dim, query_dim, bias=False)
+
+    def forward(self, x, mask=None, context=None, position_embeddings=None, position_embeddings_context=None):
+        context = x if context is None else context
+        input_shape = x.shape[:-1]
+        q_shape = (*input_shape, self.n_heads, self.head_dim)
+        context_shape = context.shape[:-1]
+        kv_shape = (*context_shape, self.n_heads, self.head_dim)
+
+        query_states = self.q_norm(self.q_proj(x).view(q_shape)).transpose(1, 2)
+        key_states = self.k_norm(self.k_proj(context).view(kv_shape)).transpose(1, 2)
+        value_states = self.v_proj(context).view(kv_shape).transpose(1, 2)
+
+        if position_embeddings is not None:
+            assert position_embeddings_context is not None
+            cos, sin = position_embeddings
+            query_states = LLM_apply_rotary_pos_emb(query_states, cos, sin)
+            cos, sin = position_embeddings_context
+            key_states = LLM_apply_rotary_pos_emb(key_states, cos, sin)
+
+        attn_output = torch.nn.functional.scaled_dot_product_attention(query_states, key_states, value_states, attn_mask=mask)
+
+        attn_output = attn_output.transpose(1, 2).reshape(*input_shape, -1).contiguous()
+        attn_output = self.o_proj(attn_output)
+        return attn_output
+
+    def init_weights(self):
+        torch.nn.init.zeros_(self.o_proj.weight)
+
+
+class LLM_TransformerBlock(nn.Module):
+    def __init__(self, source_dim, model_dim, num_heads=16, mlp_ratio=4.0, use_self_attn=False, layer_norm=False):
+        super().__init__()
+        self.use_self_attn = use_self_attn
+
+        if self.use_self_attn:
+            self.norm_self_attn = nn.LayerNorm(model_dim) if layer_norm else nn.RMSNorm(model_dim, eps=1e-6)
+            self.self_attn = LLM_Attention(
+                query_dim=model_dim,
+                context_dim=model_dim,
+                n_heads=num_heads,
+                head_dim=model_dim // num_heads,
+            )
+
+        self.norm_cross_attn = nn.LayerNorm(model_dim) if layer_norm else nn.RMSNorm(model_dim, eps=1e-6)
+        self.cross_attn = LLM_Attention(
+            query_dim=model_dim,
+            context_dim=source_dim,
+            n_heads=num_heads,
+            head_dim=model_dim // num_heads,
+        )
+
+        self.norm_mlp = nn.LayerNorm(model_dim) if layer_norm else nn.RMSNorm(model_dim, eps=1e-6)
+        self.mlp = nn.Sequential(nn.Linear(model_dim, int(model_dim * mlp_ratio)), nn.GELU(), nn.Linear(int(model_dim * mlp_ratio), model_dim))
+
+    def forward(self, x, context, target_attention_mask=None, source_attention_mask=None, position_embeddings=None, position_embeddings_context=None):
+        if self.use_self_attn:
+            normed = self.norm_self_attn(x)
+            attn_out = self.self_attn(normed, mask=target_attention_mask, position_embeddings=position_embeddings, position_embeddings_context=position_embeddings)
+            x = x + attn_out
+
+        normed = self.norm_cross_attn(x)
+        attn_out = self.cross_attn(normed, mask=source_attention_mask, context=context, position_embeddings=position_embeddings, position_embeddings_context=position_embeddings_context)
+        x = x + attn_out
+
+        x = x + self.mlp(self.norm_mlp(x))
+        return x
+
+    def init_weights(self):
+        torch.nn.init.zeros_(self.mlp[2].weight)
+        self.cross_attn.init_weights()
+
+
+class LLMAdapter(nn.Module):
+    def __init__(self, source_dim=1024, target_dim=1024, model_dim=1024, num_layers=6, num_heads=16, use_self_attn=True, layer_norm=False):
+        super().__init__()
+
+        self.embed = nn.Embedding(32128, target_dim)
+        if model_dim != target_dim:
+            self.in_proj = nn.Linear(target_dim, model_dim)
+        else:
+            self.in_proj = nn.Identity()
+        self.rotary_emb = LLM_RotaryEmbedding(model_dim // num_heads)
+        self.blocks = nn.ModuleList([LLM_TransformerBlock(source_dim, model_dim, num_heads=num_heads, use_self_attn=use_self_attn, layer_norm=layer_norm) for _ in range(num_layers)])
+        self.out_proj = nn.Linear(model_dim, target_dim)
+        self.norm = nn.RMSNorm(target_dim, eps=1e-6)
+
+    def forward(self, source_hidden_states, target_input_ids, target_attention_mask=None, source_attention_mask=None):
+        if target_attention_mask is not None:
+            target_attention_mask = target_attention_mask.to(torch.bool)
+            if target_attention_mask.ndim == 2:
+                target_attention_mask = target_attention_mask.unsqueeze(1).unsqueeze(1)
+
+        if source_attention_mask is not None:
+            source_attention_mask = source_attention_mask.to(torch.bool)
+            if source_attention_mask.ndim == 2:
+                source_attention_mask = source_attention_mask.unsqueeze(1).unsqueeze(1)
+
+        x = self.in_proj(self.embed(target_input_ids))
+        context = source_hidden_states
+        position_ids = torch.arange(x.shape[1], device=x.device).unsqueeze(0)
+        position_ids_context = torch.arange(context.shape[1], device=x.device).unsqueeze(0)
+        position_embeddings = self.rotary_emb(x, position_ids)
+        position_embeddings_context = self.rotary_emb(x, position_ids_context)
+        for block in self.blocks:
+            x = block(x, context, target_attention_mask=target_attention_mask, source_attention_mask=source_attention_mask, position_embeddings=position_embeddings, position_embeddings_context=position_embeddings_context)
+        return self.norm(self.out_proj(x))
