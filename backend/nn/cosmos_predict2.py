@@ -5,7 +5,6 @@ import torch
 from torch import nn
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
-import logging
 from typing import Callable, Optional, Tuple
 import math
 from torchvision import transforms
@@ -29,21 +28,7 @@ from backend.attention import attention_function
 # limitations under the License.
 
 
-class VideoPositionEmb(nn.Module):
-    def forward(self, x_B_T_H_W_C: torch.Tensor, fps=Optional[torch.Tensor], device=None) -> torch.Tensor:
-        """
-        It delegates the embedding generation to generate_embeddings function.
-        """
-        B_T_H_W_C = x_B_T_H_W_C.shape
-        embeddings = self.generate_embeddings(B_T_H_W_C, fps=fps, device=device)
-
-        return embeddings
-
-    def generate_embeddings(self, B_T_H_W_C: torch.Size, fps=Optional[torch.Tensor]):
-        raise NotImplementedError
-
-
-class VideoRopePosition3DEmb(VideoPositionEmb):
+class VideoRopePosition3DEmb(nn.Module):
     def __init__(
         self,
         *,  # enforce keyword arguments
@@ -85,15 +70,7 @@ class VideoRopePosition3DEmb(VideoPositionEmb):
         self.w_ntk_factor = w_extrapolation_ratio ** (dim_w / (dim_w - 2))
         self.t_ntk_factor = t_extrapolation_ratio ** (dim_t / (dim_t - 2))
 
-    def generate_embeddings(
-        self,
-        B_T_H_W_C: torch.Size,
-        fps: Optional[torch.Tensor] = None,
-        h_ntk_factor: Optional[float] = None,
-        w_ntk_factor: Optional[float] = None,
-        t_ntk_factor: Optional[float] = None,
-        device=None,
-    ):
+    def forward(self, x_B_T_H_W_C: torch.Tensor, fps=Optional[torch.Tensor], device=None) -> torch.Tensor:
         """
         Generate embeddings for the given input size.
 
@@ -107,19 +84,15 @@ class VideoRopePosition3DEmb(VideoPositionEmb):
         Returns:
             Not specified in the original code snippet.
         """
-        h_ntk_factor = h_ntk_factor if h_ntk_factor is not None else self.h_ntk_factor
-        w_ntk_factor = w_ntk_factor if w_ntk_factor is not None else self.w_ntk_factor
-        t_ntk_factor = t_ntk_factor if t_ntk_factor is not None else self.t_ntk_factor
-
-        h_theta = 10000.0 * h_ntk_factor
-        w_theta = 10000.0 * w_ntk_factor
-        t_theta = 10000.0 * t_ntk_factor
+        h_theta = 10000.0 * self.h_ntk_factor
+        w_theta = 10000.0 * self.w_ntk_factor
+        t_theta = 10000.0 * self.t_ntk_factor
 
         h_spatial_freqs = 1.0 / (h_theta**self.dim_spatial_range.to(device=device))
         w_spatial_freqs = 1.0 / (w_theta**self.dim_spatial_range.to(device=device))
         temporal_freqs =  1.0 / (t_theta**self.dim_temporal_range.to(device=device))
 
-        B, T, H, W, _ = B_T_H_W_C
+        B, T, H, W, _ = x_B_T_H_W_C.shape
         seq = torch.arange(max(self.max_h, self.max_w, T), dtype=torch.float, device=device)
         uniform_fps = (fps is None) or isinstance(fps, (int, float)) or (fps.min() == fps.max())
         assert (
@@ -148,7 +121,8 @@ class VideoRopePosition3DEmb(VideoPositionEmb):
         )
         return rearrange(em_T_H_W_D, "t h w d (i j) -> (t h w) d i j", i=2, j=2).to(torch.float32)
 
-class LearnablePosEmbAxis(VideoPositionEmb):
+
+class LearnablePosEmbAxis(nn.Module):
     def __init__(
         self,
         *,  # enforce keyword arguments
@@ -165,27 +139,24 @@ class LearnablePosEmbAxis(VideoPositionEmb):
         """
         del kwargs  # unused
         super().__init__()
-        self.interpolation = interpolation
-        assert self.interpolation in ["crop"], f"Unknown interpolation method {self.interpolation}"
+        assert interpolation in ["crop"], f"Unknown interpolation method {interpolation}"
 
         self.pos_emb_h = nn.Parameter(torch.empty(len_h, model_channels))
         self.pos_emb_w = nn.Parameter(torch.empty(len_w, model_channels))
         self.pos_emb_t = nn.Parameter(torch.empty(len_t, model_channels))
 
-    def generate_embeddings(self, B_T_H_W_C: torch.Size, fps=Optional[torch.Tensor]) -> torch.Tensor:
-        B, T, H, W, _ = B_T_H_W_C
-        if self.interpolation == "crop":
-            emb_h_H = self.pos_emb_h[:H]
-            emb_w_W = self.pos_emb_w[:W]
-            emb_t_T = self.pos_emb_t[:T]
-            emb = (
-                repeat(emb_t_T, "t d-> b t h w d", b=B, h=H, w=W)
-                + repeat(emb_h_H, "h d-> b t h w d", b=B, t=T, w=W)
-                + repeat(emb_w_W, "w d-> b t h w d", b=B, t=T, h=H)
-            )
-            assert list(emb.shape)[:4] == [B, T, H, W], f"bad shape: {list(emb.shape)[:4]} != {B, T, H, W}"
-        else:
-            raise ValueError(f"Unknown interpolation method {self.interpolation}")
+    def forward(self, x_B_T_H_W_C: torch.Tensor, fps=Optional[torch.Tensor], device=None) -> torch.Tensor:
+        B, T, H, W, _ = x_B_T_H_W_C.shape
+        
+        # interpolation must be "crop", asserted in __init__()
+        emb_h_H = self.pos_emb_h[:H]
+        emb_w_W = self.pos_emb_w[:W]
+        emb_t_T = self.pos_emb_t[:T]
+        emb = (
+            repeat(emb_t_T, "t d-> b t h w d", b=B, h=H, w=W)
+            + repeat(emb_h_H, "h d-> b t h w d", b=B, t=T, w=W)
+            + repeat(emb_w_W, "w d-> b t h w d", b=B, t=T, h=H)
+        )
 
         norm = torch.linalg.vector_norm(emb, dim=-1, keepdim=True, dtype=torch.float32)
         norm = torch.add(1e-6, norm, alpha=(norm.numel() / emb.numel()) ** 0.5)
@@ -277,10 +248,6 @@ class Attention(nn.Module):
         dropout: float = 0.0,
     ) -> None:
         super().__init__()
-        logging.debug(
-            f"Setting up {self.__class__.__name__}. Query dim is {query_dim}, context_dim is {context_dim} and using "
-            f"{n_heads} heads with a dimension of {head_dim}."
-        )
         self.is_selfattn = context_dim is None  # self attention
 
         context_dim = query_dim if context_dim is None else context_dim
@@ -384,9 +351,6 @@ class Timesteps(nn.Module):
 class TimestepEmbedding(nn.Module):
     def __init__(self, in_features: int, out_features: int, use_adaln_lora: bool = False):
         super().__init__()
-        logging.debug(
-            f"Using AdaLN LoRA Flag:  {use_adaln_lora}. We enable bias if no AdaLN LoRA for backward compatibility."
-        )
         self.in_dim = in_features
         self.out_dim = out_features
         self.linear_1 = nn.Linear(in_features, out_features, bias=not use_adaln_lora)
@@ -846,7 +810,6 @@ class MiniTrainDIT(nn.Module):
         else:
             raise ValueError(f"Unknown pos_emb_cls {self.pos_emb_cls}")
 
-        logging.debug(f"Building positional embedding with {self.pos_emb_cls} class, impl {cls_type}")
         kwargs = dict(
             model_channels=self.model_channels,
             len_h=self.max_img_h // self.patch_spatial,
@@ -973,13 +936,6 @@ class MiniTrainDIT(nn.Module):
             timesteps_B_T = timesteps_B_T.unsqueeze(1)
         t_embedding_B_T_D, adaln_lora_B_T_3D = self.t_embedder[1](self.t_embedder[0](timesteps_B_T).to(x_B_T_H_W_D.dtype))
         t_embedding_B_T_D = self.t_embedding_norm(t_embedding_B_T_D)
-
-        # for logging purpose
-        affline_scale_log_info = {}
-        affline_scale_log_info["t_embedding_B_T_D"] = t_embedding_B_T_D.detach()
-        self.affline_scale_log_info = affline_scale_log_info
-        self.affline_emb = t_embedding_B_T_D
-        self.crossattn_emb = crossattn_emb
 
         if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
             assert (
