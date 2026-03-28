@@ -171,3 +171,64 @@ class ControlNetPatcher(ControlModelPatcher):
 
 
 add_supported_control_model(ControlNetPatcher)
+
+# anima contronet (Reference latents) by 'inpaint' on civitai
+class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
+    @staticmethod
+    def try_build_from_state_dict(controlnet_data, ckpt_path):
+        is_anima_ref = (
+            "diffusion_model.blocks.0.adaln_modulation_cross_attn.1.lora_A.weight" in controlnet_data and
+            "zero_convs.0.0.weight" not in controlnet_data and
+            "input_hint_block.0.weight" not in controlnet_data
+        )
+        if not is_anima_ref:
+            return None
+    
+        prefixes = set()
+        for k in controlnet_data.keys():
+            for suffix in [".lora_A.weight", ".lora_B.weight", ".lora_up.weight", ".lora_down.weight", ".alpha", ".dora_scale"]:
+                if k.endswith(suffix):
+                    prefixes.add(k[:-len(suffix)])
+                    break
+    
+        to_load = {p: f"{p}.weight" for p in prefixes}
+    
+        from packages_3rdparty.comfyui_lora_collection.lora import load_lora
+        model_lora, _ = load_lora(controlnet_data, to_load)
+        
+        patcher = AnimaReferenceControlLoraPatcher()
+        patcher.model_lora = model_lora
+        return patcher
+    
+    def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
+        from backend.sampling.condition import Condition
+        from modules import devices
+        from modules.sd_samplers_common import images_tensor_to_samples
+        unet = process.sd_model.forge_objects.unet.clone()
+        
+        unet.add_patches(filename="anima_control", patches=self.model_lora, strength_patch=self.strength, strength_model=1.0)
+        
+        # Parse timestep range using unet predictor
+        percent_to_timestep_function = unet.model.predictor.percent_to_sigma
+        start_sigma = percent_to_timestep_function(self.start_percent)
+        end_sigma = percent_to_timestep_function(self.end_percent)
+        
+        image = cond.to(devices.device, dtype=devices.dtype_vae)
+        ref_latent = images_tensor_to_samples(image, model=process.sd_model)
+        
+        def ref_latents_modifier(model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed):
+            t = timestep[0].item()
+            if t > start_sigma or t < end_sigma:
+                return model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed
+    
+            if un_cond is not None:
+                for c in un_cond:
+                    c["model_conds"]["ref_latents"] = Condition(ref_latent)
+            for c in m_cond:
+                c["model_conds"]["ref_latents"] = Condition(ref_latent)
+            return model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed
+    
+        unet.add_conditioning_modifier(ref_latents_modifier)
+        process.sd_model.forge_objects.unet = unet
+
+add_supported_control_model(AnimaReferenceControlLoraPatcher)
