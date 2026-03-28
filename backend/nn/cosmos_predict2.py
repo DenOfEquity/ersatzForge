@@ -943,6 +943,18 @@ class MiniTrainDIT(nn.Module):
         **kwargs,
     ):
         x_B_C_T_H_W = x.unsqueeze(2)
+        orig_shape = list(x_B_C_T_H_W.shape)
+
+        # Reference latents: concat along temporal dim (Flux2-style) by 'inpaint' on civitai
+        ref_latents = kwargs.get('ref_latents', None)
+        if ref_latents is not None:
+            if not isinstance(ref_latents, list):
+                ref_latents = [ref_latents]
+            for ref in ref_latents:
+                if ref.ndim == 4:
+                    ref = ref.unsqueeze(2)
+                x_B_C_T_H_W = torch.cat([x_B_C_T_H_W, ref.to(dtype=x.dtype, device=x.device)], dim=2)
+
         timesteps_B_T = timesteps
         crossattn_emb = context
         """
@@ -988,7 +1000,7 @@ class MiniTrainDIT(nn.Module):
             )
 
         x_B_T_H_W_O = self.final_layer(x_B_T_H_W_D, t_embedding_B_T_D, adaln_lora_B_T_3D=adaln_lora_B_T_3D)
-        x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)
+        x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)[:, :, : orig_shape[-3], : orig_shape[-2], : orig_shape[-1]]
         return x_B_C_Tt_Hp_Wp.squeeze(2)
 
 
