@@ -9,10 +9,13 @@
 ##  derived from https://github.com/likelovewant/sd-forge-teacache (flux only, teacache only)
 
 
+
+#anima [QUICK TESTING] :    uncached starting: ~40%, threshold: 0.11, max. consecutive: 0 (no limit) -> approx 30% faster, insignificant differences
+#                           high proportion of uncached starting steps seems most important
+
 import torch
-import numpy as np
-from torch import Tensor
-import gradio as gr
+import numpy
+import gradio
 from modules import scripts
 from modules.ui_components import InputAccordion
 from backend.nn.flux import IntegratedFluxTransformer2DModel
@@ -23,6 +26,7 @@ from backend.nn.unet import timestep_embedding as timestep_embedding_unet
 from backend.nn.mmditx import MMDiTX
 from backend.nn.chroma import IntegratedChromaTransformer2DModel
 from backend.nn.chroma import timestep_embedding as timestep_embedding_chroma
+from backend.nn.cosmos_predict2 import MiniTrainDIT
 
 
 class BlockCache(scripts.Script):
@@ -34,6 +38,7 @@ class BlockCache(scripts.Script):
             BlockCache.original_inner_forward = IntegratedFluxTransformer2DModel.inner_forward
             BlockCache.original_forward_unet = IntegratedUNet2DConditionModel.forward
             BlockCache.original_forward_mmditx = MMDiTX.forward
+            BlockCache.original_forward_cosmos = MiniTrainDIT.forward
 
     def title(self):
         return "First Block Cache / TeaCache Integrated"
@@ -43,19 +48,19 @@ class BlockCache(scripts.Script):
 
     def ui(self, is_img2img):
         with InputAccordion(False, label=self.title()) as enabled:
-            method = gr.Radio(label="Method", choices=["First Block Cache", "TeaCache"], type="value", value="First Block Cache")
-            with gr.Row():
-                nocache_steps = gr.Number(label="Uncached starting steps", scale=0,
+            method = gradio.Radio(label="Method", choices=["First Block Cache", "TeaCache"], type="value", value="First Block Cache")
+            with gradio.Row():
+                nocache_steps = gradio.Number(label="Uncached starting steps", scale=0,
                     minimum=1, maximum=12, value=1, step=1,
                 )
-                threshold = gr.Slider(label="caching threshold, higher values cache more aggressively.", 
+                threshold = gradio.Slider(label="caching threshold, higher values cache more aggressively.", 
                     minimum=0.0, maximum=1.0, value=0.1, step=0.001,
                 )
-            with gr.Row():
-                max_cached = gr.Number(label="Max. consecutive cached", scale=0,
+            with gradio.Row():
+                max_cached = gradio.Number(label="Max. consecutive cached", scale=0,
                     minimum=0, maximum=99, value=0, step=1,
                 )
-                always_last = gr.Checkbox(label="Do not use cache on last step", value=False)
+                always_last = gradio.Checkbox(label="Do not use cache on last step", value=False)
                 
         enabled.do_not_save_to_config = True
         method.do_not_save_to_config = True
@@ -88,6 +93,8 @@ class BlockCache(scripts.Script):
                 elif p.sd_model.is_flux:
                     IntegratedFluxTransformer2DModel.inner_forward = patched_inner_forward_flux_fbc
                     IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_fbc
+                elif p.sd_model.is_cosmos_predict2:
+                    MiniTrainDIT.forward = patched_forward_cosmos_fbc
             else:
                 if p.sd_model.is_sd3:
                     MMDiTX.forward = patched_forward_mmditx_tc
@@ -96,6 +103,8 @@ class BlockCache(scripts.Script):
                 elif p.sd_model.is_flux:
                     IntegratedFluxTransformer2DModel.inner_forward = patched_inner_forward_flux_tc
                     IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_tc
+                elif p.sd_model.is_cosmos_predict2:
+                    MiniTrainDIT.forward = patched_forward_cosmos_tc
 
             p.extra_generation_params.update({
                 "bc_enabled"        : enabled,
@@ -139,6 +148,7 @@ class BlockCache(scripts.Script):
             IntegratedFluxTransformer2DModel.inner_forward = BlockCache.original_inner_forward
             IntegratedUNet2DConditionModel.forward = BlockCache.original_forward_unet
             MMDiTX.forward = BlockCache.original_forward_mmditx
+            MiniTrainDIT.forward = BlockCache.original_forward_cosmos
 
             delattr(BlockCache, "index")
             delattr(BlockCache, "threshold")
@@ -197,18 +207,9 @@ def patched_forward_mmditx_fbc(
 
     context = self.context_embedder(context)
 
-    if self.register_length > 0:
-        context = torch.cat(
-            (
-                repeat(self.register, "1 ... -> b ...", b=x.shape[0]),
-                context if context is not None else torch.Tensor([]).type_as(x),
-            ),
-            1,
-        )
-
     original_x = x.clone()
 
-    epsilon = 1e-6
+    # epsilon = 1e-6
 
     first_block = True
     for i, block in enumerate(self.joint_blocks):
@@ -318,7 +319,7 @@ def patched_inner_forward_chroma_fbc(self, img, img_ids, txt, txt_ids, timesteps
     first_block = True
     idx_i = 3 * nb_single_block
     idx_t = 3 * nb_single_block + 6 * nb_double_block
-    for i, block in enumerate(self.double_blocks):
+    for _i, block in enumerate(self.double_blocks):
         img_mod1 = mod_vectors[:, idx_i+0:idx_i+3, :]
         img_mod2 = mod_vectors[:, idx_i+3:idx_i+6, :]
         idx_i += 6
@@ -355,7 +356,7 @@ def patched_inner_forward_chroma_fbc(self, img, img_ids, txt, txt_ids, timesteps
     img = torch.cat((txt, img), 1)
     scratchA = torch.empty((img.shape[0], img.shape[1], 15360), device=device, dtype=dtype)                 # less effective, maybe ineffective
     idx = 0
-    for i, block in enumerate(self.single_blocks):
+    for _i, block in enumerate(self.single_blocks):
         img = block(scratchA, img, shift=mod_vectors[:, idx+0:idx+1, :], scale=mod_vectors[:, idx+1:idx+2, :], gate=mod_vectors[:, idx+2:idx+3, :], pe=pe)
         idx += 3
     del pe
@@ -590,6 +591,112 @@ def patched_forward_unet_fbc(self, x, timesteps=None, context=None, y=None, cont
     return h.type(x.dtype)
 
 
+def patched_forward_cosmos_fbc(self, x, timesteps, context, fps=None, padding_mask=None, **kwargs,):
+    x_B_C_T_H_W = x.unsqueeze(2)
+    orig_shape = list(x_B_C_T_H_W.shape)
+
+    # Reference latents: concat along temporal dim (Flux2-style) by 'inpaint' on civitai
+    ref_latents = kwargs.get('ref_latents', None)
+    if ref_latents is not None:
+        if not isinstance(ref_latents, list):
+            ref_latents = [ref_latents]
+        for ref in ref_latents:
+            if ref.ndim == 4:
+                ref = ref.unsqueeze(2)
+            x_B_C_T_H_W = torch.cat([x_B_C_T_H_W, ref.to(dtype=x.dtype, device=x.device)], dim=2)
+
+    timesteps_B_T = timesteps
+    crossattn_emb = context
+    """
+    Args:
+        x: (B, C, T, H, W) tensor of spatial-temp inputs
+        timesteps: (B, ) tensor of timesteps
+        crossattn_emb: (B, N, D) tensor of cross-attention embeddings
+    """
+    x_B_T_H_W_D, rope_emb_L_1_1_D, extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = self.prepare_embedded_sequence(
+        x_B_C_T_H_W,
+        fps=fps,
+        padding_mask=padding_mask,
+    )
+
+    if timesteps_B_T.ndim == 1:
+        timesteps_B_T = timesteps_B_T.unsqueeze(1)
+    t_embedding_B_T_D, adaln_lora_B_T_3D = self.t_embedder[1](self.t_embedder[0](timesteps_B_T).to(x_B_T_H_W_D.dtype))
+    t_embedding_B_T_D = self.t_embedding_norm(t_embedding_B_T_D)
+
+    if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
+        assert (
+            x_B_T_H_W_D.shape == extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D.shape
+        ), f"{x_B_T_H_W_D.shape} != {extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D.shape}"
+
+    block_kwargs = {
+        "rope_emb_L_1_1_D": rope_emb_L_1_1_D.unsqueeze(1).unsqueeze(0),
+        "adaln_lora_B_T_3D": adaln_lora_B_T_3D,
+        "extra_per_block_pos_emb": extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+    }
+
+    thisSigma = timesteps[0].item()
+
+    if BlockCache.previousSigma == thisSigma:
+        BlockCache.index += 1
+        if BlockCache.index == len(BlockCache.distance):
+            BlockCache.distance.append(0)
+            BlockCache.residual.append(None)
+            BlockCache.previous.append(None)
+            BlockCache.skipped.append(0)
+    else:
+        BlockCache.previousSigma = thisSigma
+        BlockCache.index = 0
+        BlockCache.this_step += 1
+
+    index = BlockCache.index
+
+    original_x = x_B_T_H_W_D.clone()
+    first_block = True
+    for block in self.blocks:
+        x_B_T_H_W_D = block(
+            x_B_T_H_W_D,
+            t_embedding_B_T_D,
+            crossattn_emb,
+            **block_kwargs,
+        )
+        if first_block:
+            first_block = False
+            if BlockCache.this_step <= BlockCache.nocache_steps:
+                skip_check = False
+            elif BlockCache.always_last and BlockCache.this_step >= BlockCache.last_step:
+                skip_check = False
+            else:
+                skip_check = True
+            if BlockCache.previous[index] is None or BlockCache.residual[index] is None:
+                skip_check = False
+            if BlockCache.skip_limit > 0 and BlockCache.skipped[index] >= BlockCache.skip_limit:
+                skip_check = False
+                
+            if skip_check:
+                BlockCache.distance[index] += ((x_B_T_H_W_D - BlockCache.previous[index]).abs().mean() / BlockCache.previous[index].abs().mean()).cpu().item()
+
+                BlockCache.previous[index] = x_B_T_H_W_D.clone()
+                if BlockCache.distance[index] < BlockCache.threshold:
+                    BlockCache.skipped[index] += 1
+
+                    x_B_T_H_W_D += BlockCache.residual[index] * (x_B_T_H_W_D.mean().abs() / BlockCache.residual[index].mean().abs())
+
+                    x_B_T_H_W_O = self.final_layer(x_B_T_H_W_D, t_embedding_B_T_D, adaln_lora_B_T_3D=adaln_lora_B_T_3D)
+                    x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)[:, :, : orig_shape[-3], : orig_shape[-2], : orig_shape[-1]]
+                    return x_B_C_Tt_Hp_Wp.squeeze(2)
+            else:
+                BlockCache.previous[index] = x_B_T_H_W_D.clone()
+
+    BlockCache.residual[index] = x_B_T_H_W_D - original_x
+    BlockCache.distance[index] = 0
+    BlockCache.skipped[index] = 0
+
+    x_B_T_H_W_O = self.final_layer(x_B_T_H_W_D, t_embedding_B_T_D, adaln_lora_B_T_3D=adaln_lora_B_T_3D)
+    x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)[:, :, : orig_shape[-3], : orig_shape[-2], : orig_shape[-1]]
+    return x_B_C_Tt_Hp_Wp.squeeze(2)
+
+
 def patched_forward_mmditx_tc(
     self,
     x: torch.Tensor,
@@ -666,14 +773,6 @@ def patched_forward_mmditx_tc(
         skip_layers = transformer_options.get("skip_layers", [])
 
         context = self.context_embedder(context)
-        if self.register_length > 0:
-            context = torch.cat(
-                (
-                    repeat(self.register, "1 ... -> b ...", b=x.shape[0]),
-                    context if context is not None else torch.Tensor([]).type_as(x),
-                ),
-                1,
-            )
 
         for i, block in enumerate(self.joint_blocks):
             if i in skip_layers:
@@ -760,7 +859,7 @@ def patched_inner_forward_chroma_tc(self, img, img_ids, txt, txt_ids, timesteps,
     skip = False
     if skip_check:
         coefficients = [4.98651651e+02, -2.83781631e+02, 5.58554382e+01, -3.82021401e+00, 2.64230861e-01]
-        rescale_func = np.poly1d(coefficients)
+        rescale_func = numpy.poly1d(coefficients)
         BlockCache.distance[index] += rescale_func(
             ((original_img - BlockCache.previous[index]).abs().mean() / BlockCache.previous[index].abs().mean()).cpu().item()
         )
@@ -780,7 +879,7 @@ def patched_inner_forward_chroma_tc(self, img, img_ids, txt, txt_ids, timesteps,
         idx_i = 3 * nb_single_block
         idx_t = 3 * nb_single_block + 6 * nb_double_block
 
-        for i, block in enumerate(self.double_blocks):
+        for _i, block in enumerate(self.double_blocks):
             img_mod1 = mod_vectors[:, idx_i+0:idx_i+3, :]
             img_mod2 = mod_vectors[:, idx_i+3:idx_i+6, :]
             idx_i += 6
@@ -791,7 +890,7 @@ def patched_inner_forward_chroma_tc(self, img, img_ids, txt, txt_ids, timesteps,
         img = torch.cat((txt, img), 1)
         scratchA = torch.empty((img.shape[0], img.shape[1], 15360), device=device, dtype=dtype)                 # less effective, maybe ineffective
         idx = 0
-        for i, block in enumerate(self.single_blocks):
+        for _i, block in enumerate(self.single_blocks):
             img = block(scratchA, img, shift=mod_vectors[:, idx+0:idx+1, :], scale=mod_vectors[:, idx+1:idx+2, :], gate=mod_vectors[:, idx+2:idx+3, :], pe=pe)
             idx += 3
         del pe
@@ -865,7 +964,7 @@ def patched_inner_forward_flux_tc(self, img, img_ids, txt, txt_ids, timesteps, y
     skip = False
     if skip_check:
         coefficients = [4.98651651e+02, -2.83781631e+02, 5.58554382e+01, -3.82021401e+00, 2.64230861e-01]
-        rescale_func = np.poly1d(coefficients)
+        rescale_func = numpy.poly1d(coefficients)
         BlockCache.distance[index] += rescale_func(
             ((original_img - BlockCache.previous[index]).abs().mean() / BlockCache.previous[index].abs().mean()).cpu().item()
         )
@@ -1026,3 +1125,113 @@ def patched_forward_unet_tc(self, x, timesteps=None, context=None, y=None, contr
 
     return h.type(x.dtype)
 
+
+def patched_forward_cosmos_tc(self, x, timesteps, context, fps=None, padding_mask=None, **kwargs,):
+    x_B_C_T_H_W = x.unsqueeze(2)
+    orig_shape = list(x_B_C_T_H_W.shape)
+
+    # Reference latents: concat along temporal dim (Flux2-style) by 'inpaint' on civitai
+    ref_latents = kwargs.get('ref_latents', None)
+    if ref_latents is not None:
+        if not isinstance(ref_latents, list):
+            ref_latents = [ref_latents]
+        for ref in ref_latents:
+            if ref.ndim == 4:
+                ref = ref.unsqueeze(2)
+            x_B_C_T_H_W = torch.cat([x_B_C_T_H_W, ref.to(dtype=x.dtype, device=x.device)], dim=2)
+
+    timesteps_B_T = timesteps
+    crossattn_emb = context
+    """
+    Args:
+        x: (B, C, T, H, W) tensor of spatial-temp inputs
+        timesteps: (B, ) tensor of timesteps
+        crossattn_emb: (B, N, D) tensor of cross-attention embeddings
+    """
+    x_B_T_H_W_D, rope_emb_L_1_1_D, extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = self.prepare_embedded_sequence(
+        x_B_C_T_H_W,
+        fps=fps,
+        padding_mask=padding_mask,
+    )
+
+    if timesteps_B_T.ndim == 1:
+        timesteps_B_T = timesteps_B_T.unsqueeze(1)
+    t_embedding_B_T_D, adaln_lora_B_T_3D = self.t_embedder[1](self.t_embedder[0](timesteps_B_T).to(x_B_T_H_W_D.dtype))
+    t_embedding_B_T_D = self.t_embedding_norm(t_embedding_B_T_D)
+
+    if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
+        assert (
+            x_B_T_H_W_D.shape == extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D.shape
+        ), f"{x_B_T_H_W_D.shape} != {extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D.shape}"
+
+    block_kwargs = {
+        "rope_emb_L_1_1_D": rope_emb_L_1_1_D.unsqueeze(1).unsqueeze(0),
+        "adaln_lora_B_T_3D": adaln_lora_B_T_3D,
+        "extra_per_block_pos_emb": extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+    }
+
+    thisSigma = timesteps[0].item()
+
+    if BlockCache.previousSigma == thisSigma:
+        BlockCache.index += 1
+        if BlockCache.index == len(BlockCache.distance):
+            BlockCache.distance.append(0)
+            BlockCache.residual.append(None)
+            BlockCache.previous.append(None)
+            BlockCache.skipped.append(0)
+    else:
+        BlockCache.previousSigma = thisSigma
+        BlockCache.index = 0
+        BlockCache.this_step += 1
+
+    index    = BlockCache.index
+    residual = BlockCache.residual[index]
+    previous = BlockCache.previous[index]
+    distance = BlockCache.distance[index]
+    skipped  = BlockCache.skipped[index]
+
+
+    if BlockCache.this_step <= BlockCache.nocache_steps:
+        skip_check = False
+    elif BlockCache.always_last and BlockCache.this_step == BlockCache.last_step:
+        skip_check = False
+    else:
+        skip_check = True
+    if previous is None or previous.shape != x_B_T_H_W_D.shape:
+        skip_check = False
+    if residual is None:
+        skip_check = False
+    if BlockCache.skip_limit > 0 and skipped >= BlockCache.skip_limit:
+        skip_check = False
+
+    skip = False
+    if skip_check:
+        distance += ((x_B_T_H_W_D - previous).abs().mean() / previous.abs().mean()).cpu().item()
+        if distance < BlockCache.threshold:
+            skip = True
+
+    previous = x_B_T_H_W_D.clone()
+
+    if skip:
+        x_B_T_H_W_D += residual * (x_B_T_H_W_D.mean().abs() / residual.mean().abs())
+        skipped += 1
+    else:
+        for block in self.blocks:
+            x_B_T_H_W_D = block(
+                x_B_T_H_W_D,
+                t_embedding_B_T_D,
+                crossattn_emb,
+                **block_kwargs,
+            )
+        residual = x_B_T_H_W_D - previous
+        distance = 0
+        skipped = 0
+
+    BlockCache.residual[index] = residual
+    BlockCache.previous[index] = previous
+    BlockCache.distance[index] = distance
+    BlockCache.skipped[index]  = skipped
+
+    x_B_T_H_W_O = self.final_layer(x_B_T_H_W_D, t_embedding_B_T_D, adaln_lora_B_T_3D=adaln_lora_B_T_3D)
+    x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)[:, :, : orig_shape[-3], : orig_shape[-2], : orig_shape[-1]]
+    return x_B_C_Tt_Hp_Wp.squeeze(2)
