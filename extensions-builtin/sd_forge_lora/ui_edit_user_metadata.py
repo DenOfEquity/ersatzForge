@@ -121,7 +121,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
 
         version = user_metadata.get('sd_version_str') or item.get('sd_version_str')
         if version:
-            version = version[10:] #.replace('SdVersion.', '')
+            version = version[10:]
         else:
             version = user_metadata.get("sd version", "Unknown")
 
@@ -135,7 +135,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         ]
 
     def create_extra_default_items_in_left_column(self):
-        self.select_sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Flux', 'Zimage', 'Unknown'], value='Unknown', label='Base model', interactive=True)
+        self.select_sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Flux', 'Zimage', 'Anima', 'Unknown'], value='Unknown', label='Base model', interactive=True)
 
     def create_editor(self):
         self.create_default_editor_elems()
@@ -143,7 +143,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         self.taginfo = gr.HighlightedText(label='Training tags')
         self.edit_activation_text = gr.Text(label='Activation text', info='Will be added to prompt along with Lora', value='')
         self.edit_negative_text = gr.Text(label='Negative prompt', info='Will be added to negative prompts', value='')
-        self.slider_preferred_weight = gr.Slider(label='Preferred weight', info='Set to 0 to disable', minimum=0.0, maximum=2.0, value=1.0, step=0.01)
+        self.slider_preferred_weight = gr.Slider(label='Preferred weight', minimum=0.0, maximum=2.0, value=1.0, step=0.01)
         self.edit_notes = gr.TextArea(label='Notes', lines=4)
 
         def select_tag(activation_text, evt: gr.SelectData):
