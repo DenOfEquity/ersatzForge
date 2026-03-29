@@ -1,5 +1,4 @@
 import os
-import enum
 
 from modules import sd_models, cache, errors, hashes, shared
 
@@ -58,7 +57,7 @@ class NetworkOnDisk:
             return "SdVersion.Flux"
         elif str(self.metadata.get('ss_base_model_version', '')) == 'flux1':
             return "SdVersion.Flux"
-        elif str(self.metadata.get('ss_network_module', '')) == '"networks.lora_flux':
+        elif str(self.metadata.get('ss_network_module', '')) == 'networks.lora_flux':
             return "SdVersion.Flux"
 
         elif str(self.metadata.get('modelspec.architecture', '')) == 'stable-diffusion-3-3-5-medium/lora':
@@ -83,6 +82,13 @@ class NetworkOnDisk:
 
         elif str(self.metadata.get('ss_base_model_version', '')) == 'zimage':
             return "SdVersion.Zimage"
+
+        elif str(self.metadata.get('modelspec.architecture', '')).startswith('anima'):
+            return "SdVersion.Anima"
+        elif str(self.metadata.get('ss_base_model_version', '')) == 'anima':
+            return "SdVersion.Anima"
+        elif str(self.metadata.get('ss_network_module', '')) == 'networks.lora_anima':
+            return "SdVersion.Anima"
 
         return "SdVersion.Unknown"
 
