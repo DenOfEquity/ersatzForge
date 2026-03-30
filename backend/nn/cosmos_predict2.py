@@ -33,8 +33,6 @@ class VideoRopePosition3DEmb(nn.Module):
         self,
         *,  # enforce keyword arguments
         head_dim: int,
-        len_h: int,
-        len_w: int,
         len_t: int,
         base_fps: int = 24,
         h_extrapolation_ratio: float = 1.0,
@@ -46,8 +44,6 @@ class VideoRopePosition3DEmb(nn.Module):
         del kwargs
         super().__init__()
         self.base_fps = base_fps
-        self.max_h = len_h
-        self.max_w = len_w
         self.enable_fps_modulation = enable_fps_modulation
 
         dim = head_dim
@@ -93,7 +89,7 @@ class VideoRopePosition3DEmb(nn.Module):
         temporal_freqs =  1.0 / (t_theta**self.dim_temporal_range.to(device=device))
 
         B, T, H, W, _ = x_B_T_H_W_C.shape
-        seq = torch.arange(max(self.max_h, self.max_w, T), dtype=torch.float, device=device)
+        seq = torch.arange(max(H, W, T), dtype=torch.float, device=device)
         uniform_fps = (fps is None) or isinstance(fps, (int, float)) or (fps.min() == fps.max())
         assert (
             uniform_fps or B == 1 or T == 1
@@ -737,8 +733,6 @@ class MiniTrainDIT(nn.Module):
         rope_enable_fps_modulation: bool = True,
     ) -> None:
         super().__init__()
-        self.max_img_h = max_img_h
-        self.max_img_w = max_img_w
         self.max_frames = max_frames
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -812,8 +806,6 @@ class MiniTrainDIT(nn.Module):
 
         kwargs = dict(
             model_channels=self.model_channels,
-            len_h=self.max_img_h // self.patch_spatial,
-            len_w=self.max_img_w // self.patch_spatial,
             len_t=self.max_frames // self.patch_temporal,
             max_fps=self.max_fps,
             min_fps=self.min_fps,
