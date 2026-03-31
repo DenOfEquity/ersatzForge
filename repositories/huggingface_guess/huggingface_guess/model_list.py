@@ -266,6 +266,7 @@ class SDXL(BASE):
         "context_dim": 2048,
         "adm_in_channels": 2816,
         "use_temporal_attention": False,
+        "in_channels": 4,
     }
 
     latent_format = latent.SDXL
@@ -322,6 +323,25 @@ class SDXL(BASE):
 
     def clip_target(self, state_dict={}):
         return {'clip_l': 'text_encoder', 'clip_g': 'text_encoder_2'}
+
+
+class Mugen(SDXL):
+    huggingface_repo = "Mugen"
+    latent_format = latent.SDXL_Flux2
+    vae_key_prefix = ["first_stage_model.", "vae."]
+
+    unet_config = {
+        "model_channels": 320,
+        "use_linear_in_transformer": True,
+        "transformer_depth": [0, 0, 2, 2, 10, 10],
+        "context_dim": 2048,
+        "adm_in_channels": 2816,
+        "use_temporal_attention": False,
+        "in_channels": 32,
+    }
+    
+    def inpaint_model(self):
+        return False
 
 
 class SSD1B(SDXL):
@@ -656,4 +676,4 @@ class Anima(BASE):
         return {"qwen3_06b": "text_encoder"}
 
 
-models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima]#, WAN21_I2V]
+models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, Mugen, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima]#, WAN21_I2V]

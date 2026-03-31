@@ -1,7 +1,9 @@
+import math
 import torch
-from backend.attention import attention_function_single_head_spatial
+from einops import rearrange
 from diffusers.configuration_utils import ConfigMixin, register_to_config
-from torch import nn
+
+from backend.attention import attention_function_single_head_spatial
 
 
 def nonlinearity(x):
@@ -9,7 +11,7 @@ def nonlinearity(x):
 
 
 def Normalize(in_channels, num_groups=32):
-    return nn.GroupNorm(num_groups=num_groups, num_channels=in_channels, eps=1e-6, affine=True)
+    return torch.nn.GroupNorm(num_groups=num_groups, num_channels=in_channels, eps=1e-6, affine=True)
 
 
 class DiagonalGaussianDistribution:
@@ -31,12 +33,12 @@ class DiagonalGaussianDistribution:
         return self.mean
 
 
-class Upsample(nn.Module):
+class Upsample(torch.nn.Module):
     def __init__(self, in_channels, with_conv):
         super().__init__()
         self.with_conv = with_conv
         if self.with_conv:
-            self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
+            self.conv = torch.nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x):
         try:
@@ -56,12 +58,12 @@ class Upsample(nn.Module):
         return x
 
 
-class Downsample(nn.Module):
+class Downsample(torch.nn.Module):
     def __init__(self, in_channels, with_conv):
         super().__init__()
         self.with_conv = with_conv
         if self.with_conv:
-            self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=2, padding=0)
+            self.conv = torch.nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=2, padding=0)
 
     def forward(self, x):
         if self.with_conv:
@@ -73,7 +75,7 @@ class Downsample(nn.Module):
         return x
 
 
-class ResnetBlock(nn.Module):
+class ResnetBlock(torch.nn.Module):
     def __init__(self, *, in_channels, out_channels=None, conv_shortcut=False, dropout, temb_channels=512):
         super().__init__()
         self.in_channels = in_channels
@@ -83,17 +85,17 @@ class ResnetBlock(nn.Module):
 
         self.swish = torch.nn.SiLU(inplace=True)
         self.norm1 = Normalize(in_channels)
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv1 = torch.nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
         if temb_channels > 0:
-            self.temb_proj = nn.Linear(temb_channels, out_channels)
+            self.temb_proj = torch.nn.Linear(temb_channels, out_channels)
         self.norm2 = Normalize(out_channels)
         self.dropout = torch.nn.Dropout(dropout, inplace=True)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv2 = torch.nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
         if self.in_channels != self.out_channels:
             if self.use_conv_shortcut:
-                self.conv_shortcut = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+                self.conv_shortcut = torch.nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
             else:
-                self.nin_shortcut = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
+                self.nin_shortcut = torch.nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x, temb):
         h = x
@@ -114,16 +116,16 @@ class ResnetBlock(nn.Module):
         return x + h
 
 
-class AttnBlock(nn.Module):
+class AttnBlock(torch.nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.in_channels = in_channels
 
         self.norm = Normalize(in_channels)
-        self.q = nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
-        self.k = nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
-        self.v = nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
-        self.proj_out = nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
+        self.q = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
+        self.k = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
+        self.v = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
+        self.proj_out = torch.nn.Conv2d(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x):
         h_ = x
@@ -136,7 +138,7 @@ class AttnBlock(nn.Module):
         return x + h_
 
 
-class Encoder(nn.Module):
+class Encoder(torch.nn.Module):
     def __init__(self, *, ch, out_ch, ch_mult=(1, 2, 4, 8), num_res_blocks, attn_resolutions, dropout=0.0, resamp_with_conv=True, in_channels, resolution, z_channels, double_z=True, use_linear_attn=False, attn_type="vanilla", **kwargs):
         super().__init__()
         self.ch = ch
@@ -146,15 +148,15 @@ class Encoder(nn.Module):
         self.resolution = resolution
         self.in_channels = in_channels
 
-        self.conv_in = nn.Conv2d(in_channels, self.ch, kernel_size=3, stride=1, padding=1)
+        self.conv_in = torch.nn.Conv2d(in_channels, self.ch, kernel_size=3, stride=1, padding=1)
 
         curr_res = resolution
         in_ch_mult = (1,) + tuple(ch_mult)
         self.in_ch_mult = in_ch_mult
-        self.down = nn.ModuleList()
+        self.down = torch.nn.ModuleList()
         for i_level in range(self.num_resolutions):
-            block = nn.ModuleList()
-            attn = nn.ModuleList()
+            block = torch.nn.ModuleList()
+            attn = torch.nn.ModuleList()
             block_in = ch * in_ch_mult[i_level]
             block_out = ch * ch_mult[i_level]
             for _i_block in range(self.num_res_blocks):
@@ -162,7 +164,7 @@ class Encoder(nn.Module):
                 block_in = block_out
                 if curr_res in attn_resolutions:
                     attn.append(AttnBlock(block_in))
-            down = nn.Module()
+            down = torch.nn.Module()
             down.block = block
             down.attn = attn
             if i_level != self.num_resolutions - 1:
@@ -170,13 +172,13 @@ class Encoder(nn.Module):
                 curr_res = curr_res // 2
             self.down.append(down)
 
-        self.mid = nn.Module()
+        self.mid = torch.nn.Module()
         self.mid.block_1 = ResnetBlock(in_channels=block_in, out_channels=block_in, temb_channels=self.temb_ch, dropout=dropout)
         self.mid.attn_1 = AttnBlock(block_in)
         self.mid.block_2 = ResnetBlock(in_channels=block_in, out_channels=block_in, temb_channels=self.temb_ch, dropout=dropout)
 
         self.norm_out = Normalize(block_in)
-        self.conv_out = nn.Conv2d(block_in, 2 * z_channels if double_z else z_channels, kernel_size=3, stride=1, padding=1)
+        self.conv_out = torch.nn.Conv2d(block_in, 2 * z_channels if double_z else z_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x):
         temb = None
@@ -199,7 +201,7 @@ class Encoder(nn.Module):
         return h
 
 
-class Decoder(nn.Module):
+class Decoder(torch.nn.Module):
     def __init__(self, *, ch, out_ch, ch_mult=(1, 2, 4, 8), num_res_blocks, attn_resolutions, dropout=0.0, resamp_with_conv=True, in_channels, resolution, z_channels, give_pre_end=False, tanh_out=False, use_linear_attn=False, **kwargs):
         super().__init__()
         self.ch = ch
@@ -214,24 +216,24 @@ class Decoder(nn.Module):
         block_in = ch * ch_mult[self.num_resolutions - 1]
         curr_res = resolution // 2 ** (self.num_resolutions - 1)
 
-        self.conv_in = nn.Conv2d(z_channels, block_in, kernel_size=3, stride=1, padding=1)
+        self.conv_in = torch.nn.Conv2d(z_channels, block_in, kernel_size=3, stride=1, padding=1)
 
-        self.mid = nn.Module()
+        self.mid = torch.nn.Module()
         self.mid.block_1 = ResnetBlock(in_channels=block_in, out_channels=block_in, temb_channels=self.temb_ch, dropout=dropout)
         self.mid.attn_1 = AttnBlock(block_in)
         self.mid.block_2 = ResnetBlock(in_channels=block_in, out_channels=block_in, temb_channels=self.temb_ch, dropout=dropout)
 
-        self.up = nn.ModuleList()
+        self.up = torch.nn.ModuleList()
         for i_level in reversed(range(self.num_resolutions)):
-            block = nn.ModuleList()
-            attn = nn.ModuleList()
+            block = torch.nn.ModuleList()
+            attn = torch.nn.ModuleList()
             block_out = ch * ch_mult[i_level]
             for _i_block in range(self.num_res_blocks + 1):
                 block.append(ResnetBlock(in_channels=block_in, out_channels=block_out, temb_channels=self.temb_ch, dropout=dropout))
                 block_in = block_out
                 if curr_res in attn_resolutions:
                     attn.append(AttnBlock(block_in))
-            up = nn.Module()
+            up = torch.nn.Module()
             up.block = block
             up.attn = attn
             if i_level != 0:
@@ -240,7 +242,7 @@ class Decoder(nn.Module):
             self.up.insert(0, up)
 
         self.norm_out = Normalize(block_in)
-        self.conv_out = nn.Conv2d(block_in, out_ch, kernel_size=3, stride=1, padding=1)
+        self.conv_out = torch.nn.Conv2d(block_in, out_ch, kernel_size=3, stride=1, padding=1)
 
     def forward(self, z, **kwargs):
         temb = None
@@ -268,7 +270,7 @@ class Decoder(nn.Module):
         return h
 
 
-class IntegratedAutoencoderKL(nn.Module, ConfigMixin):
+class IntegratedAutoencoderKL(torch.nn.Module, ConfigMixin):
     config_name = 'config.json'
 
     @register_to_config
@@ -278,8 +280,8 @@ class IntegratedAutoencoderKL(nn.Module, ConfigMixin):
         ch_mult = [x // ch for x in block_out_channels]
         self.encoder = Encoder(double_z=True, z_channels=latent_channels, resolution=256, in_channels=in_channels, out_ch=out_channels, ch=ch, ch_mult=ch_mult, num_res_blocks=layers_per_block, attn_resolutions=[], dropout=0.0)
         self.decoder = Decoder(double_z=True, z_channels=latent_channels, resolution=256, in_channels=in_channels, out_ch=out_channels, ch=ch, ch_mult=ch_mult, num_res_blocks=layers_per_block, attn_resolutions=[], dropout=0.0)
-        self.quant_conv = nn.Conv2d(2 * latent_channels, 2 * latent_channels, 1) if use_quant_conv else None
-        self.post_quant_conv = nn.Conv2d(latent_channels, latent_channels, 1) if use_post_quant_conv else None
+        self.quant_conv = torch.nn.Conv2d(2 * latent_channels, 2 * latent_channels, 1) if use_quant_conv else None
+        self.post_quant_conv = torch.nn.Conv2d(latent_channels, latent_channels, 1) if use_post_quant_conv else None
         self.embed_dim = latent_channels
         self.scaling_factor = scaling_factor
         self.shift_factor = shift_factor
@@ -301,6 +303,112 @@ class IntegratedAutoencoderKL(nn.Module, ConfigMixin):
             z = self.post_quant_conv(z)
 
         x = self.decoder(z)
+        return x
+
+    def process_in(self, latent):
+        return (latent - self.shift_factor) * self.scaling_factor
+
+    def process_out(self, latent):
+        return (latent / self.scaling_factor) + self.shift_factor
+
+
+class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
+    config_name = "config.json"
+
+    @register_to_config
+    def __init__(self, in_channels=3, out_channels=3, down_block_types=("DownEncoderBlock2D",), up_block_types=("UpDecoderBlock2D",), block_out_channels=(64,), layers_per_block=1, act_fn="silu", latent_channels=32, norm_num_groups=32, sample_size=32, scaling_factor=0.6043, shift_factor=0.0760, latents_mean=None, latents_std=None, force_upcast=True, use_quant_conv=True, use_post_quant_conv=True):
+        super().__init__()
+        ch = block_out_channels[0]
+        ch_mult = [x // ch for x in block_out_channels]
+        self.encoder = Encoder(double_z=True, z_channels=latent_channels, resolution=256, in_channels=in_channels, out_ch=out_channels, ch=ch, ch_mult=ch_mult, num_res_blocks=layers_per_block, attn_resolutions=[], dropout=0.0)
+        self.decoder = Decoder(double_z=True, z_channels=latent_channels, resolution=256, in_channels=in_channels, out_ch=out_channels, ch=ch, ch_mult=ch_mult, num_res_blocks=layers_per_block, attn_resolutions=[], dropout=0.0)
+        self.quant_conv = torch.nn.Conv2d(2 * latent_channels, 2 * latent_channels, 1) if use_quant_conv else None
+        self.post_quant_conv = torch.nn.Conv2d(latent_channels, latent_channels, 1) if use_post_quant_conv else None
+        self.embed_dim = latent_channels
+        self.scaling_factor = scaling_factor
+        self.shift_factor = shift_factor
+
+        if not isinstance(self.shift_factor, float):
+            self.shift_factor = 0.0
+
+        self.bn_eps = 1e-4
+        self.bn_momentum = 0.1
+        self.ps = [2, 2]
+        self.bn = torch.nn.BatchNorm2d(
+            math.prod(self.ps) * latent_channels,
+            eps=self.bn_eps,
+            momentum=self.bn_momentum,
+            affine=False,
+            track_running_stats=True,
+        )
+        self.bn.eval()
+
+    def encode(self, x):
+        z = self.encoder(x)
+
+        if self.quant_conv is not None:
+            z = self.quant_conv(z)
+
+        posterior = DiagonalGaussianDistribution(z)
+        z = posterior.sample()
+
+        z = rearrange(
+            z,
+            "... c (i pi) (j pj)  -> ... (c pi pj) i j",
+            pi=self.ps[0],
+            pj=self.ps[1],
+        )
+
+        z = torch.nn.functional.batch_norm(
+            z,
+            self.bn.running_mean.to(dtype=z.dtype, device=z.device),
+            self.bn.running_var.to(dtype=z.dtype, device=z.device),
+            momentum=self.bn_momentum,
+            eps=self.bn_eps,
+        )
+
+        if self.is_mugen:
+            h, w = z.shape[-2], z.shape[-1]
+            pad_h = 1 if h % 2 != 0 else 0
+            pad_w = 1 if w % 2 != 0 else 0
+            if pad_h or pad_w:
+                z = torch.nn.functional.pad(z, (0, pad_w, 0, pad_h))
+                h = z.shape[-2]
+                w = z.shape[-1]
+            z = z.reshape(z.shape[0], 32, 2, 2, h, w)
+            z = z.permute(0, 1, 4, 2, 5, 3).reshape(z.shape[0], 32, h * 2, w * 2)
+ 
+        return z
+
+    def decode(self, z):
+        s = torch.sqrt(self.bn.running_var.view(1, -1, 1, 1).to(dtype=z.dtype, device=z.device) + self.bn_eps)
+        m = self.bn.running_mean.view(1, -1, 1, 1).to(dtype=z.dtype, device=z.device)
+
+        oh, ow = z.shape[-2], z.shape[-1]
+        if self.is_mugen:
+            h, w = oh, ow
+            pad_h = 1 if h % 2 != 0 else 0
+            pad_w = 1 if w % 2 != 0 else 0
+            if pad_h or pad_w:
+                z = torch.nn.functional.pad(z, (0, pad_w, 0, pad_h))
+                h = z.shape[-2]
+                w = z.shape[-1]
+
+            z = z.reshape(z.shape[0], 32, h // 2, 2, w // 2, 2)
+            z = z.permute(0, 1, 3, 5, 2, 4).reshape(z.shape[0], 128, h // 2, w // 2)
+
+        z = z * s + m
+        z = rearrange(
+            z,
+            "... (c pi pj) i j -> ... c (i pi) (j pj)",
+            pi=self.ps[0],
+            pj=self.ps[1],
+        )
+
+        if self.post_quant_conv is not None:
+            z = self.post_quant_conv(z)
+
+        x = self.decoder(z)[:, :, :oh*8, :ow*8]
         return x
 
     def process_in(self, latent):

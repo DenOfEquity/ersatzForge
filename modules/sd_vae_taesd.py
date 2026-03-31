@@ -27,33 +27,40 @@ class Clamp(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, n_in, n_out):
+    def __init__(self, n_in, n_out, use_midblock_gn=False):
         super().__init__()
         self.conv = nn.Sequential(conv(n_in, n_out), nn.ReLU(), conv(n_out, n_out), nn.ReLU(), conv(n_out, n_out))
         self.skip = nn.Conv2d(n_in, n_out, 1, bias=False) if n_in != n_out else nn.Identity()
         self.fuse = nn.ReLU()
-
+        self.pool = None
+        if use_midblock_gn:
+            conv1x1, n_gn = lambda n_in, n_out: nn.Conv2d(n_in, n_out, 1, bias=False), n_in*4
+            self.pool = nn.Sequential(conv1x1(n_in, n_gn), nn.GroupNorm(4, n_gn), nn.ReLU(inplace=True), conv1x1(n_gn, n_in))
     def forward(self, x):
+        if self.pool is not None:
+            x = x + self.pool(x)
         return self.fuse(self.conv(x) + self.skip(x))
 
 
-def decoder(latent_channels=4):
-    return nn.Sequential(
-        Clamp(), conv(latent_channels, 64), nn.ReLU(),
-        Block(64, 64), Block(64, 64), Block(64, 64), nn.Upsample(scale_factor=2), conv(64, 64, bias=False),
-        Block(64, 64), Block(64, 64), Block(64, 64), nn.Upsample(scale_factor=2), conv(64, 64, bias=False),
-        Block(64, 64), Block(64, 64), Block(64, 64), nn.Upsample(scale_factor=2), conv(64, 64, bias=False),
-        Block(64, 64), conv(64, 3),
-    )
-
-
-def encoder(latent_channels=4):
+def Encoder(latent_channels=4, use_midblock_gn=False):
+    mb_kw = dict(use_midblock_gn=use_midblock_gn)
     return nn.Sequential(
         conv(3, 64), Block(64, 64),
         conv(64, 64, stride=2, bias=False), Block(64, 64), Block(64, 64), Block(64, 64),
         conv(64, 64, stride=2, bias=False), Block(64, 64), Block(64, 64), Block(64, 64),
-        conv(64, 64, stride=2, bias=False), Block(64, 64), Block(64, 64), Block(64, 64),
+        conv(64, 64, stride=2, bias=False), Block(64, 64, **mb_kw), Block(64, 64, **mb_kw), Block(64, 64, **mb_kw),
         conv(64, latent_channels),
+    )
+
+
+def Decoder(latent_channels=4, use_midblock_gn=False):
+    mb_kw = dict(use_midblock_gn=use_midblock_gn)
+    return nn.Sequential(
+        Clamp(), conv(latent_channels, 64), nn.ReLU(),
+        Block(64, 64, **mb_kw), Block(64, 64, **mb_kw), Block(64, 64, **mb_kw), nn.Upsample(scale_factor=2), conv(64, 64, bias=False),
+        Block(64, 64), Block(64, 64), Block(64, 64), nn.Upsample(scale_factor=2), conv(64, 64, bias=False),
+        Block(64, 64), Block(64, 64), Block(64, 64), nn.Upsample(scale_factor=2), conv(64, 64, bias=False),
+        Block(64, 64), conv(64, 3),
     )
 
 
@@ -65,15 +72,19 @@ class TAESDDecoder(nn.Module):
         """Initialize pretrained TAESD on the given device from the given checkpoints."""
         super().__init__()
 
+        midblock = False
         if latent_channels is None:
             if "taesd3" in str(decoder_path):
                 latent_channels = 16
             elif "taef1" in str(decoder_path):
                 latent_channels = 16
+            elif "taef2" in str(decoder_path):
+                latent_channels = 32
+                midblock = True
             else:
                 latent_channels = 4
 
-        self.decoder = decoder(latent_channels)
+        self.decoder = Decoder(latent_channels, use_midblock_gn=midblock)
         self.decoder.load_state_dict(torch.load(decoder_path, map_location='cpu'))
 
 
@@ -85,15 +96,19 @@ class TAESDEncoder(nn.Module):
         """Initialize pretrained TAESD on the given device from the given checkpoints."""
         super().__init__()
 
+        midblock = False
         if latent_channels is None:
             if "taesd3" in str(encoder_path):
                 latent_channels = 16
             elif "taef1" in str(encoder_path):
                 latent_channels = 16
+            elif "taef2" in str(encoder_path):
+                latent_channels = 32
+                midblock = True
             else:
                 latent_channels = 4
 
-        self.encoder = encoder(latent_channels)
+        self.encoder = Encoder(latent_channels, use_midblock_gn=midblock)
         self.encoder.load_state_dict(
             torch.load(encoder_path, map_location='cpu' if devices.device.type != 'cuda' else None))
 
@@ -255,7 +270,10 @@ def decoder_model():
     elif shared.sd_model.is_flux or shared.sd_model.is_lumina2:
         model_name = "taef1_decoder.pth"
     elif shared.sd_model.is_sdxl:
-        model_name = "taesdxl_decoder.pth"
+        if getattr(shared.sd_model, "is_mugen", False):
+            model_name = "taef2_decoder.pth"
+        else:
+            model_name = "taesdxl_decoder.pth"
     elif shared.sd_model.is_sd1 or shared.sd_model.is_sd2:
         model_name = "taesd_decoder.pth"
     elif shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_wan:
@@ -293,7 +311,10 @@ def encoder_model():
     elif shared.sd_model.is_flux or shared.sd_model.is_lumina2:
         model_name = "taef1_encoder.pth"
     elif shared.sd_model.is_sdxl:
-        model_name = "taesdxl_encoder.pth"
+        if getattr(shared.sd_model, "is_mugen", False):
+            model_name = "taef2_encoder.pth"
+        else:
+            model_name = "taesdxl_encoder.pth"
     elif shared.sd_model.is_sd1 or shared.sd_model.is_sd2:
         model_name = "taesd_encoder.pth"
     elif shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_wan:

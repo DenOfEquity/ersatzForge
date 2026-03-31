@@ -158,7 +158,7 @@ options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), 
     "sdxl_refiner_low_aesthetic_score": OptionInfo(2.5, "SDXL low aesthetic score", gr.Slider, {"minimum": 0, "maximum": 10, "step": 0.1}).info("used for refiner model negative prompt"),
     "sdxl_refiner_high_aesthetic_score": OptionInfo(6.0, "SDXL high aesthetic score", gr.Slider, {"minimum": 0, "maximum": 10, "step": 0.1}).info("used for refiner model prompt"),
     "sdxl_flow_shift": OptionInfo(3.0, "Flow Shift for SDXL flow match models. Relevant models are detected by name.", gr.Slider, {"minimum": 0.01, "maximum": 12.0, "step": 0.01}, infotext="SDXL Shift"),
-    "sdxl_flow_models": OptionInfo("bigaspv25, nyaflow, snakebite2, snakelite", "Name filtering for SDXL flow match models. Options separated by commas. Names can be fragments or the exact model name. Minimum length: four characters.", gr.Textbox, {"maxlines": 1}),
+    "sdxl_flow_models": OptionInfo("bigaspv25, nyaflow, snakebite2, snakelite, mugen", "Name filtering for SDXL flow match models. Options separated by commas. Names can be fragments or the exact model name. Minimum length: four characters.", gr.Textbox, {"maxlines": 1}),
 }))
 
 options_templates.update(options_section(('dyPE', "dynamicPE", "sd"), {
@@ -336,7 +336,7 @@ options_templates.update(options_section(('sampler-params', "Sampler parameters"
     's_tmax':  OptionInfo(0.0, "sigma tmax",  gr.Slider, {"minimum": 0.0, "maximum": 999.0, "step": 0.01}, infotext='Sigma tmax').info("0 = inf; end value of the sigma range; only applies to Euler, Heun, and DPM2"),
     's_noise': OptionInfo(1.0, "sigma noise", gr.Slider, {"minimum": 0.0, "maximum": 1.1, "step": 0.001}, infotext='Sigma noise').info('amount of additional noise to counteract loss of detail during sampling'),
     'sigma_min': OptionInfo(0.0, "sigma min", gr.Slider, {"minimum": 0.0, "maximum": 2.0, "step": 0.001}, infotext='Sigma min').info("0 = default (~0.03); minimum noise strength for k-diffusion noise scheduler"),
-    'sigma_max': OptionInfo(0.0, "sigma max", gr.Slider, {"minimum": 0.0, "maximum": 60.0, "step": 0.001}, infotext='Sigma max').info("0 = default (~14.6); maximum noise strength for k-diffusion noise scheduler"),
+    'sigma_max': OptionInfo(0.0, "sigma max", gr.Slider, {"minimum": 0.0, "maximum": 120.0, "step": 0.001}, infotext='Sigma max').info("0 = default (~14.6); maximum noise strength for k-diffusion noise scheduler"),
     'rho':  OptionInfo(0.0, "rho", gr.Number, infotext='Schedule rho').info("0 = default (7 for karras, 1 for polyexponential); higher values result in a steeper noise schedule (decreases faster)"),
     'eta_noise_seed_delta': OptionInfo(0, "Eta noise seed delta", gr.Number, {"precision": 0}, infotext='ENSD').info("ENSD; does not improve anything, just produces different results for ancestral samplers - only useful for reproducing images"),
     'always_discard_next_to_last_sigma': OptionInfo(False, "Always discard next-to-last sigma", infotext='Discard penultimate sigma').link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/6044"),

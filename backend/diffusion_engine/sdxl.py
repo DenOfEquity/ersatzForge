@@ -18,7 +18,7 @@ from modules.shared import opts
 
 
 class StableDiffusionXL(ForgeDiffusionEngine):
-    matched_guesses = [model_list.SDXL]
+    matched_guesses = [model_list.SDXL, model_list.Mugen]
 
     def __init__(self, estimated_config, huggingface_components):
         super().__init__(estimated_config, huggingface_components)
@@ -35,6 +35,9 @@ class StableDiffusionXL(ForgeDiffusionEngine):
         )
 
         vae = VAE(model=huggingface_components['vae'])
+        if vae.latent_channels == 32:
+            self.is_mugen = True
+            vae.first_stage_model.is_mugen = True
 
         if dynamic_args.get('SDXL_flow', False):  # example: bigASP2.5
             k_predictor = PredictionDiscreteFlow(shift=opts.sdxl_flow_shift)

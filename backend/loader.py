@@ -13,7 +13,7 @@ from backend import memory_management
 from backend.utils import read_arbitrary_config, load_torch_file, beautiful_print_gguf_state_dict_statics
 from backend.state_dict import try_filter_state_dict, load_state_dict
 from backend.operations import using_forge_operations
-from backend.nn.vae import IntegratedAutoencoderKL
+from backend.nn.vae import IntegratedAutoencoderKL, AutoencoderKLFlux2
 from backend.nn.vae_wan import AutoencoderKLWan
 from backend.nn.vae_wan22 import WanVAE
 from backend.nn.clip import IntegratedCLIP
@@ -55,7 +55,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             comp._eventual_warn_about_too_long_sequence = lambda *args, **kwargs: None
             return comp
 
-        if cls_name in ['AutoencoderKL']:
+        if cls_name == 'AutoencoderKL':
             assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have VAE state dict!'
 
             config = IntegratedAutoencoderKL.load_config(config_path)
@@ -67,7 +67,19 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 state_dict = huggingface_guess.diffusers_convert.convert_vae_state_dict(state_dict)
             load_state_dict(model, state_dict, ignore_start='loss.')
             return model
-        if cls_name in ['AutoencoderKLWan']:
+
+        if cls_name == 'AutoencoderKLFlux2':
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have VAE state dict!"
+
+            config = AutoencoderKLFlux2.load_config(config_path)
+
+            with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                model = AutoencoderKLFlux2.from_config(config)
+
+            load_state_dict(model, state_dict, ignore_start="loss.")
+            return model
+
+        if cls_name == 'AutoencoderKLWan':
             assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have VAE state dict!'
 
             config = AutoencoderKLWan.load_config(config_path)
@@ -79,7 +91,8 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 # state_dict = huggingface_guess.diffusers_convert.convert_vae_state_dict(state_dict)
             load_state_dict(model, state_dict)#, ignore_start='loss.')
             return model
-        if cls_name in ['AutoencoderKLWan22']:
+
+        if cls_name == 'AutoencoderKLWan22':
             assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have VAE state dict!'
 
             config = WanVAE.load_config(config_path)
