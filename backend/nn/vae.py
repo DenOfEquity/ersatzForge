@@ -367,7 +367,7 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
             eps=self.bn_eps,
         )
 
-        if self.is_mugen:
+        if getattr(self, "is_mugen", False):
             h, w = z.shape[-2], z.shape[-1]
             pad_h = 1 if h % 2 != 0 else 0
             pad_w = 1 if w % 2 != 0 else 0
@@ -385,7 +385,7 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
         m = self.bn.running_mean.view(1, -1, 1, 1).to(dtype=z.dtype, device=z.device)
 
         oh, ow = z.shape[-2], z.shape[-1]
-        if self.is_mugen:
+        if getattr(self, "is_mugen", False):
             h, w = oh, ow
             pad_h = 1 if h % 2 != 0 else 0
             pad_w = 1 if w % 2 != 0 else 0
