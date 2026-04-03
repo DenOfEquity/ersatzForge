@@ -84,11 +84,14 @@ function setupExtraNetworksForTab(tabname) {
                 else if (UIpreset == 'flux' || UIpreset == 'chroma') {
                     if (sdversion != 'SdVersion.Flux') visible = false;
                 }
+                else if (UIpreset == 'klein') {
+                    if (sdversion != 'SdVersion.Klein') visible = false;
+                }
                 else if (UIpreset == 'zimage') {
                     if (sdversion != 'SdVersion.Zimage') visible = false;
                 }
                 else if (UIpreset == 'anima') {
-                    if (sdversion != 'SdVersion.Anima')   visible = false;
+                    if (sdversion != 'SdVersion.Anima') visible = false;
                 }
 
                 if (visible) {
