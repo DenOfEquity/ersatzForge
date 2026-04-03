@@ -287,8 +287,6 @@ class PredictionFlux(AbstractPrediction):
         self.apply_mu_transform(seq_len=seq_len, base_seq_len=base_seq_len, max_seq_len=max_seq_len, base_shift=base_shift, max_shift=max_shift, mu=mu)
 
     def apply_mu_transform(self, seq_len=4096, base_seq_len=256, max_seq_len=4096, base_shift=0.5, max_shift=1.15, mu=None):
-        # TODO: Add an UI option to let user choose whether to call this in each generation to bind latent size to sigmas
-        # And some cases may want their own mu values or other parameters
         if mu is None:
             self.mu = calculate_shift(image_seq_len=seq_len, base_seq_len=base_seq_len, max_seq_len=max_seq_len, base_shift=base_shift, max_shift=max_shift)
         else:
@@ -317,6 +315,45 @@ class PredictionFlux(AbstractPrediction):
         if percent >= 1.0:
             return 0.0
         return 1.0 - percent
+
+
+class PredictionFlux2(AbstractPrediction):
+    """https://github.com/Comfy-Org/ComfyUI/blob/v0.11.0/comfy/model_sampling.py#L343"""
+
+    def __init__(self, model_config):
+        super().__init__(sigma_data=None, prediction_type="const")
+        sampling_settings: dict = model_config.sampling_settings
+        self.set_parameters(shift=sampling_settings.get("shift", 2.02))
+
+    def set_parameters(self, shift=2.02, timesteps=10000):
+        self.shift = shift
+        ts = self.sigma((torch.arange(1, timesteps + 1, 1) / timesteps))
+        self.register_buffer("sigmas", ts)
+
+    @property
+    def sigma_min(self):
+        return self.sigmas[0]
+
+    @property
+    def sigma_max(self):
+        return self.sigmas[-1]
+
+    def timestep(self, sigma):
+        return sigma
+
+    def sigma(self, timestep):
+        return self.flux_time_shift(self.shift, 1.0, timestep)
+
+    def percent_to_sigma(self, percent):
+        if percent <= 0.0:
+            return 1.0
+        if percent >= 1.0:
+            return 0.0
+        return self.flux_time_shift(self.shift, 1.0, 1.0 - percent)
+
+    @staticmethod
+    def flux_time_shift(mu: float, sigma: float, t):
+        return math.exp(mu) / (math.exp(mu) + (1 / t - 1) ** sigma)
 
 
 class PredictionCosmosRFlow(PredictionContinuousEDM):

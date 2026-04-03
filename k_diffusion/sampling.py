@@ -6,7 +6,7 @@ from torch import nn
 import torchsde
 from tqdm.auto import trange, tqdm
 from k_diffusion import deis
-from backend.modules.k_prediction import PredictionFlux, PredictionDiscreteFlow
+from backend.modules.k_prediction import PredictionFlux, PredictionFlux2, PredictionDiscreteFlow
 
 from modules import shared
 
@@ -137,17 +137,18 @@ def sample_euler(model, x, sigmas, extra_args=None, callback=None, disable=None,
     s_in = x.new_ones([x.shape[0]])
     for i in trange(len(sigmas) - 1, disable=disable):
         gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
-        eps = torch.randn_like(x) * s_noise
         sigma_hat = sigmas[i] * (gamma + 1)
         if gamma > 0:
-            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
+            eps = torch.randn_like(x) * s_noise
+            x.add_(eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5)
+
         denoised = model(x, sigma_hat * s_in, **extra_args)
-        d = to_d(x, sigma_hat, denoised)
         if callback is not None:
             callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigma_hat, 'denoised': denoised})
-        dt = sigmas[i + 1] - sigma_hat
-        # Euler method
-        x = x + d * dt
+
+        d = to_d(x, sigma_hat, denoised)
+        d.mul_(sigmas[i + 1] - sigma_hat)
+        x.add_(d)
     return x
 
 
@@ -159,7 +160,7 @@ def sample_euler_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
     s_in = x.new_ones([x.shape[0]])
     p = None
 
-    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
+    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionFlux2) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
         use_flow_method = True
     else:
         use_flow_method = False
@@ -173,14 +174,16 @@ def sample_euler_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
         if use_flow_method:
             sigma_down, sigma_up, alpha = get_ancestral_step_flow(sigmas[i], sigmas[i + 1], eta=eta)
             sigma_down_i_ratio = sigma_down / sigmas[i]
-            x = sigma_down_i_ratio * x + (1 - sigma_down_i_ratio) * denoised
+            x.mul_(sigma_down_i_ratio)
+            x.add_((1 - sigma_down_i_ratio) * denoised)
+#            x = sigma_down_i_ratio * x + (1 - sigma_down_i_ratio) * denoised
         else:
             sigma_down, sigma_up = get_ancestral_step(sigmas[i], sigmas[i + 1], eta=eta)
             alpha = 1.0
 
             d = to_d(x, sigmas[i], denoised)
-            dt = sigma_down - sigmas[i]
-            x = x + d * dt
+            d.mul_(sigma_down - sigmas[i])
+            x.add_(d)
 
         if eta > 0 and sigmas[i + 1] > 0:
             if noise_attenuation and p is not None:
@@ -189,10 +192,14 @@ def sample_euler_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
                     attenuation[i] /= (2**0.5) * attenuation[i].max()
                 attenuation = 1.0 - attenuation
                 p = x.clone()
-                x = alpha * x + noise_sampler(sigmas[i], sigmas[i + 1]) * attenuation * s_noise * sigma_up
+                x.mul_(alpha)
+                x.add_(noise_sampler(sigmas[i], sigmas[i + 1]) * attenuation * s_noise * sigma_up)
+                # x = alpha * x + noise_sampler(sigmas[i], sigmas[i + 1]) * attenuation * s_noise * sigma_up
             else:
                 p = x.clone()
-                x = alpha * x + noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * sigma_up
+                x.mul_(alpha)
+                x.add_(noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * sigma_up)
+                # x = alpha * x + noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * sigma_up
  
     return x
 
@@ -208,10 +215,10 @@ def sample_heun(model, x, sigmas, extra_args=None, callback=None, disable=None, 
     s_in = x.new_ones([x.shape[0]])
     for i in trange(len(sigmas) - 1, disable=disable):
         gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
-        eps = torch.randn_like(x) * s_noise
         sigma_hat = sigmas[i] * (gamma + 1)
         if gamma > 0:
-            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
+            eps = torch.randn_like(x) * s_noise
+            x.add_(eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5)
         denoised = model(x, sigma_hat * s_in, **extra_args)
         d = to_d(x, sigma_hat, denoised)
         if callback is not None:
@@ -219,14 +226,14 @@ def sample_heun(model, x, sigmas, extra_args=None, callback=None, disable=None, 
         dt = sigmas[i + 1] - sigma_hat
         if sigmas[i + 1] == 0:
             # Euler method
-            x = x + d * dt
+            x.add_(d * dt)
         else:
             # Heun's method
             x_2 = x + d * dt
             denoised_2 = model(x_2, sigmas[i + 1] * s_in, **extra_args)
             d_2 = to_d(x_2, sigmas[i + 1], denoised_2)
             d_prime = (d + d_2) / 2
-            x = x + d_prime * dt
+            x.add_(d_prime * dt)
     return x
 
 
@@ -237,10 +244,10 @@ def sample_dpm_2(model, x, sigmas, extra_args=None, callback=None, disable=None,
     s_in = x.new_ones([x.shape[0]])
     for i in trange(len(sigmas) - 1, disable=disable):
         gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
-        eps = torch.randn_like(x) * s_noise
         sigma_hat = sigmas[i] * (gamma + 1)
         if gamma > 0:
-            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
+            eps = torch.randn_like(x) * s_noise
+            x.add_(eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5)
         denoised = model(x, sigma_hat * s_in, **extra_args)
         d = to_d(x, sigma_hat, denoised)
         if callback is not None:
@@ -248,7 +255,7 @@ def sample_dpm_2(model, x, sigmas, extra_args=None, callback=None, disable=None,
         if sigmas[i + 1] == 0:
             # Euler method
             dt = sigmas[i + 1] - sigma_hat
-            x = x + d * dt
+            x.add_(d * dt)
         else:
             # DPM-Solver-2
             sigma_mid = sigma_hat.log().lerp(sigmas[i + 1].log(), 0.5).exp()
@@ -257,7 +264,7 @@ def sample_dpm_2(model, x, sigmas, extra_args=None, callback=None, disable=None,
             x_2 = x + d * dt_1
             denoised_2 = model(x_2, sigma_mid * s_in, **extra_args)
             d_2 = to_d(x_2, sigma_mid, denoised_2)
-            x = x + d_2 * dt_2
+            x.add_(d_2 * dt_2)
     return x
 
 
@@ -268,7 +275,7 @@ def sample_dpm_2_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
     noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
     s_in = x.new_ones([x.shape[0]])
 
-    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
+    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionFlux2) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
         use_flow_method = True
     else:
         use_flow_method = False
@@ -289,7 +296,7 @@ def sample_dpm_2_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
         if sigma_down == 0:
             # Euler method
             dt = sigma_down - sigmas[i]
-            x = x + d * dt
+            x.add_(d * dt)
         else:
             # DPM-Solver-2
             sigma_mid = sigmas[i].log().lerp(sigma_down.log(), 0.5).exp()
@@ -298,7 +305,7 @@ def sample_dpm_2_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
             x_2 = x + d * dt_1
             denoised_2 = model(x_2, sigma_mid * s_in, **extra_args)
             d_2 = to_d(x_2, sigma_mid, denoised_2)
-            x = x + d_2 * dt_2
+            x.add_(d_2 * dt_2)
             x = alpha * x + noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * sigma_up
 
     return x
@@ -550,7 +557,7 @@ def sample_dpmpp_2s_ancestral(model, x, sigmas, extra_args=None, callback=None, 
     sigma_fn = lambda t: t.neg().exp()
     t_fn = lambda sigma: sigma.log().neg()
 
-    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
+    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionFlux2) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
         use_flow_method = True
     else:
         use_flow_method = False
@@ -571,7 +578,7 @@ def sample_dpmpp_2s_ancestral(model, x, sigmas, extra_args=None, callback=None, 
             # Euler method
             d = to_d(x, sigmas[i], denoised)
             dt = sigma_down - sigmas[i]
-            x = x + d * dt
+            x.add_(d * dt)
         else:
             # DPM-Solver++(2S)
             t, t_next = t_fn(sigmas[i]), t_fn(sigma_down)
@@ -597,7 +604,7 @@ def sample_dpmpp_sde(model, x, sigmas, extra_args=None, callback=None, disable=N
     sigma_fn = lambda t: t.neg().exp()
     t_fn = lambda sigma: sigma.log().neg()
 
-    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
+    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionFlux2) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
         use_flow_method = True
     else:
         use_flow_method = False
@@ -610,7 +617,7 @@ def sample_dpmpp_sde(model, x, sigmas, extra_args=None, callback=None, disable=N
             # Euler method
             d = to_d(x, sigmas[i], denoised)
             dt = sigmas[i + 1] - sigmas[i]
-            x = x + d * dt
+            x.add_(d * dt)
         else:
             # DPM-Solver++
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
@@ -774,10 +781,10 @@ def sample_heunpp2(model, x, sigmas, extra_args=None, callback=None, disable=Non
     s_end = sigmas[-1]
     for i in trange(len(sigmas) - 1, disable=disable):
         gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
-        eps = torch.randn_like(x) * s_noise
         sigma_hat = sigmas[i] * (gamma + 1)
         if gamma > 0:
-            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
+            eps = torch.randn_like(x) * s_noise
+            x.add_(eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5)
         denoised = model(x, sigma_hat * s_in, **extra_args)
         d = to_d(x, sigma_hat, denoised)
         if callback is not None:

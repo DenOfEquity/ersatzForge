@@ -367,16 +367,15 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
             eps=self.bn_eps,
         )
 
-        if getattr(self, "is_mugen", False):
-            h, w = z.shape[-2], z.shape[-1]
-            pad_h = 1 if h % 2 != 0 else 0
-            pad_w = 1 if w % 2 != 0 else 0
-            if pad_h or pad_w:
-                z = torch.nn.functional.pad(z, (0, pad_w, 0, pad_h))
-                h = z.shape[-2]
-                w = z.shape[-1]
-            z = z.reshape(z.shape[0], 32, 2, 2, h, w)
-            z = z.permute(0, 1, 4, 2, 5, 3).reshape(z.shape[0], 32, h * 2, w * 2)
+        h, w = z.shape[-2], z.shape[-1]
+        pad_h = 1 if h % 2 != 0 else 0
+        pad_w = 1 if w % 2 != 0 else 0
+        if pad_h or pad_w:
+            z = torch.nn.functional.pad(z, (0, pad_w, 0, pad_h))
+            h = z.shape[-2]
+            w = z.shape[-1]
+        z = z.reshape(z.shape[0], 32, 2, 2, h, w)
+        z = z.permute(0, 1, 4, 2, 5, 3).reshape(z.shape[0], 32, h * 2, w * 2)
  
         return z
 
@@ -385,7 +384,7 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
         m = self.bn.running_mean.view(1, -1, 1, 1).to(dtype=z.dtype, device=z.device)
 
         oh, ow = z.shape[-2], z.shape[-1]
-        if getattr(self, "is_mugen", False):
+        if s.shape[1] != z.shape[1]:
             h, w = oh, ow
             pad_h = 1 if h % 2 != 0 else 0
             pad_w = 1 if w % 2 != 0 else 0
@@ -412,7 +411,9 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
         return x
 
     def process_in(self, latent):
-        return (latent - self.shift_factor) * self.scaling_factor
+        return latent
+#        return (latent - self.shift_factor) * self.scaling_factor
 
     def process_out(self, latent):
-        return (latent / self.scaling_factor) + self.shift_factor
+        return latent
+        # return (latent / self.scaling_factor) + self.shift_factor

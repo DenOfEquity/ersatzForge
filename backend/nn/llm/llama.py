@@ -56,6 +56,30 @@ class Qwen3_4BConfig:
     rope_scale = None
     final_norm: bool = True
 
+
+@dataclass
+class Qwen3_8BConfig:
+    vocab_size: int = 151936
+    hidden_size: int = 4096
+    intermediate_size: int = 12288
+    num_hidden_layers: int = 36
+    num_attention_heads: int = 32
+    num_key_value_heads: int = 8
+    max_position_embeddings: int = 40960
+    rms_norm_eps: float = 1e-6
+    rope_theta: float = 1000000.0
+    transformer_type: str = "llama"
+    head_dim = 128
+    rms_norm_add = False
+    mlp_activation = "silu"
+    qkv_bias = False
+    rope_dims = None
+    q_norm = "gemma3"
+    k_norm = "gemma3"
+    rope_scale = None
+    final_norm: bool = True
+
+
 # @dataclass
 # class Qwen25_7BVLI_Config:
     # vocab_size: int = 152064
@@ -437,6 +461,24 @@ class Qwen3_4B(BaseLlama, torch.nn.Module):
     def __init__(self, config_dict):
         super().__init__()
         config = Qwen3_4BConfig()
+
+        _config_dict = asdict(config)
+        for key, value in _config_dict.items():
+            if key in config_dict:
+                assert value == config_dict[key]
+
+        self.num_layers = config.num_hidden_layers
+
+        self.model = Llama2_(config)
+
+    def forward(self, input_ids, *args, **kwargs):
+        return self.model(input_ids, *args, **kwargs)
+
+
+class Qwen3_8B(BaseLlama, torch.nn.Module):
+    def __init__(self, config_dict):
+        super().__init__()
+        config = Qwen3_8BConfig()
 
         _config_dict = asdict(config)
         for key, value in _config_dict.items():

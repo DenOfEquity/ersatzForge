@@ -676,4 +676,56 @@ class Anima(BASE):
         return {"qwen3_06b": "text_encoder"}
 
 
-models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, Mugen, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima]#, WAN21_I2V]
+class Klein4B(Flux):
+    huggingface_repo = "black-forest-labs/FLUX.2-klein-4B"
+
+    unet_config = {
+        "image_model": "flux2",
+        "hidden_size": 3072,
+    }
+
+    sampling_settings = {
+        "shift": 2.02,
+    }
+
+    unet_extra_config = {}
+    latent_format = latent.Flux2
+
+    memory_usage_factor = 14.6  # 3.1 * (2 * 2) * (3072 / 2604)
+
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
+
+    vae_key_prefix = ["vae."]
+    text_encoder_key_prefix = ["text_encoders."]
+
+    def clip_target(self, state_dict={}):
+        return {"qwen3_4b": "text_encoder"}
+
+
+class Klein9B(Flux):
+    huggingface_repo = "black-forest-labs/FLUX.2-klein-9B"
+
+    unet_config = {
+        "image_model": "flux2",
+        "hidden_size": 4096,
+    }
+
+    sampling_settings = {
+        "shift": 2.02,
+    }
+
+    unet_extra_config = {}
+    latent_format = latent.Flux2
+
+    memory_usage_factor = 19.5  # 3.1 * (2 * 2) * (4096 / 2604)
+
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
+
+    vae_key_prefix = ["vae."]
+    text_encoder_key_prefix = ["text_encoders."]
+
+    def clip_target(self, state_dict={}):
+        return {"qwen3_8b": "text_encoder"}
+
+
+models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, Mugen, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima, Klein4B, Klein9B]#, WAN21_I2V]

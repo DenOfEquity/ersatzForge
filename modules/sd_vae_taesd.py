@@ -269,6 +269,8 @@ def decoder_model():
         model_name = "taesd3_decoder.pth"
     elif shared.sd_model.is_flux or shared.sd_model.is_lumina2:
         model_name = "taef1_decoder.pth"
+    elif shared.sd_model.is_flux2:
+        model_name = "taef2_decoder.pth"
     elif shared.sd_model.is_sdxl:
         if getattr(shared.sd_model, "is_mugen", False):
             model_name = "taef2_decoder.pth"
@@ -310,6 +312,8 @@ def encoder_model():
         model_name = "taesd3_encoder.pth"
     elif shared.sd_model.is_flux or shared.sd_model.is_lumina2:
         model_name = "taef1_encoder.pth"
+    elif shared.sd_model.is_flux2:
+        model_name = "taef2_encoder.pth"
     elif shared.sd_model.is_sdxl:
         if getattr(shared.sd_model, "is_mugen", False):
             model_name = "taef2_encoder.pth"

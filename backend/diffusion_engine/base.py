@@ -66,6 +66,7 @@ class ForgeDiffusionEngine:
         self.is_cosmos_predict2 = False
         self.is_wan = False
         self.is_flux = False # also Chroma
+        self.is_flux2 = False
         self.is_chromaDCT = False
         self.is_lumina2 = False
 

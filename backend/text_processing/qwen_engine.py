@@ -19,15 +19,17 @@ class PromptChunk:
 
 
 class Qwen3TextProcessingEngine:
-    def __init__(self, text_encoder, tokenizer):
+    def __init__(self, text_encoder, tokenizer, is_flux2=False):
         super().__init__()
 
         self.text_encoder = text_encoder
         self.tokenizer = tokenizer
+        self.is_flux2 = is_flux2
 
         self.id_pad = 151643
+        self.min_length = 512 if is_flux2 else 1
         # self.llama_template = "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
-        self.intermediate_output = -2
+        self.intermediate_output = [9, 18, 27] if is_flux2 else -2
         self.layer_norm_hidden_state = False
 
     def tokenize(self, texts):
@@ -44,9 +46,14 @@ class Qwen3TextProcessingEngine:
         def next_chunk():
             nonlocal chunk
 
-            #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
-            chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198]
-            chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0]
+            if self.is_flux2:
+                #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
+                chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198, 151667, 198, 198, 151668, 198, 198]
+                chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            else:
+                #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
+                chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198]
+                chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0]
 
             chunks.append(chunk)
             chunk = PromptChunk()
@@ -87,16 +94,32 @@ class Qwen3TextProcessingEngine:
                     line_z_values.append(z)
 
                 # remove start/end tokens
+                if self.is_flux2:
+                    e = 11
+                else:
+                    e = 5
                 count_z = len(line_z_values)
                 for i in range(count_z):
                     if i - 1 >= 0 and i + 1 < count_z:
-                        line_z_values[i] = line_z_values[i][3:-5]
+                        line_z_values[i] = line_z_values[i][3:-e]
                     elif i + 1 < count_z:
-                        line_z_values[i] = line_z_values[i][:-5]
+                        line_z_values[i] = line_z_values[i][:-e]
                     elif i - 1 >= 0:
                         line_z_values[i] = line_z_values[i][3:]
 
+                current_length = 0
+                for l in line_z_values:
+                    current_length += len(l)
+
+                if current_length % self.min_length != 0:
+                    remaining_count = self.min_length - (current_length % self.min_length)
+
+                    if remaining_count > 0:
+                        pad = self.process_tokens([self.id_pad] * remaining_count, [1.0] * remaining_count)[0]
+                        line_z_values.append(pad)
+
                 line_z_values = [torch.cat(line_z_values, dim=0, )]
+
                 cache[line] = line_z_values
 
             zs.extend(line_z_values)
@@ -121,6 +144,7 @@ class Qwen3TextProcessingEngine:
                 attention_mask.append(0 if eos else 1)
                 tokens_temp += [token]
                 if not eos and token == self.id_pad:
+                    attention_mask[-1] = 0
                     eos = True
                 index += 1
 
@@ -155,4 +179,8 @@ class Qwen3TextProcessingEngine:
             final_layer_norm_intermediate=self.layer_norm_hidden_state,
         )
 
+        if self.is_flux2:
+            z = torch.stack((z[:, 0], z[:, 1], z[:, 2]), dim=1)
+            z = z.movedim(1, 2)
+            z = z.reshape(z.shape[0], z.shape[1], -1)
         return z
