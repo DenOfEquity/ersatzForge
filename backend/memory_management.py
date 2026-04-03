@@ -323,9 +323,9 @@ def state_dict_dtype(state_dict):
     for tensor in state_dict.values():
         dtype = tensor.dtype
         if dtype in dtype_counts:
-            dtype_counts[dtype] += 1
+            dtype_counts[dtype] += tensor.numel()
         else:
-            dtype_counts[dtype] = 1
+            dtype_counts[dtype] = tensor.numel()
 
     major_dtype = None
     max_count = 0
@@ -1115,12 +1115,12 @@ def should_use_fp16(device=None, model_params=0, prioritize_performance=True, ma
     if FORCE_FP16:
         return True
 
+    if FORCE_FP32:
+        return False
+
     if device is not None:
         if is_device_mps(device):
             return True
-
-    if FORCE_FP32:
-        return False
 
     if directml_enabled:
         return False
@@ -1173,12 +1173,12 @@ def should_use_bf16(device=None, model_params=0, prioritize_performance=True, ma
         if is_device_cpu(device):  # TODO ? bf16 works on CPU but is extremely slow
             return False
 
+    if FORCE_FP32:
+        return False
+
     if device is not None:
         if is_device_mps(device):
             return True
-
-    if FORCE_FP32:
-        return False
 
     if directml_enabled:
         return False

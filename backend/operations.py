@@ -134,15 +134,37 @@ class ForgeOperations:
             self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype))
             self.weight = None
             self.scale_weight = None
+            self.scale_input = None
             self.bias = None
             self.parameters_manual_cast = current_manual_cast_enabled
 
         def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+            if self.scale_weight is None:
+                if prefix + "scale_weight" in state_dict:
+                    self.scale_weight = torch.nn.Parameter(state_dict.pop(prefix + "scale_weight"))
+                elif prefix + "weight_scale" in state_dict:
+                    self.scale_weight = torch.nn.Parameter(state_dict.pop(prefix + "weight_scale"))
+            else:
+                if prefix + "weight_scale" in state_dict:
+                    state_dict[prefix + "scale_weight"] = state_dict.pop(prefix + "weight_scale")
+                elif prefix + "scale_weight" not in state_dict:
+                    self.scale_weight = None
+
+            if self.scale_input is None:
+                if prefix + "scale_input" in state_dict:
+                    self.scale_input = torch.nn.Parameter(state_dict.pop(prefix + "scale_input"))
+                elif prefix + "input_scale" in state_dict:
+                    self.scale_input = torch.nn.Parameter(state_dict.pop(prefix + "input_scale"))
+            else:
+                if prefix + "input_scale" in state_dict:
+                    state_dict[prefix + "scale_input"] = state_dict.pop(prefix + "input_scale")
+                elif prefix + "scale_input" not in state_dict:
+                    self.scale_input = None
+
             if hasattr(self, 'dummy'):
                 if prefix + 'weight' in state_dict:
                     self.weight = torch.nn.Parameter(state_dict[prefix + 'weight'].to(self.dummy))
-                if prefix + 'scale_weight' in state_dict:
-                    self.scale_weight = torch.nn.Parameter(state_dict[prefix + 'scale_weight'])
+
                 if prefix + 'bias' in state_dict:
                     self.bias = torch.nn.Parameter(state_dict[prefix + 'bias'].to(self.dummy))
                 del self.dummy
@@ -159,7 +181,6 @@ class ForgeOperations:
                 return torch.nn.functional.linear(x, weight, bias)
 
     class Conv2d(torch.nn.Conv2d):
-
         def __init__(self, *args, **kwargs):
             kwargs['device'] = current_device
             kwargs['dtype'] = current_dtype
@@ -179,7 +200,6 @@ class ForgeOperations:
                 return super()._conv_forward(x, weight, bias)
 
     class Conv3d(torch.nn.Conv3d):
-
         def __init__(self, *args, **kwargs):
             kwargs['device'] = current_device
             kwargs['dtype'] = current_dtype
@@ -199,7 +219,6 @@ class ForgeOperations:
                 return super()._conv_forward(x, weight, bias)
 
     class Conv1d(torch.nn.Conv1d):
-
         def __init__(self, *args, **kwargs):
             kwargs['device'] = current_device
             kwargs['dtype'] = current_dtype
@@ -219,7 +238,6 @@ class ForgeOperations:
                 return super()._conv_forward(x, weight, bias)
 
     class ConvTranspose2d(torch.nn.ConvTranspose2d):
-
         def __init__(self, *args, **kwargs):
             kwargs['device'] = current_device
             kwargs['dtype'] = current_dtype
@@ -244,7 +262,6 @@ class ForgeOperations:
                 return torch.nn.functional.conv_transpose2d(x, weight, bias, self.stride, self.padding, output_padding, self.groups, self.dilation)
 
     class ConvTranspose1d(torch.nn.ConvTranspose1d):
-
         def __init__(self, *args, **kwargs):
             kwargs['device'] = current_device
             kwargs['dtype'] = current_dtype
@@ -269,7 +286,6 @@ class ForgeOperations:
                 return torch.nn.functional.conv_transpose2d(x, weight, bias, self.stride, self.padding, output_padding, self.groups, self.dilation)
 
     class ConvTranspose3d(torch.nn.ConvTranspose3d):
-
         def __init__(self, *args, **kwargs):
             kwargs['device'] = current_device
             kwargs['dtype'] = current_dtype
@@ -294,7 +310,6 @@ class ForgeOperations:
                 return torch.nn.functional.conv_transpose2d(x, weight, bias, self.stride, self.padding, output_padding, self.groups, self.dilation)
 
     class GroupNorm(torch.nn.GroupNorm):
-
         def __init__(self, *args, **kwargs):
             kwargs['device'] = current_device
             kwargs['dtype'] = current_dtype
@@ -313,7 +328,6 @@ class ForgeOperations:
                 return super().forward(x)
 
     class LayerNorm(torch.nn.LayerNorm):
-
         def __init__(self, *args, **kwargs):
             kwargs['device'] = current_device
             kwargs['dtype'] = current_dtype
@@ -332,8 +346,7 @@ class ForgeOperations:
                 return super().forward(x)
 
     class RMSNorm(torch.nn.RMSNorm):
-
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args, add=False, **kwargs):
             kwargs["device"] = current_device
             kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
@@ -352,7 +365,6 @@ class ForgeOperations:
                 return super().forward(x)
 
     class Embedding(torch.nn.Embedding):
-
         def __init__(self, *args, **kwargs):
             kwargs['device'] = current_device
             super().__init__(*args, **kwargs)

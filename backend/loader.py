@@ -744,14 +744,20 @@ def replace_state_dict(sd, asd, guess):
                 continue
             sd[f"{text_encoder_key_prefix}gemma2_2b.{k}"] = v
 
-    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 4B (Z Image), 06B (Anima)
+    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 8B (Klein9B), 4B (Z Image, Klein4B), 06B (Anima)
         size = asd["model.layers.0.post_attention_layernorm.weight"].shape[0]
-        if size == 1024:
+        if size == 4096:
+            size_str = "8b"
+        elif size == 2560:
+            size_str = "4b"
+        elif size == 1024:
             size_str = "06b"
         else:
-            size_str = "4b"
-        for k, v in asd.items():
-            sd[f"{text_encoder_key_prefix}qwen3_{size_str}.{k}"] = v
+            size_str = None
+
+        if size_str:
+            for k, v in asd.items():
+                sd[f"{text_encoder_key_prefix}qwen3_{size_str}.{k}"] = v
 
 
     # ResAdapter (bytedance) unet patch (sd1.5 or sdxl)
