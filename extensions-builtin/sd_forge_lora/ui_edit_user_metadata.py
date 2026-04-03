@@ -135,7 +135,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         ]
 
     def create_extra_default_items_in_left_column(self):
-        self.select_sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Flux', 'Zimage', 'Anima', 'Unknown'], value='Unknown', label='Base model', interactive=True)
+        self.select_sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Flux', 'Klein', 'Zimage', 'Anima', 'Unknown'], value='Unknown', label='Base model', interactive=True)
 
     def create_editor(self):
         self.create_default_editor_elems()
