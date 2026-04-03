@@ -50,15 +50,19 @@ class KModel(torch.nn.Module):
             dtype_size = 4
 
         # true memory requirements may not be so simply calculated, may be quadratic to image size
+        # also cond size is relevant
+        # 1.65 values may be adjustable down, now that moved previews to CPU
         match (self.diffusion_model.__class__.__name__):
             case "IntegratedChromaDCTTransformer2DModel":
                 scaler = 1.65 / 3.0
             case "IntegratedChromaTransformer2DModel":
                 scaler = 1.65
             case "Lumina2DiT":
-                scaler = 1.4
+                scaler = 1.22
+            case "IntegratedFlux2Transformer2DModel":
+                scaler = 1.3
             case _:
-                scaler = 1.65    #may need to be higher for some attention functions?
+                scaler = 1.65
 
         mem_required = scaler * input_shape[0] * input_shape[1] * input_shape[2] * input_shape[3] * dtype_size * 1024
 
