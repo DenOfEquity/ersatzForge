@@ -76,6 +76,8 @@ class ersatzOtherControl(scripts.Script):
     kontext_image_hash = None
     kontext_latent_size = None
     kontext_resize = None
+    klein_image_hash = None
+    klein_latent_size = None
 
     def __init__(self):
         if ersatzOtherControl.original_kontext_forward is None:
@@ -136,6 +138,46 @@ class ersatzOtherControl(scripts.Script):
                         return imageB, imageA
                     swap12.click(fn=kontext_swap, inputs=[k_image1, k_image2], outputs=[k_image1, k_image2])
 
+                with gradio.Tab("Flux2.Klein") as klein:
+                    gradio.Markdown("Select a Flux2.Klein model in the **Checkpoint** menu. Add reference image(s) here.")
+                    with gradio.Row():
+                        with gradio.Column():
+                            klein_1 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
+                            with gradio.Row():
+                                klein_1_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
+                                klein_1_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
+                                klein_1_dims = gradio.Textbox(visible=False, value='0')
+                        with gradio.Column():
+                            klein_2 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
+                            with gradio.Row():
+                                klein_2_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
+                                klein_2_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
+                                klein_2_dims = gradio.Textbox(visible=False, value='0')
+                    with gradio.Accordion(label="3 & 4", open=False):
+                        with gradio.Row():
+                            with gradio.Column():
+                                klein_3 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
+                                with gradio.Row():
+                                    klein_3_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
+                                    klein_3_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
+                                    klein_3_dims = gradio.Textbox(visible=False, value='0')
+                            with gradio.Column():
+                                klein_4 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
+                                with gradio.Row():
+                                    klein_4_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
+                                    klein_4_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
+                                    klein_4_dims = gradio.Textbox(visible=False, value='0')
+
+                        klein_1.change(fn=get_dims, inputs=klein_1, outputs=[klein_1_info, klein_1_send, klein_1_dims], show_progress="hidden")
+                        klein_2.change(fn=get_dims, inputs=klein_2, outputs=[klein_2_info, klein_2_send, klein_2_dims], show_progress="hidden")
+                        klein_3.change(fn=get_dims, inputs=klein_3, outputs=[klein_3_info, klein_3_send, klein_3_dims], show_progress="hidden")
+                        klein_4.change(fn=get_dims, inputs=klein_4, outputs=[klein_4_info, klein_4_send, klein_4_dims], show_progress="hidden")
+                        klein_1_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, klein_1_dims], outputs=None)
+                        klein_2_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, klein_2_dims], outputs=None)
+                        klein_3_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, klein_3_dims], outputs=None)
+                        klein_4_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, klein_4_dims], outputs=None)
+
+
                 with gradio.Tab("Z-Image-Turbo Control") as zitc:
                     gradio.Markdown("Select the control model in the **Additional modules** menu. Include pre-processed reference image, or inpaint image, here. NeverOOM recommended for low-VRAM.")
                     with gradio.Row():
@@ -145,7 +187,7 @@ class ersatzOtherControl(scripts.Script):
                             z_version = gradio.Radio(value="v1", choices=["v1", "v2", "v2 inpaint"], label="Mode")
                             z_mask_mode = gradio.Radio(value="unmasked", choices=["masked", "unmasked"], label="Target area")
                             z_strength = gradio.Slider(value=1.0, minimum=0.0, maximum=2.0, step=0.01, label="strength")
-                            z_stop = gradio.Slider(value=0.75, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
+                            z_stop = gradio.Slider(value=0.85, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
                             with gradio.Row():
                                 z_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 z_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
@@ -156,7 +198,8 @@ class ersatzOtherControl(scripts.Script):
 
 
             fkon.select(fn=lambda: 0, inputs=None, outputs=selected_tab, show_progress="hidden")
-            zitc.select(fn=lambda: 1, inputs=None, outputs=selected_tab, show_progress="hidden")
+            klein.select(fn=lambda: 1, inputs=None, outputs=selected_tab, show_progress="hidden")
+            zitc.select(fn=lambda: 2, inputs=None, outputs=selected_tab, show_progress="hidden")
 
 
         self.infotext_fields = [
@@ -169,33 +212,37 @@ class ersatzOtherControl(scripts.Script):
             (kontext_reduce, "kontext_reduce"),
         ]
 
-        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce
+        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4
 
 
     def process(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce, klein_image1, klein_image2, klein_image3, klein_image4 = script_args
         if enabled:
             if selected_tab == 0 and (kontext_image1 is not None or kontext_image2 is not None) and params.sd_model.is_flux:
                 params.extra_generation_params.update(dict(
-                    eOC_enabled  = enabled,
+                    eOC_enabled    = enabled,
                     kontext_sizing = kontext_sizing,
                     kontext_reduce = kontext_reduce,
                 ))
-            if selected_tab == 1 and z_image is not None and z_strength > 0.0 and z_stop < 1.0 and params.sd_model.is_lumina2:
+            if selected_tab == 1 and (klein_image1 is not None or klein_image2 is not None or klein_image3 is not None or klein_image4 is not None) and params.sd_model.is_flux2:
+                params.extra_generation_params.update(dict(
+                    eOC_enabled = enabled,
+                ))
+            if selected_tab == 2 and z_image is not None and z_strength > 0.0 and z_stop < 1.0 and params.sd_model.is_lumina2:
                 if getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
                     params.extra_generation_params.update(dict(
-                        eOC_enabled  = enabled,
-                        z_version = z_version,
+                        eOC_enabled = enabled,
+                        z_version   = z_version,
                         z_mask_mode = z_mask_mode,
-                        z_strength = z_strength,
-                        z_stop     = z_stop,
+                        z_strength  = z_strength,
+                        z_stop      = z_stop,
                     ))
                 else:
                     print ("[Z-Image-Turbo Control] Control model not loaded.")
 
 
     def process_before_every_sampling(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_image1, kontext_image2, kontext_sizing, kontext_reduce, klein_image1, klein_image2, klein_image3, klein_image4 = script_args
 
         if not enabled:
             return
@@ -317,8 +364,41 @@ class ersatzOtherControl(scripts.Script):
             params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
 
-        if selected_tab == 1 and z_image is not None and z_strength > 0.0 and z_stop < 1.0 and params.sd_model.is_lumina2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
+        if selected_tab == 1 and (klein_image1 is not None or klein_image2 is not None or klein_image3 is not None or klein_image4 is not None) and params.sd_model.is_flux2:
+            imgs_data  = str(list(klein_image1.getdata(band=None))) if klein_image1 is not None else ""
+            imgs_data += str(list(klein_image2.getdata(band=None))) if klein_image2 is not None else ""
+            imgs_data += str(list(klein_image3.getdata(band=None))) if klein_image3 is not None else ""
+            imgs_data += str(list(klein_image4.getdata(band=None))) if klein_image4 is not None else ""
+            klein_image_hash = hash(imgs_data)
+            klein_latent_size = (w, h)
 
+            if klein_image_hash == self.klein_image_hash and klein_latent_size == self.klein_latent_size:
+                print ("[KleinEdit] used cache")
+            else:
+                self.klein_image_hash = klein_image_hash
+                self.klein_latent_size = klein_latent_size
+
+                k_latents = []
+                k_ids = []
+                accum_h = 0
+                accum_w = 0
+
+                for image in [klein_image1, klein_image2, klein_image3, klein_image4]:
+                    if image is not None:
+                        k_latent = pil_to_latent(image, w*8, h*8, 0, "KleinEdit")
+                        k_latents.append(k_latent)
+
+                shared.klein_latents = k_latents
+
+                del k_latent
+
+            shared.klein_active = True
+            extra_mem = n * len(shared.klein_latents) * shared.klein_latents[0].shape[1] * shared.klein_latents[0].shape[2] * shared.klein_latents[0].shape[3] * x.element_size() * 1024
+            print ("[KleinEdit] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
+            params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
+
+
+        if selected_tab == 2 and z_image is not None and z_strength > 0.0 and z_stop < 1.0 and params.sd_model.is_lumina2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
             zitc_image_hash = hash(str(list(z_image.getdata(band=None))) + str(list(z_mask.getdata(band=None))) + z_version + z_mask_mode)
             zitc_latent_size = (w, h)
 
@@ -326,7 +406,6 @@ class ersatzOtherControl(scripts.Script):
                 print ("[Z-Image-Turbo Control] used cache")
                 shared.ZITstrength = z_strength
                 shared.ZITstop = z_stop
-                # extra_mem = calc_extra_mem(shared.ZITlatent)
             else:
                 self.zitc_image_hash = zitc_image_hash
                 self.zitc_latent_size = zitc_latent_size
@@ -367,7 +446,7 @@ class ersatzOtherControl(scripts.Script):
                 shared.ZITstrength = z_strength
                 shared.ZITstop = z_stop
 
-            # extra_mem = n * z_latent.shape[1] * z_latent.shape[2] * x.element_size() * 1024 * 1.2
+            # extra_mem = n * shared.ZITlatent.shape[1] * shared.ZITlatent.shape[2] * x.element_size() * 1024 * 1.2
             # print ("[Z-Image-Turbo Control] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
             # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
@@ -380,6 +459,9 @@ class ersatzOtherControl(scripts.Script):
                 IntegratedFluxTransformer2DModel.forward = ersatzOtherControl.original_kontext_forward
                 params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
             if selected_tab == 1:
+                shared.klein_active = False
+                params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
+            if selected_tab == 2:
                 shared.ZITstrength = 0.0
                 shared.ZITstop = 0.0
                 # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
