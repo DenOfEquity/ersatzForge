@@ -2,7 +2,8 @@
 # If used outside Forge, only non-commercial use is allowed.
 # See also https://github.com/black-forest-labs/flux
 
-# modified for Flux2 Klein 4B/9B (independant, not combined implementation with Flux1) (despite much similarity)
+# modified for Flux2 Klein 4B/9B
+# additional ref: ForgeNeo
 
 
 from dataclasses import dataclass
@@ -16,85 +17,8 @@ from backend.utils import fp16_fix
 
 from modules import shared
 
-
-def attention(q, k, v, pe, mask=None):
-    _shape = q.shape # k.shape is always the same
-    _reshape = list(_shape[:-1]) + [-1, 1, 2]
-
-    q = q.to(torch.float32).reshape(*_reshape)
-    q = torch.add(torch.mul(pe[..., 0], q[..., 0]), torch.mul(pe[..., 1], q[..., 1]))
-    q = q.reshape(*_shape).type_as(v)
-
-    k = k.to(torch.float32).reshape(*_reshape)
-    k = torch.add(torch.mul(pe[..., 0], k[..., 0]), torch.mul(pe[..., 1], k[..., 1]))
-    k = k.reshape(*_shape).type_as(v)
-
-    x = attention_function(q, k, v, q.shape[1], skip_reshape=True, mask=mask)
-    return x
-
-
-def rope(pos, dim, theta):
-    scale = torch.arange(0, dim, 2, dtype=torch.float32, device=pos.device) / dim
-    omega = 1.0 / (theta ** scale)
-
-    # out = torch.einsum("...n,d->...nd", pos, omega)
-    out = pos.unsqueeze(-1) * omega.unsqueeze(0)
-
-    cos_out = torch.cos(out)
-    sin_out = torch.sin(out)
-    out = torch.stack([cos_out, -sin_out, sin_out, cos_out], dim=-1)
-    del omega, cos_out, sin_out
-
-    # out = rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2)
-    b, n, d, _ = out.shape
-    out = out.view(b, n, d, 2, 2)
-
-    return out.to(torch.float32)
-
-
-def apply_rope(xq, xk, freqs_cis):
-    xq_ = xq.to(torch.float32).reshape(*xq.shape[:-1], -1, 1, 2)
-    xq_out = freqs_cis[..., 0] * xq_[..., 0] + freqs_cis[..., 1] * xq_[..., 1]
-    xq_out = xq_out.reshape(*xq.shape).type_as(xq)
-    del xq, xq_
-    xk_ = xk.to(torch.float32).reshape(*xk.shape[:-1], -1, 1, 2)
-    xk_out = freqs_cis[..., 0] * xk_[..., 0] + freqs_cis[..., 1] * xk_[..., 1]
-    xk_out = xk_out.reshape(*xk.shape).type_as(xk)
-    del xk, xk_
-    return xq_out, xk_out
-
-
-def timestep_embedding(t, dim, max_period=10000, time_factor=1000.0):
-    t = time_factor * t
-    half = dim // 2
-
-    freqs = torch.exp(-math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32, device=t.device) / half)
-
-    args = t[:, None].to(torch.float32) * freqs[None]
-    del freqs
-    embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
-    del args
-    if dim % 2:
-        embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
-    if torch.is_floating_point(t):
-        embedding = embedding.to(t)
-    return embedding
-
-
-class EmbedND(nn.Module):
-    def __init__(self, theta, axes_dim):
-        super().__init__()
-        self.theta = theta
-        self.axes_dim = axes_dim
-
-    def forward(self, ids):
-        n_axes = ids.shape[-1]
-        emb = torch.cat(
-            [rope(ids[..., i], self.axes_dim[i], self.theta) for i in range(n_axes)],
-            dim=-3,
-        )
-        del ids, n_axes
-        return emb.unsqueeze(1)
+from .flux import attention, rope, apply_rope, timestep_embedding
+from .flux import EmbedND, RMSNorm, QKNorm
 
 
 class MLPEmbedder(nn.Module):
@@ -139,33 +63,6 @@ def build_mlp(hidden_size: int, mlp_hidden_dim: int, mlp_silu_act: bool = False,
             nn.GELU(approximate="tanh"),
             nn.Linear(mlp_hidden_dim, hidden_size, bias=True),
         )
-
-
-class RMSNorm(torch.nn.Module):
-    def __init__(self, dim: int):
-        super().__init__()
-        self.scale = nn.Parameter(torch.ones(dim))
-
-    def forward(self, x):
-        self.scale.data = self.scale.data.to(x.device, x.dtype)
-
-        if x.dtype in [torch.bfloat16, torch.float32]:
-            n = torch.rsqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + 1e-6) * self.scale
-        else:
-            n = torch.rsqrt(torch.mean(x.to(torch.float32) ** 2, dim=-1, keepdim=True) + 1e-6).to(x.dtype) * self.scale
-        return x.mul(n)
-
-
-class QKNorm(nn.Module):
-    def __init__(self, dim):
-        super().__init__()
-        self.query_norm = RMSNorm(dim)
-        self.key_norm = RMSNorm(dim)
-
-    def forward(self, q, k):
-        q = self.query_norm(q)
-        k = self.key_norm(k)
-        return q.to(k), k
 
 
 class SelfAttention(nn.Module):
@@ -258,7 +155,7 @@ class DoubleStreamBlock(nn.Module):
 
         self.txt_mlp = build_mlp(hidden_size, mlp_hidden_dim, mlp_silu_act=mlp_silu_act, yak_mlp=yak_mlp)
 
-    def forward(self, img: torch.Tensor, txt: torch.Tensor, vec: torch.Tensor, pe: torch.Tensor, attn_mask=None):
+    def forward(self, img: torch.Tensor, txt: torch.Tensor, vec: torch.Tensor, pe: torch.Tensor):
         if self.modulation:
             img_mod1, img_mod2 = self.img_mod(vec)
             txt_mod1, txt_mod2 = self.txt_mod(vec)
@@ -290,7 +187,7 @@ class DoubleStreamBlock(nn.Module):
         v = torch.cat((txt_v, img_v), dim=2)
         del txt_v, img_v
         # run actual attention
-        attn = attention(q, k, v, pe=pe, mask=attn_mask)
+        attn = attention(q, k, v, pe=pe)
         del q, k, v
 
         txt_attn, img_attn = attn[:, : txt.shape[1]], attn[:, txt.shape[1] :]
@@ -347,7 +244,7 @@ class SingleStreamBlock(nn.Module):
         else:
             self.modulation = None
 
-    def forward(self, x: torch.Tensor, vec: torch.Tensor, pe: torch.Tensor, attn_mask=None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, vec: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
         if self.modulation:
             mod, _ = self.modulation(vec)
         else:
@@ -362,7 +259,7 @@ class SingleStreamBlock(nn.Module):
         q, k = self.norm(q, k)
 
         # compute attention
-        attn = attention(q, k, v, pe=pe, mask=attn_mask)
+        attn = attention(q, k, v, pe=pe)
         del q, k, v
         # compute activation in mlp stream, cat again and run second linear layer
         if self.yak_mlp:
@@ -502,7 +399,6 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
         y: torch.Tensor,
         guidance: torch.Tensor = None,
         control=None,
-        attn_mask: torch.Tensor = None,
     ) -> torch.Tensor:
 
         if img.ndim != 3 or txt.ndim != 3:
@@ -535,7 +431,7 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
             pe = None
 
         for i, block in enumerate(self.double_blocks):
-            img, txt = block(img=img, txt=txt, vec=vec, pe=pe, attn_mask=attn_mask)
+            img, txt = block(img=img, txt=txt, vec=vec, pe=pe)
 
         img = fp16_fix(img)
         img = torch.cat((txt, img), 1)
@@ -544,7 +440,7 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
             vec, _ = self.single_stream_modulation(vec_orig)
 
         for i, block in enumerate(self.single_blocks):
-            img = block(img, vec=vec, pe=pe, attn_mask=attn_mask)
+            img = block(img, vec=vec, pe=pe)
 
         img = img[:, txt.shape[1] :, ...]
 
@@ -585,38 +481,38 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
         img_tokens = img.shape[1]
 
         if getattr(shared, "klein_active", False):
-            ref_latents = shared.klein_latents # VAE encoded only, no patchify
+            ref_latents = getattr(shared, "klein_latents", None) # VAE encoded only, no patchify
 
-        if ref_latents is not None:
-            h = 0
-            w = 0
-            index = 0
-            ref_latents_method = kwargs.get("ref_latents_method", self.default_ref_method)
-            for ref in ref_latents:
-                if ref_latents_method == "index":
-                    index += self.ref_index_scale
-                    h_offset = 0
-                    w_offset = 0
-                elif ref_latents_method == "uxo":
-                    index = 0
-                    h_offset = h_len * patch_size + h
-                    w_offset = w_len * patch_size + w
-                    h += ref.shape[-2]
-                    w += ref.shape[-1]
-                else:
-                    index = 1
-                    h_offset = 0
-                    w_offset = 0
-                    if ref.shape[-2] + h > ref.shape[-1] + w:
-                        w_offset = w
+            if ref_latents is not None:
+                h = 0
+                w = 0
+                index = 0
+                ref_latents_method = kwargs.get("ref_latents_method", self.default_ref_method)
+                for ref in ref_latents:
+                    if ref_latents_method == "index":
+                        index += self.ref_index_scale
+                        h_offset = 0
+                        w_offset = 0
+                    elif ref_latents_method == "uxo":
+                        index = 0
+                        h_offset = h_len * patch_size + h
+                        w_offset = w_len * patch_size + w
+                        h += ref.shape[-2]
+                        w += ref.shape[-1]
                     else:
-                        h_offset = h
-                    h = max(h, ref.shape[-2] + h_offset)
-                    w = max(w, ref.shape[-1] + w_offset)
+                        index = 1
+                        h_offset = 0
+                        w_offset = 0
+                        if ref.shape[-2] + h > ref.shape[-1] + w:
+                            w_offset = w
+                        else:
+                            h_offset = h
+                        h = max(h, ref.shape[-2] + h_offset)
+                        w = max(w, ref.shape[-1] + w_offset)
 
-                klein, klein_ids = self.process_img(ref, index=index, h_offset=h_offset, w_offset=w_offset)
-                img = torch.cat([img, klein.to(img)], dim=1)
-                img_ids = torch.cat([img_ids, klein_ids.to(img_ids)], dim=1)
+                    klein, klein_ids = self.process_img(ref, index=index, h_offset=h_offset, w_offset=w_offset)
+                    img = torch.cat([img, klein.to(img)], dim=1)
+                    img_ids = torch.cat([img_ids, klein_ids.to(img_ids)], dim=1)
 
         txt_ids = torch.zeros((bs, context.shape[1], len(self.axes_dim)), device=x.device, dtype=torch.float32)
 
@@ -624,7 +520,7 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
             for i in self.txt_ids_dims:
                 txt_ids[:, :, i] = torch.linspace(0, context.shape[1] - 1, steps=context.shape[1], device=x.device, dtype=torch.float32)
 
-        out = self.forward_orig(img, img_ids, context, txt_ids, timestep, y, guidance, control, attn_mask=kwargs.get("attention_mask", None))
+        out = self.forward_orig(img, img_ids, context, txt_ids, timestep, y, guidance, control)
         out = out[:, :img_tokens]
 
         return rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_len, w=w_len, ph=self.patch_size, pw=self.patch_size)[:, :, :h_orig, :w_orig]
