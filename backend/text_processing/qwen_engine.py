@@ -27,7 +27,7 @@ class Qwen3TextProcessingEngine:
         self.is_flux2 = is_flux2
 
         self.id_pad = 151643
-        self.min_length = 512 if is_flux2 else 1
+        # self.min_length = 512 if is_flux2 else 1 #flux min 512? or pow2
         # self.llama_template = "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
         self.intermediate_output = [9, 18, 27] if is_flux2 else -2
         self.layer_norm_hidden_state = False
@@ -107,16 +107,16 @@ class Qwen3TextProcessingEngine:
                     elif i - 1 >= 0:
                         line_z_values[i] = line_z_values[i][3:]
 
-                current_length = 0
-                for l in line_z_values:
-                    current_length += len(l)
+                # current_length = 0
+                # for l in line_z_values:
+                    # current_length += len(l)
 
-                if current_length % self.min_length != 0:
-                    remaining_count = self.min_length - (current_length % self.min_length)
+                # if current_length % self.min_length != 0:
+                    # remaining_count = self.min_length - (current_length % self.min_length)
 
-                    if remaining_count > 0:
-                        pad = self.process_tokens([self.id_pad] * remaining_count, [1.0] * remaining_count)[0]
-                        line_z_values.append(pad)
+                    # if remaining_count > 0:
+                        # pad = self.process_tokens([self.id_pad] * remaining_count, [1.0] * remaining_count)[0]
+                        # line_z_values.append(pad)
 
                 line_z_values = [torch.cat(line_z_values, dim=0, )]
 
