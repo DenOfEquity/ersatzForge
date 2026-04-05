@@ -52,6 +52,7 @@ class T5TextProcessingEngine:
 
     def encode_with_transformers(self, tokens, attention_mask=None):
         device = memory_management.text_encoder_device()
+        offload_device = memory_management.text_encoder_offload_device()
         tokens = tokens.to(device)
         self.text_encoder.shared.to(device=device, dtype=torch.float32)
 
@@ -59,6 +60,8 @@ class T5TextProcessingEngine:
             z = self.text_encoder(input_ids=tokens, attention_mask=attention_mask)
         else:
             z = self.text_encoder(input_ids=tokens,)
+
+        self.text_encoder.shared.to(device=offload_device)
 
         return z
 
@@ -144,14 +147,6 @@ class T5TextProcessingEngine:
             zs.extend(line_z_values)
 
         return zs
-        # pad zs
-        # max_length = len(max(zs, key=len))
-        # for i in range(len(zs)):
-            # pad = max_length - len(zs[i])
-            # if pad > 0:
-                # zs[i] = torch.cat([zs[i], zs[i].new_zeros([pad, zs[i].shape[1]])])
-
-        # return torch.stack(zs)
 
     def process_tokens(self, batch_tokens, batch_multipliers):
         if self.text_encoder.config["model_type"] == "umt5":
