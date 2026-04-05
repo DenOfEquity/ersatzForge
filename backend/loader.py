@@ -15,7 +15,7 @@ from backend.state_dict import try_filter_state_dict, load_state_dict, state_dic
 from backend.operations import using_forge_operations
 from backend.nn.vae import IntegratedAutoencoderKL, AutoencoderKLFlux2
 from backend.nn.vae_wan import AutoencoderKLWan
-from backend.nn.vae_wan22 import WanVAE
+from backend.nn.vae_wan22 import AutoencoderKLWan22
 from backend.nn.clip import IntegratedCLIP
 from backend.nn.unet import IntegratedUNet2DConditionModel
 
@@ -96,10 +96,10 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
         if cls_name == 'AutoencoderKLWan22':
             assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have VAE state dict!'
 
-            config = WanVAE.load_config(config_path)
+            config = AutoencoderKLWan22.load_config(config_path)
 
             with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
-                model = WanVAE.from_config(config)
+                model = AutoencoderKLWan22.from_config(config)
 
             load_state_dict(model, state_dict)#, ignore_start='loss.')
             return model
