@@ -379,8 +379,8 @@ def on_preset_change(preset=None):
                 gr.update(value=ui_settings_from_file['customscript/sampler.py/img2img/Schedule type/value']),
                 gr.update(visible=True, value=ui_settings_from_file['txt2img/HiRes CFG scale/value']),
                 gr.update(visible=True, value=ui_settings_from_file['txt2img/HiRes Distilled CFG scale/value']),
-                gr.skip(),
-                gr.skip(),
+                gr.update(value=ui_settings_from_file['txt2img/Sampling steps/value']),
+                gr.update(value=ui_settings_from_file['img2img/Sampling steps/value']),
             ]
         else:
             return [
@@ -408,10 +408,10 @@ def on_preset_change(preset=None):
     else: # other presets
         preset_code = getattr(shared.opts, f"preset_code_{preset}", "")
         codes = preset_code.split(",")
-        if len(codes) == 9:
+        if len(codes) >= 9:
             codes = [c.strip() for c in codes]
             return [
-                gr.skip(),          #vae_te
+                gr.skip() if len(codes) == 9 else codes[9:],          #vae_te
                 gr.update(visible=False) if codes[0] == "None" else gr.update(visible=True, value=int(codes[0])),   # ui_clip_skip
                 gr.skip(),  #storage type
                 gr.update(visible=False, value=0) if codes[1] == "None" else gr.update(visible=True, value=int(codes[1])),   # mem
@@ -458,8 +458,8 @@ def on_preset_change(preset=None):
                 gr.update(value=getattr(shared.opts, f"{p}_i2i_scheduler", "Simple")),
                 gr.update(value=getattr(shared.opts, f"{p}_t2i_hr_cfg", 1.0)),
                 gr.update(visible=(preset == "flux"), value=getattr(shared.opts, "flux_t2i_hr_d_cfg", 3.5)),    # ui_txt2img_hr_distilled_cfg
-                gr.skip(),
-                gr.skip(),
+                gr.update(value=getattr(shared.opts, f"{p}_steps", 20)),
+                gr.update(value=getattr(shared.opts, f"{p}_steps", 20)),
             ]
 
 shared.options_templates.update(shared.options_section(('ui_other', "UI defaults (other)", "ui"), {
@@ -477,6 +477,7 @@ Code order is: (all must be present)<br/>
 <li>sampler</li>
 <li>scheduler</li>
 <li>sampling steps</li>
+<li>additional modules 1, 2, ...: <em>optional</em> <sub>note: copy names as they appear in the dropdown menu; comma-separated</sub></li>
 </ol>
 """),
     "preset_code_chroma": shared.OptionInfo("", "Chroma preset code", gr.Textbox, {"maxlines": 1, "placeholder": "see UI defaults 'flux'"}),
@@ -494,9 +495,10 @@ shared.options_templates.update(shared.options_section(('ui_sd', "UI defaults 's
     "sd_i2i_width":  shared.OptionInfo(512,  "img2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd_i2i_height": shared.OptionInfo(512,  "img2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd_i2i_cfg":    shared.OptionInfo(7,    "img2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
-    "sd_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,  "maximum": total_vram,   "step": 1}),
+    "sd_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
     "sd_vae_te":     shared.OptionInfo([""], "VAE / Text Encoder", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
     "sd_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
+    "sd_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
 shared.options_templates.update(shared.options_section(('ui_xl', "UI defaults 'xl'", "ui"), {
     "xl_t2i_width":  shared.OptionInfo(896,  "txt2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
@@ -509,6 +511,7 @@ shared.options_templates.update(shared.options_section(('ui_xl', "UI defaults 'x
     "xl_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,  "maximum": total_vram,   "step": 1}),
     "xl_vae_te":     shared.OptionInfo([""], "VAE / Text Encoder", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
     "xl_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
+    "xl_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
 shared.options_templates.update(shared.options_section(('ui_sd3', "UI defaults 'sd3'", "ui"), {
     "sd3_t2i_width":  shared.OptionInfo(896,  "txt2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
@@ -521,6 +524,7 @@ shared.options_templates.update(shared.options_section(('ui_sd3', "UI defaults '
     "sd3_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,  "maximum": total_vram,   "step": 1}),
     "sd3_vae_te":     shared.OptionInfo([""], "VAE / Text Encoder", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
     "sd3_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
+    "sd3_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
 shared.options_templates.update(shared.options_section(('ui_flux', "UI defaults 'flux'", "ui"), {
     "flux_t2i_width":    shared.OptionInfo(896,  "txt2img width",                gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
@@ -536,5 +540,6 @@ shared.options_templates.update(shared.options_section(('ui_flux', "UI defaults 
     "flux_GPU_MB":       shared.OptionInfo(0,    "Reserve VRAM (MB)",            gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
     "flux_vae_te":       shared.OptionInfo([""], "VAE / Text Encoder", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
     "flux_unet_dtype":   shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
+    "flux_steps":        shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
 
