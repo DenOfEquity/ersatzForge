@@ -89,7 +89,10 @@ def calc_resolution_hires(enable, width, height, hr_scale, hr_resize_x, hr_resiz
     else:
         pass
 
-    factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
+    if sd_models.model_data.sd_model is not None:
+        factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
+    else:
+        factor = 16
     new_width  = factor * ((hr_resize_x + (factor // 2)) // factor)
     new_height = factor * ((hr_resize_y + (factor // 2)) // factor)
 
@@ -103,7 +106,10 @@ def resize_from_to_html(width, height, scale_by):
     if not target_width or not target_height:
         return gr.Slider(info="(no image)")
 
-    factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
+    if sd_models.model_data.sd_model is not None:
+        factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
+    else:
+        factor = 16
     target_width  = factor * ((target_width  + (factor // 2)) // factor)
     target_height = factor * ((target_height + (factor // 2)) // factor)
 
