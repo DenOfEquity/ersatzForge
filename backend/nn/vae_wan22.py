@@ -415,7 +415,7 @@ def count_conv3d(model):
     return count
 
 
-class WanVAE(nn.Module, ConfigMixin):
+class AutoencoderKLWan22(nn.Module, ConfigMixin):
     config_name = "config.json"
 
     @register_to_config
