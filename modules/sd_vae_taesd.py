@@ -280,7 +280,7 @@ def decoder_model():
         model_name = "taesd_decoder.pth"
     elif shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_wan:
         v = True
-        model_name = "taew2_1.pth" #to do: w2_2 (check number of latent channels in config)
+        model_name = "taew2_2.pth" if shared.sd_model.forge_objects.vae.latent_channels == 48 else "taew2_1.pth"
         
     else:
         return None # preview can fall back to cheap approximation
@@ -323,7 +323,7 @@ def encoder_model():
         model_name = "taesd_encoder.pth"
     elif shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_wan:
         v = True
-        model_name = "taew2_1.pth" #to do: w2_2
+        model_name = "taew2_2.pth" if shared.sd_model.forge_objects.vae.latent_channels == 48 else "taew2_1.pth"
     else:
         raise FileNotFoundError('no TAESD encoder model for this architecture')
 
