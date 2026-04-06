@@ -191,7 +191,11 @@ class VAE:
             return
 
         self.memory_used_encode = lambda shape, dtype: (526 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
-        self.memory_used_decode = lambda shape, dtype: (64854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
+        if model.__class__.__name__ == "AutoencoderKLWan22":
+            self.memory_used_decode = lambda shape, dtype: (8 * 64854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
+        else:
+            self.memory_used_decode = lambda shape, dtype: (64854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
+            
         if hasattr(model.config, "downscale_ratio"):
             self.downscale_ratio = int(model.config.downscale_ratio)
         elif hasattr(model.config, "scale_factor_spatial"):
