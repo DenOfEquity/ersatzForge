@@ -96,20 +96,24 @@ class ersatzOtherControl(scripts.Script):
         else:
             tab_id = gradio.State(value="txt2img")
 
-        def get_dims(image):
+        def get_dims(image, tab):
             if image:
+                if tab == 1: # klein
+                    r = 32
+                else:
+                    r = 16
                 w = image.size[0]
                 h = image.size[1]
-                sw = 16 * ((15 + w) // 16)
-                sh = 16 * ((15 + h) // 16)
+                sw = r * ((w + r - 1) // r)
+                sh = r * ((h + r - 1) // r)
                 return f"{image.size[0]} × {image.size[1]} ({sw} × {sh})", gradio.update(interactive=True, variant="secondary"), f"{sw},{sh}"
             else:
                 return  "", gradio.update(interactive=False, variant='tertiary'), "0"
 
         with InputAccordion(False, label=self.title()) as enabled:
             with gradio.Tabs():
-                with gradio.Tab("FluxKontext") as fkon:
-                    gradio.Markdown("Select a FluxKontext model in the **Checkpoint** menu. Add reference image(s) here.")
+                with gradio.Tab("Flux1.Kontext") as fkon:
+                    gradio.Markdown("Select a Flux1.Kontext model in the **Checkpoint** menu. Add reference image(s) here.")
                     with gradio.Row():
                         with gradio.Column():
                             k_image1 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
@@ -125,8 +129,8 @@ class ersatzOtherControl(scripts.Script):
                                 k_image2_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
                                 k_image2_dims = gradio.Textbox(visible=False, value='0')
 
-                        k_image1.change(fn=get_dims, inputs=k_image1, outputs=[k_image1_info, k_image1_send, k_image1_dims], show_progress="hidden")
-                        k_image2.change(fn=get_dims, inputs=k_image2, outputs=[k_image2_info, k_image2_send, k_image2_dims], show_progress="hidden")
+                        k_image1.change(fn=get_dims, inputs=[k_image1, selected_tab], outputs=[k_image1_info, k_image1_send, k_image1_dims], show_progress="hidden")
+                        k_image2.change(fn=get_dims, inputs=[k_image2, selected_tab], outputs=[k_image2_info, k_image2_send, k_image2_dims], show_progress="hidden")
                         k_image1_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, k_image1_dims], outputs=None)
                         k_image2_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, k_image2_dims], outputs=None)
 
@@ -168,10 +172,10 @@ class ersatzOtherControl(scripts.Script):
                                     klein_4_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
                                     klein_4_dims = gradio.Textbox(visible=False, value='0')
 
-                        klein_1.change(fn=get_dims, inputs=klein_1, outputs=[klein_1_info, klein_1_send, klein_1_dims], show_progress="hidden")
-                        klein_2.change(fn=get_dims, inputs=klein_2, outputs=[klein_2_info, klein_2_send, klein_2_dims], show_progress="hidden")
-                        klein_3.change(fn=get_dims, inputs=klein_3, outputs=[klein_3_info, klein_3_send, klein_3_dims], show_progress="hidden")
-                        klein_4.change(fn=get_dims, inputs=klein_4, outputs=[klein_4_info, klein_4_send, klein_4_dims], show_progress="hidden")
+                        klein_1.change(fn=get_dims, inputs=[klein_1, selected_tab], outputs=[klein_1_info, klein_1_send, klein_1_dims], show_progress="hidden")
+                        klein_2.change(fn=get_dims, inputs=[klein_2, selected_tab], outputs=[klein_2_info, klein_2_send, klein_2_dims], show_progress="hidden")
+                        klein_3.change(fn=get_dims, inputs=[klein_3, selected_tab], outputs=[klein_3_info, klein_3_send, klein_3_dims], show_progress="hidden")
+                        klein_4.change(fn=get_dims, inputs=[klein_4, selected_tab], outputs=[klein_4_info, klein_4_send, klein_4_dims], show_progress="hidden")
                         klein_1_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, klein_1_dims], outputs=None)
                         klein_2_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, klein_2_dims], outputs=None)
                         klein_3_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, klein_3_dims], outputs=None)
@@ -193,7 +197,7 @@ class ersatzOtherControl(scripts.Script):
                                 z_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
                                 z_image_dims = gradio.Textbox(visible=False, value="0")
 
-                        z_image.background.change(fn=get_dims, inputs=[z_image.background], outputs=[z_image_info, z_image_send, z_image_dims], show_progress="hidden")
+                        z_image.background.change(fn=get_dims, inputs=[z_image.background, selected_tab], outputs=[z_image_info, z_image_send, z_image_dims], show_progress="hidden")
                         z_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z_image_dims], outputs=None)
 
 
@@ -379,13 +383,11 @@ class ersatzOtherControl(scripts.Script):
                 self.klein_latent_size = klein_latent_size
 
                 k_latents = []
-                k_ids = []
-                accum_h = 0
-                accum_w = 0
-
+                ow = 32 * ((w*8 + 31) // 32)
+                oh = 32 * ((h*8 + 31) // 32)
                 for image in [klein_image1, klein_image2, klein_image3, klein_image4]:
                     if image is not None:
-                        k_latent = pil_to_latent(image, w*8, h*8, 0, "KleinEdit")
+                        k_latent = pil_to_latent(image, ow, oh, 0, "KleinEdit")
                         k_latents.append(k_latent)
 
                 shared.klein_latents = k_latents
