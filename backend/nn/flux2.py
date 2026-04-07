@@ -386,8 +386,8 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
 
         self.txt_ids_dims = txt_ids_dims
         self.global_modulation = global_modulation
-        self.default_ref_method = default_ref_method
-        self.ref_index_scale = ref_index_scale
+        # self.default_ref_method = default_ref_method
+        # self.ref_index_scale = ref_index_scale
 
     def forward_orig(
         self,
@@ -446,7 +446,7 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
 
         return self.final_layer(img, vec_orig)  # (N, T, patch_size ** 2 * out_channels)
 
-    def process_img(self, x, index=0, h_offset=0, w_offset=0):
+    def process_img(self, x, index=0):
         bs, c, h, w = x.shape
         patch_size = self.patch_size
 
@@ -459,16 +459,13 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
         h_len = (h + (patch_size // 2)) // patch_size
         w_len = (w + (patch_size // 2)) // patch_size
 
-        h_offset = (h_offset + (patch_size // 2)) // patch_size
-        w_offset = (w_offset + (patch_size // 2)) // patch_size
-
         steps_h = h_len
         steps_w = w_len
 
         img_ids = torch.zeros((steps_h, steps_w, len(self.axes_dim)), device=x.device, dtype=torch.float32)
-        img_ids[:, :, 0] = img_ids[:, :, 1] + index
-        img_ids[:, :, 1] = img_ids[:, :, 1] + torch.linspace(h_offset, h_len - 1 + h_offset, steps=steps_h, device=x.device, dtype=torch.float32).unsqueeze(1)
-        img_ids[:, :, 2] = img_ids[:, :, 2] + torch.linspace(w_offset, w_len - 1 + w_offset, steps=steps_w, device=x.device, dtype=torch.float32).unsqueeze(0)
+        img_ids[:, :, 0] = index
+        img_ids[:, :, 1] += torch.linspace(0, h_len - 1, steps=steps_h, device=x.device, dtype=torch.float32).unsqueeze(1)
+        img_ids[:, :, 2] += torch.linspace(0, w_len - 1, steps=steps_w, device=x.device, dtype=torch.float32).unsqueeze(0)
         return img, repeat(img_ids, "h w c -> b (h w) c", b=bs)
 
     def forward(self, x, timestep, context, y=None, guidance=None, ref_latents=None, control=None, **kwargs):
@@ -480,37 +477,13 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
         img, img_ids = self.process_img(x)
         img_tokens = img.shape[1]
 
-        if getattr(shared, "klein_active", False):
-            ref_latents = getattr(shared, "klein_latents", None) # VAE encoded only, no patchify
-
-            if ref_latents is not None:
-                h = 0
-                w = 0
-                index = 0
-                ref_latents_method = kwargs.get("ref_latents_method", self.default_ref_method)
-                for ref in ref_latents:
-                    if ref_latents_method == "index":
-                        index += self.ref_index_scale
-                        h_offset = 0
-                        w_offset = 0
-                    elif ref_latents_method == "uxo":
-                        index = 0
-                        h_offset = h_len * patch_size + h
-                        w_offset = w_len * patch_size + w
-                        h += ref.shape[-2]
-                        w += ref.shape[-1]
-                    else:
-                        index = 1
-                        h_offset = 0
-                        w_offset = 0
-                        if ref.shape[-2] + h > ref.shape[-1] + w:
-                            w_offset = w
-                        else:
-                            h_offset = h
-                        h = max(h, ref.shape[-2] + h_offset)
-                        w = max(w, ref.shape[-1] + w_offset)
-
-                    klein, klein_ids = self.process_img(ref, index=index, h_offset=h_offset, w_offset=w_offset)
+        index = 0
+        if hasattr(shared, "klein_latents"):
+            for ref, str in zip(getattr(shared, "klein_latents"), getattr(shared, "klein_strength")):
+                if ref is not None and str > 0.0:
+                    index += 10
+                    klein, klein_ids = self.process_img(ref, index=index)
+                    klein *= str
                     img = torch.cat([img, klein.to(img)], dim=1)
                     img_ids = torch.cat([img_ids, klein_ids.to(img_ids)], dim=1)
 
