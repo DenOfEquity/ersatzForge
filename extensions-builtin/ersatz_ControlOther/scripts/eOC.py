@@ -148,41 +148,41 @@ class ersatzOtherControl(scripts.Script):
                         with gradio.Column():
                             klein_1 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                             with gradio.Row():
-                                klein_1_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
-                                klein_1_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
-                            with gradio.Row():
                                 klein_1_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 klein_1_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
                                 klein_1_dims = gradio.Textbox(visible=False, value='0')
+                            with gradio.Row():
+                                klein_1_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
+                                klein_1_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
                         with gradio.Column():
                             klein_2 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
-                            with gradio.Row():
-                                klein_2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
-                                klein_2_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
                             with gradio.Row():
                                 klein_2_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 klein_2_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
                                 klein_2_dims = gradio.Textbox(visible=False, value='0')
-                    with gradio.Accordion(label="3 & 4", open=False):
+                            with gradio.Row():
+                                klein_2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
+                                klein_2_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
+                    with gradio.Accordion(label="References 3 & 4", open=False):
                         with gradio.Row():
                             with gradio.Column():
                                 klein_3 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                                 with gradio.Row():
-                                    klein_3_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
-                                    klein_3_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
-                                with gradio.Row():
                                     klein_3_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                     klein_3_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
                                     klein_3_dims = gradio.Textbox(visible=False, value='0')
+                                with gradio.Row():
+                                    klein_3_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
+                                    klein_3_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
                             with gradio.Column():
                                 klein_4 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
-                                with gradio.Row():
-                                    klein_4_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
-                                    klein_4_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
                                 with gradio.Row():
                                     klein_4_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                     klein_4_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
                                     klein_4_dims = gradio.Textbox(visible=False, value='0')
+                                with gradio.Row():
+                                    klein_4_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
+                                    klein_4_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
 
                         klein_1.change(fn=get_dims, inputs=[klein_1, selected_tab], outputs=[klein_1_info, klein_1_send, klein_1_dims], show_progress="hidden")
                         klein_2.change(fn=get_dims, inputs=[klein_2, selected_tab], outputs=[klein_2_info, klein_2_send, klein_2_dims], show_progress="hidden")
