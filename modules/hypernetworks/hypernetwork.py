@@ -5,8 +5,10 @@ import inspect
 import safetensors
 import torch
 
-from modules import devices, shared, hashes, errors
 from torch.nn.init import normal_, xavier_normal_, xavier_uniform_, kaiming_normal_, kaiming_uniform_, zeros_
+
+from modules import devices, shared, hashes, errors
+import modules_forge.colour_code as cc
 
 
 class HypernetworkModule(torch.nn.Module):
@@ -205,6 +207,8 @@ class Hypernetwork:
         # Dropout structure should have same length as layer structure, Every digits should be in [0,1), and last digit must be 0.
         if self.dropout_structure is None:
             self.dropout_structure = parse_dropout_structure(self.layer_structure, self.use_dropout, self.last_layer_dropout)
+
+        print(f"{cc.LOAD2}[HyperNetwork]{cc.RESET} " + filename)
 
         if shared.opts.print_hypernet_extra:
             if self.optional_info is not None:
