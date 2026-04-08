@@ -363,6 +363,7 @@ def apply_token_merging(sd_model, token_merging_ratio):
     return
 
 
+import modules_forge.colour_code as cc
 @torch.inference_mode()
 def forge_model_reload():
     current_hash = hash(str(model_data.forge_loading_parameters))
@@ -370,7 +371,11 @@ def forge_model_reload():
     if model_data.forge_hash == current_hash and model_data.sd_model is not None:
         return model_data.sd_model, False
 
-    print("Loading Model: " + str(model_data.forge_loading_parameters))
+    print(f"{cc.LOAD}Loading model:{cc.RESET}  " + str(model_data.forge_loading_parameters["checkpoint_info"].filename))
+    for module in model_data.forge_loading_parameters["additional_modules"]:
+        print(f"{cc.LOAD}Loading module:{cc.RESET} " + str(module))
+    if model_data.forge_loading_parameters["unet_storage_dtype"] is not None:
+        print (f"{cc.SETTING}Forced storage dtype for model:{cc.RESET} " + str(model_data.forge_loading_parameters["unet_storage_dtype"]))
 
     timer = Timer()
 
@@ -412,7 +417,7 @@ def forge_model_reload():
 
     timer.record("scripts callbacks")
 
-    print(f"Model loaded in {timer.summary()}.")
+    print(f"{cc.INFO2}Model loaded in {timer.summary()}.{cc.RESET}")
 
     model_data.forge_hash = current_hash
 
