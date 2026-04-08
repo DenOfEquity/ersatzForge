@@ -10,6 +10,8 @@ from modules import shared, sd_models, errors, scripts
 from backend.utils import load_torch_file
 from backend.patcher.lora import model_lora_keys_clip, model_lora_keys_unet, load_lora
 
+import modules_forge.colour_code as cc
+
 
 def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filename='default', online_mode=False):
     model_flag = type(model.model).__name__ if model is not None else 'default'
@@ -30,7 +32,7 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
 
     if len(lora_unmatch) > 12:
         # print (lora_unmatch.keys())
-        print(f"[LORA] apparent version mismatch ({len(lora_unmatch)} keys) for {model_flag}: {filename}")
+        print(f"{cc.WARNING}[LORA] apparent version mismatch{cc.RESET} ({cc.MINOR}{len(lora_unmatch)} keys{cc.RESET}) for {model_flag}: {filename}")
 
     del lora, lora_unmatch
 
@@ -41,18 +43,18 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
         loaded_keys = new_model.add_patches(filename=filename, patches=lora_unet, strength_patch=strength_model, online_mode=online_mode)
         skipped_keys = [item for item in lora_unet if item not in loaded_keys]
         if len(skipped_keys) > 12:
-            print(f"[LORA] Mismatch {filename} for {model_flag}-UNet with {len(skipped_keys)} keys mismatched in {len(loaded_keys)} keys")
+            print(f"{cc.WARNING}[LORA] Mismatch{cc.RESET} {filename} for {model_flag}-UNet with {cc.MINOR}{len(skipped_keys)} keys mismatched{cc.RESET} in {len(loaded_keys)} keys")
         else:
-            print(f"[LORA] Loaded {filename} for {model_flag}-UNet with {len(loaded_keys)} keys at weight {strength_model} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
+            print(f"{cc.LOAD2}[LORA] Loaded{cc.RESET} {filename} for {model_flag}-UNet with {len(loaded_keys)} keys at weight {strength_model} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
             model = new_model
 
     if new_clip is not None and len(lora_clip) > 0:
         loaded_keys = new_clip.add_patches(filename=filename, patches=lora_clip, strength_patch=strength_clip, online_mode=online_mode)
         skipped_keys = [item for item in lora_clip if item not in loaded_keys]
         if len(skipped_keys) > 12:
-            print(f"[LORA] Mismatch {filename} for {model_flag}-CLIP with {len(skipped_keys)} keys mismatched in {len(loaded_keys)} keys")
+            print(f"{cc.WARNING}[LORA] Mismatch{cc.RESET} {filename} for {model_flag}-CLIP with {cc.MINOR}{len(skipped_keys)} keys mismatched{cc.RESET} in {len(loaded_keys)} keys")
         else:
-            print(f"[LORA] Loaded {filename} for {model_flag}-CLIP with {len(loaded_keys)} keys at weight {strength_clip} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
+            print(f"{cc.LOAD2}[LORA] Loaded{cc.RESET} {filename} for {model_flag}-CLIP with {len(loaded_keys)} keys at weight {strength_clip} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
             clip = new_clip
 
     return model, clip
@@ -93,7 +95,7 @@ def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=No
 
     for i in range(len(names)):
         if networks_on_disk[i] is None:
-            print (f"[LoRA] Not found: {names[i]}")
+            print(f"{cc.ERROR}[LoRA] Not found:{cc.RESET} {names[i]}")
             continue
         try:
             net = load_network(names[i], networks_on_disk[i])
@@ -101,7 +103,7 @@ def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=No
             networks_on_disk[i].read_hash()
             loaded_networks.append(net)
         except Exception as e:
-            print (f"[LoRA] {e}")
+            print(f"{cc.WARNING}[LoRA] {e}{cc.RESET}")
             networks_on_disk[i] = None
 
     online_mode = dynamic_args.get("online_lora", False)
