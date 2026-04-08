@@ -3,6 +3,8 @@ import gradio as gr
 from modules import scripts
 from backend import memory_management
 
+import modules_forge.colour_code as cc
+
 
 class NeverOOMForForge(scripts.Script):
     sorting_priority = 18
@@ -34,10 +36,10 @@ class NeverOOMForForge(scripts.Script):
         unet_enabled, vae_enabled, tile_size_x, tile_size_y, tile_overlap, tile_method = script_args
 
         if unet_enabled != 'Normal':
-            print(f'NeverOOM Enabled for UNet ({unet_enabled})')
+            print(f"{cc.SETTING}NeverOOM Enabled for UNet ({unet_enabled}){cc.RESET}")
 
         if vae_enabled:
-            print('NeverOOM Enabled for VAE (always tiled)')
+            print(f"{cc.SETTING}NeverOOM Enabled for VAE (always tiled){cc.RESET}")
             p.sd_model.forge_objects.vae.tile_info = (tile_size_x, tile_size_y, tile_overlap, tile_method)
         else:
             p.sd_model.forge_objects.vae.tile_info = None
@@ -56,7 +58,7 @@ class NeverOOMForForge(scripts.Script):
                 case _:
                     memory_management.vram_state = self.original_vram_state
 
-            print(f'VRAM State Changed To {memory_management.vram_state.name}')
+            print(f"{cc.SETTING}Set VRAM state to: {memory_management.vram_state.name}{cc.RESET}")
             self.previous_unet_enabled = unet_enabled
 
         return
