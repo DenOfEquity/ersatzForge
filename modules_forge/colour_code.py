@@ -1,0 +1,11 @@
+ERROR   = "\033[0;31m"   # RED
+INFO2   = "\033[0;32m"   # DIM GREEN
+INFO    = "\033[1;32m"   # GREEN
+MINOR   = "\033[0;33m"   # DIM YELLOW
+WARNING = "\033[1;33m"   # YELLOW
+SETTING2= "\033[0;35m"   # DIM PURPLE
+SETTING = "\033[1;35m"   # PURPLE
+LOAD2   = "\033[0;36m"   # DIM TEAL
+LOAD    = "\033[1;36m"   # TEAL
+CRITICAL= "\033[0;37;41m"# WHITE ON RED
+RESET   = "\033[0m"      # RESET
