@@ -339,8 +339,6 @@ def prepare_environment():
     requirements_file_for_npu = os.environ.get('REQS_FILE_FOR_NPU', "requirements_npu.txt")
 
     xformers_package = os.environ.get('XFORMERS_PACKAGE', 'xformers==0.0.27')
-    clip_package = os.environ.get('CLIP_PACKAGE', "https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip")
-    openclip_package = os.environ.get('OPENCLIP_PACKAGE', "https://github.com/mlfoundations/open_clip/archive/bb6e834e9c70d9c27d0dc3ecedeebeaeb1ffad6b.zip")
 
     try:
         # the existence of this file is a signal to webui.sh/bat that webui needs to be restarted when it stops execution
@@ -368,14 +366,6 @@ def prepare_environment():
             Torch is not able to use GPU; add --skip-torch-cuda-test to COMMANDLINE_ARGS variable to disable this check.'
         )
     startup_timer.record("torch GPU test")
-
-    if not is_installed("clip"):
-        run_pip(f"install {clip_package}", "clip")
-        startup_timer.record("install clip")
-
-    if not is_installed("open_clip"):
-        run_pip(f"install {openclip_package}", "open_clip")
-        startup_timer.record("install open_clip")
 
     if (not is_installed("xformers") or args.reinstall_xformers) and args.xformers:
         run_pip(f"install -U -I --no-deps {xformers_package}", "xformers")
@@ -471,4 +461,3 @@ def dump_sysinfo():
         file.write(text)
 
     return filename
-
