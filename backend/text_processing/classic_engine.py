@@ -7,6 +7,7 @@ from backend.text_processing.textual_inversion import EmbeddingDatabase
 from backend import memory_management
 
 from modules.shared import opts
+import modules_forge.colour_code as cc
 
 
 PromptChunkFix = namedtuple('PromptChunkFix', ['offset', 'embedding'])
@@ -45,7 +46,7 @@ class CLIPEmbeddingForTextualInversion(torch.nn.Module):
                     emb = emb.to(inputs_embeds)
                     emb_len = min(tensor.shape[0] - offset - 1, emb.shape[0])
                     tensor = torch.cat([tensor[0:offset + 1], emb[0:emb_len], tensor[offset + 1 + emb_len:]]).to(dtype=inputs_embeds.dtype)
-                    print(f'[Textual Inversion] Used Embedding [{embedding.name}] in CLIP of [{self.textual_inversion_key}]')
+                    print(f'{cc.LOAD2}[Textual Inversion]{cc.RESET} [{embedding.name}] in CLIP of [{self.textual_inversion_key}]')
 
             vecs.append(tensor)
 
