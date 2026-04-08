@@ -151,7 +151,7 @@ class LastLayer(nn.Module):
 
 
 class IntegratedChromaTransformer2DModel(nn.Module):
-    def __init__(self, in_channels: int, vec_in_dim: int, context_in_dim: int, hidden_size: int, mlp_ratio: float, num_heads: int, depth: int, depth_single_blocks: int, axes_dim: list[int], theta: int, qkv_bias: bool, guidance_embed):
+    def __init__(self, in_channels: int, vec_in_dim: int, context_in_dim: int, hidden_size: int, mlp_ratio: float, num_heads: int, depth: int, depth_single_blocks: int, axes_dim: list[int], theta: int, qkv_bias: bool, guidance_embed, **kwargs):
         super().__init__()
 
         self.in_channels = in_channels * 4
