@@ -6,7 +6,6 @@ from torch import nn
 import torchsde
 from tqdm.auto import trange, tqdm
 from k_diffusion import deis
-from backend.modules.k_prediction import PredictionFlux, PredictionFlux2, PredictionDiscreteFlow
 
 from modules import shared
 
@@ -160,10 +159,7 @@ def sample_euler_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
     s_in = x.new_ones([x.shape[0]])
     p = None
 
-    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionFlux2) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
-        use_flow_method = True
-    else:
-        use_flow_method = False
+    use_flow_method = hasattr(model.inner_model.predictor, "shift") or hasattr(model.inner_model.predictor, "mu")
 
     for i in trange(len(sigmas) - 1, disable=disable):
         denoised = model(x, sigmas[i] * s_in, **extra_args)
@@ -275,10 +271,7 @@ def sample_dpm_2_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
     noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
     s_in = x.new_ones([x.shape[0]])
 
-    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionFlux2) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
-        use_flow_method = True
-    else:
-        use_flow_method = False
+    use_flow_method = hasattr(model.inner_model.predictor, "shift") or hasattr(model.inner_model.predictor, "mu")
 
     for i in trange(len(sigmas) - 1, disable=disable):
         denoised = model(x, sigmas[i] * s_in, **extra_args)
@@ -557,10 +550,7 @@ def sample_dpmpp_2s_ancestral(model, x, sigmas, extra_args=None, callback=None, 
     sigma_fn = lambda t: t.neg().exp()
     t_fn = lambda sigma: sigma.log().neg()
 
-    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionFlux2) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
-        use_flow_method = True
-    else:
-        use_flow_method = False
+    use_flow_method = hasattr(model.inner_model.predictor, "shift") or hasattr(model.inner_model.predictor, "mu")
 
     for i in trange(len(sigmas) - 1, disable=disable):
         denoised = model(x, sigmas[i] * s_in, **extra_args)
@@ -604,10 +594,7 @@ def sample_dpmpp_sde(model, x, sigmas, extra_args=None, callback=None, disable=N
     sigma_fn = lambda t: t.neg().exp()
     t_fn = lambda sigma: sigma.log().neg()
 
-    if isinstance(model.inner_model.predictor, PredictionFlux) or isinstance(model.inner_model.predictor, PredictionFlux2) or isinstance(model.inner_model.predictor, PredictionDiscreteFlow):
-        use_flow_method = True
-    else:
-        use_flow_method = False
+    use_flow_method = hasattr(model.inner_model.predictor, "shift") or hasattr(model.inner_model.predictor, "mu")
 
     for i in trange(len(sigmas) - 1, disable=disable):
         denoised = model(x, sigmas[i] * s_in, **extra_args)
