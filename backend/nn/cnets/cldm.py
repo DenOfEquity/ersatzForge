@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 
 from backend.nn.unet import timestep_embedding, exists, conv_nd, SpatialTransformer, TimestepEmbedSequential, ResBlock, Downsample
@@ -9,6 +8,7 @@ class ControlNet(nn.Module):
             self,
             in_channels,
             model_channels,
+            hint_width,
             hint_channels,
             num_res_blocks,
             dropout=0,
@@ -117,22 +117,27 @@ class ControlNet(nn.Module):
         )
         self.zero_convs = nn.ModuleList([self.make_zero_conv(model_channels)])
 
+        if hint_width == 48:
+            c0, c1, c2, c3 = 48, 96, 192, 384
+        else:
+            c0, c1, c2, c3 = 16, 32, 96, 256
+
         self.input_hint_block = TimestepEmbedSequential(
-            conv_nd(dims, hint_channels, 16, 3, padding=1),
+            conv_nd(dims, hint_channels, c0, 3, padding=1),
             nn.SiLU(),
-            conv_nd(dims, 16, 16, 3, padding=1),
+            conv_nd(dims, c0, c0, 3, padding=1),
             nn.SiLU(),
-            conv_nd(dims, 16, 32, 3, padding=1, stride=2),
+            conv_nd(dims, c0, c1, 3, padding=1, stride=2),
             nn.SiLU(),
-            conv_nd(dims, 32, 32, 3, padding=1),
+            conv_nd(dims, c1, c1, 3, padding=1),
             nn.SiLU(),
-            conv_nd(dims, 32, 96, 3, padding=1, stride=2),
+            conv_nd(dims, c1, c2, 3, padding=1, stride=2),
             nn.SiLU(),
-            conv_nd(dims, 96, 96, 3, padding=1),
+            conv_nd(dims, c2, c2, 3, padding=1),
             nn.SiLU(),
-            conv_nd(dims, 96, 256, 3, padding=1, stride=2),
+            conv_nd(dims, c2, c3, 3, padding=1, stride=2),
             nn.SiLU(),
-            conv_nd(dims, 256, model_channels, 3, padding=1)
+            conv_nd(dims, c3, model_channels, 3, padding=1)
         )
 
         self._feature_size = model_channels
@@ -249,19 +254,16 @@ class ControlNet(nn.Module):
 
         outs = []
 
-        hs = []
         if self.num_classes is not None:
             assert y.shape[0] == x.shape[0]
-            emb = emb + self.label_emb(y)
+            emb.add_(self.label_emb(y))
 
         h = x
         for module, zero_conv in zip(self.input_blocks, self.zero_convs):
+            h = module(h, emb, context)
             if guided_hint is not None:
-                h = module(h, emb, context)
-                h += guided_hint
+                h.add_(guided_hint)
                 guided_hint = None
-            else:
-                h = module(h, emb, context)
             outs.append(zero_conv(h, emb, context))
 
         h = self.middle_block(h, emb, context)
