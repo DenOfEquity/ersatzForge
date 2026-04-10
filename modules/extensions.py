@@ -11,6 +11,7 @@ from modules import shared, errors, cache, scripts
 from modules.gitpython_hack import Repo
 from modules.paths_internal import extensions_dir, extensions_builtin_dir, script_path  # noqa: F401
 from modules_forge.config import always_disabled_extensions
+import modules_forge.colour_code as cc
 
 extensions: list[Extension] = []
 extension_paths: dict[str, Extension] = {}
@@ -240,13 +241,13 @@ def list_extensions():
     loaded_extensions.clear()
 
     if shared.cmd_opts.disable_all_extensions:
-        print("*** \"--disable-all-extensions\" arg was used, will not load any extensions ***")
+        print(f"{cc.WARNING}--disable-all-extensions {cc.MINOR}command line argument was used, will not load any extensions.{cc.RESET}")
     elif shared.opts.disable_all_extensions == "all":
-        print("*** \"Disable all extensions\" option was set, will not load any extensions ***")
+        print(f"{cc.WARNING}Disable all extensions {cc.MINOR}option was set, will not load any extensions.{cc.RESET}")
     elif shared.cmd_opts.disable_extra_extensions:
-        print("*** \"--disable-extra-extensions\" arg was used, will only load built-in extensions ***")
+        print(f"{cc.WARNING}--disable-extra-extensions {cc.MINOR}command line argument was used, will only load built-in extensions.{cc.RESET}")
     elif shared.opts.disable_all_extensions == "extra":
-        print("*** \"Disable all extensions\" option was set, will only load built-in extensions ***")
+        print(f"{cc.WARNING}Disable all extensions {cc.MINOR}option was set, will only load built-in extensions.{cc.RESET}")
 
 
     # scan through extensions directory and load metadata
