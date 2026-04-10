@@ -266,7 +266,6 @@ class SDXL(BASE):
         "context_dim": 2048,
         "adm_in_channels": 2816,
         "use_temporal_attention": False,
-        "in_channels": 4,
     }
 
     latent_format = latent.SDXL
@@ -693,7 +692,7 @@ class Klein4B(Flux):
 
     memory_usage_factor = 14.6  # 3.1 * (2 * 2) * (3072 / 2604)
 
-    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
+    supported_inference_dtypes = [torch.float16, torch.bfloat16, torch.float32]
 
     vae_key_prefix = ["vae."]
     text_encoder_key_prefix = ["text_encoders."]
@@ -719,7 +718,7 @@ class Klein9B(Flux):
 
     memory_usage_factor = 19.5  # 3.1 * (2 * 2) * (4096 / 2604)
 
-    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
+    supported_inference_dtypes = [torch.float16, torch.bfloat16, torch.float32]
 
     vae_key_prefix = ["vae."]
     text_encoder_key_prefix = ["text_encoders."]
@@ -728,4 +727,4 @@ class Klein9B(Flux):
         return {"qwen3_8b": "text_encoder"}
 
 
-models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, SDXL, Mugen, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima, Klein4B, Klein9B]#, WAN21_I2V]
+models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, Mugen, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima, Klein4B, Klein9B]#, WAN21_I2V]
