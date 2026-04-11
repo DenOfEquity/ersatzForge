@@ -126,6 +126,12 @@ current_bnb_dtype = None
 
 
 class ForgeOperations:
+    def common_load(cls, state_dict, prefix):
+        if prefix + 'scale_weight' in state_dict:
+            cls.scale_weight = torch.nn.Parameter(state_dict[prefix + 'scale_weight'])
+        elif prefix + 'weight_scale' in state_dict:
+            cls.scale_weight = torch.nn.Parameter(state_dict[prefix + 'weight_scale'])
+
     class Linear(torch.nn.Module):
         def __init__(self, in_features, out_features, *args, **kwargs):
             super().__init__()
@@ -134,33 +140,11 @@ class ForgeOperations:
             self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype))
             self.weight = None
             self.scale_weight = None
-            self.scale_input = None
             self.bias = None
             self.parameters_manual_cast = current_manual_cast_enabled
 
         def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
-            if self.scale_weight is None:
-                if prefix + "scale_weight" in state_dict:
-                    self.scale_weight = torch.nn.Parameter(state_dict.pop(prefix + "scale_weight"))
-                elif prefix + "weight_scale" in state_dict:
-                    self.scale_weight = torch.nn.Parameter(state_dict.pop(prefix + "weight_scale"))
-            else:
-                if prefix + "weight_scale" in state_dict:
-                    state_dict[prefix + "scale_weight"] = state_dict.pop(prefix + "weight_scale")
-                elif prefix + "scale_weight" not in state_dict:
-                    self.scale_weight = None
-
-            if self.scale_input is None:
-                if prefix + "scale_input" in state_dict:
-                    self.scale_input = torch.nn.Parameter(state_dict.pop(prefix + "scale_input"))
-                elif prefix + "input_scale" in state_dict:
-                    self.scale_input = torch.nn.Parameter(state_dict.pop(prefix + "input_scale"))
-            else:
-                if prefix + "input_scale" in state_dict:
-                    state_dict[prefix + "scale_input"] = state_dict.pop(prefix + "input_scale")
-                elif prefix + "scale_input" not in state_dict:
-                    self.scale_input = None
-
+            ForgeOperations.common_load(self, state_dict, prefix)
             if hasattr(self, 'dummy'):
                 if prefix + 'weight' in state_dict:
                     self.weight = torch.nn.Parameter(state_dict[prefix + 'weight'].to(self.dummy))
@@ -632,4 +616,3 @@ class DynamicSwapInstaller:
         for m in model.modules():
             DynamicSwapInstaller._uninstall_module(m)
         return
-
