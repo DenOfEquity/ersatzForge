@@ -44,7 +44,7 @@ class ControlNetPatcher(ControlModelPatcher):
 
         controlnet_config = None
         if "controlnet_cond_embedding.conv_in.weight" in controlnet_data:  # diffusers format
-            unet_dtype = memory_management.unet_dtype()
+            unet_dtype = memory_management.state_dict_dtype(controlnet_data)
             controlnet_config = unet_config_from_diffusers_unet(controlnet_data, unet_dtype)
             diffusers_keys = unet_to_diffusers(controlnet_config)
             diffusers_keys["controlnet_mid_block.weight"] = "middle_block_out.0.weight"
@@ -105,7 +105,7 @@ class ControlNetPatcher(ControlModelPatcher):
             return ControlNetPatcher(net)
 
         if controlnet_config is None:
-            unet_dtype = memory_management.unet_dtype()
+            unet_dtype = memory_management.state_dict_dtype(controlnet_data)
             controlnet_config = model_config_from_unet(controlnet_data, prefix, True).unet_config
             controlnet_config['dtype'] = unet_dtype
 
@@ -117,7 +117,7 @@ class ControlNetPatcher(ControlModelPatcher):
         controlnet_config["hint_channels"] = controlnet_data["{}input_hint_block.0.weight".format(prefix)].shape[1]
 
         with using_forge_operations(dtype=unet_dtype, manual_cast_enabled=computation_dtype != unet_dtype):
-            control_model = cldm.ControlNet(**controlnet_config).to(dtype=unet_dtype)
+            control_model = cldm.ControlNet(**controlnet_config)
 
         if pth:
             if 'difference' in controlnet_data:
