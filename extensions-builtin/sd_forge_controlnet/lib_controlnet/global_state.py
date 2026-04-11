@@ -2,12 +2,12 @@ import os.path
 import stat
 from collections import OrderedDict
 
-from modules import shared, sd_models
+from modules import shared
 from modules_forge.shared import controlnet_dir, supported_preprocessors
 
-from typing import Dict, Tuple, List
+from typing import Tuple, List
 
-CN_MODEL_EXTS = [".pt", ".pth", ".ckpt", ".safetensors", ".bin", ".patch"]
+CN_MODEL_EXTS = [".pt", ".pth", ".ckpt", ".safetensors", ".sft", ".bin", ".patch"]
 
 
 def traverse_all_files(curr_path, model_list):
@@ -85,7 +85,7 @@ def get_all_preprocessor_names():
 
 def get_all_preprocessor_tags():
     tags = []
-    for k, p in supported_preprocessors.items():
+    for _k, p in supported_preprocessors.items():
         tags += p.tags
     tags = list(set(tags))
     tags = sorted(tags)
@@ -104,7 +104,7 @@ def get_filtered_preprocessor_names(tag):
 
 def get_filtered_controlnet_names(tag):
     filtered_preprocessors = get_filtered_preprocessors(tag)
-    model_filename_filters = ["union"]
+    model_filename_filters = ["union", "unicontrol"]
     for p in filtered_preprocessors.values():
         model_filename_filters += p.model_filename_filters
     return [x for x in controlnet_names if x == 'None' or any(f.lower() in x.lower() for f in model_filename_filters)]
