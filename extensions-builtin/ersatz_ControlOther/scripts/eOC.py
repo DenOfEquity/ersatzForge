@@ -152,7 +152,7 @@ class ersatzOtherControl(scripts.Script):
                                 klein_1_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
                                 klein_1_dims = gradio.Textbox(visible=False, value='0')
                             with gradio.Row():
-                                klein_1_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
+                                klein_1_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                 klein_1_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
                         with gradio.Column():
                             klein_2 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
@@ -161,7 +161,7 @@ class ersatzOtherControl(scripts.Script):
                                 klein_2_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
                                 klein_2_dims = gradio.Textbox(visible=False, value='0')
                             with gradio.Row():
-                                klein_2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
+                                klein_2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                 klein_2_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
                     with gradio.Accordion(label="References 3 & 4", open=False):
                         with gradio.Row():
@@ -172,7 +172,7 @@ class ersatzOtherControl(scripts.Script):
                                     klein_3_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
                                     klein_3_dims = gradio.Textbox(visible=False, value='0')
                                 with gradio.Row():
-                                    klein_3_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
+                                    klein_3_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                     klein_3_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
                             with gradio.Column():
                                 klein_4 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
@@ -181,7 +181,7 @@ class ersatzOtherControl(scripts.Script):
                                     klein_4_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
                                     klein_4_dims = gradio.Textbox(visible=False, value='0')
                                 with gradio.Row():
-                                    klein_4_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", scale=0)
+                                    klein_4_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                     klein_4_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
 
                         klein_1.change(fn=get_dims, inputs=[klein_1, selected_tab], outputs=[klein_1_info, klein_1_send, klein_1_dims], show_progress="hidden")
@@ -410,9 +410,9 @@ class ersatzOtherControl(scripts.Script):
                 self.klein_resize = klein_resize
 
                 k_latents = []
-                for image, size in zip([klein_1, klein_2, klein_3, klein_4], klein_resize):
+                for image, resize in zip([klein_1, klein_2, klein_3, klein_4], klein_resize):
                     if image is not None:
-                        match size:
+                        match resize:
                             case "to output":
                                 k_width = 32 * ((w*8 + 31) // 32)
                                 k_height = 32 * ((h*8 + 31) // 32)
@@ -422,9 +422,22 @@ class ersatzOtherControl(scripts.Script):
                             case "half":
                                 k_width = (64 * ((image.size[0] + 63) // 64)) // 2
                                 k_height = (64 * ((image.size[1] + 63) // 64)) // 2
-                            case _:
+                            case "none":
                                 k_width = 32 * ((image.size[0] + 31) // 32)
                                 k_height = 32 * ((image.size[1] + 31) // 32)
+                            case _:
+                                if resize.isdigit():
+                                    maximum = int(size)
+                                    if image.size[0] > image.size[1]:
+                                        k_width = 32 * ((maximum + 16) // 32)
+                                        k_height = int(32 * ((16 + (maximum * image.size[1] / image.size[0])) // 32))
+                                    else:
+                                        k_width = int(32 * ((16 + (maximum * image.size[0] / image.size[1])) // 32))
+                                        k_height = 32 * ((maximum + 16) // 32)
+                                else:
+                                    k_width = 32 * ((image.size[0] + 31) // 32)
+                                    k_height = 32 * ((image.size[1] + 31) // 32)
+
                         k_latent = pil_to_latent(image, k_width, k_height, 0, "KleinEdit")
                         k_latents.append(k_latent)
                     else:
