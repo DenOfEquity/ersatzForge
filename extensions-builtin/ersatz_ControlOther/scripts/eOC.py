@@ -292,7 +292,7 @@ class ersatzOtherControl(scripts.Script):
             image = torch.tensor(image).unsqueeze(0)
 
             if image.shape[3] != width or image.shape[2] != height:
-                print (f"[{mode_text}] resizing and center-cropping input to: ", width, height)
+                print (f"[{mode_text}] resizing and center-cropping input to: {width}×{height}")
                 image = adaptive_resize(image, width, height, "lanczos", "center")
             else:
                 print (f"[{mode_text}] no image resize needed")
@@ -451,7 +451,11 @@ class ersatzOtherControl(scripts.Script):
                 del k_latent
 
             shared.klein_strength = (klein_1_str, klein_2_str, klein_3_str, klein_4_str)
-            extra_mem = n * len(shared.klein_latents) * shared.klein_latents[0].shape[1] * shared.klein_latents[0].shape[2] * shared.klein_latents[0].shape[3] * x.element_size() * 1024
+            extra_mem = 0
+            for latent in shared.klein_latents:
+                if latent is not None:
+                    extra_mem += latent.shape[1] * latent.shape[2] * latent.shape[3]
+            extra_mem *= n * x.element_size() * 1024
             print ("[KleinEdit] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
             params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
