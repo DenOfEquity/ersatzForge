@@ -89,9 +89,9 @@ class Toprow:
             self.button_deepbooru = ToolButton('📦', tooltip='Interrogate DeepBooru - use DeepBooru neural network to describe the image, and put it into the Prompt field', elem_id="deepbooru")
 
         if not shared.opts.disable_token_counters:
-            self.token_counter = gr.HTML(value="<span>1/75</span>", elem_id=f"{self.id_part}_token_counter", elem_classes=["token-counter"])
+            self.token_counter = gr.HTML(value="<span>0</span>", elem_id=f"{self.id_part}_token_counter", elem_classes=["token-counter"])
             self.token_button = gr.Button(visible=False, elem_id=f"{self.id_part}_token_button")
-            self.negative_token_counter = gr.HTML(value="<span>1/75</span>", elem_id=f"{self.id_part}_negative_token_counter", elem_classes=["token-counter"])
+            self.negative_token_counter = gr.HTML(value="<span>0</span>", elem_id=f"{self.id_part}_negative_token_counter", elem_classes=["token-counter"])
             self.negative_token_button = gr.Button(visible=False, elem_id=f"{self.id_part}_negative_token_button")
 
 
