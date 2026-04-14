@@ -272,15 +272,15 @@ def repair_config(sd_config, state_dict=None):
     pass
 
 
-# This is a dummy class for backward compatibility when model is not load - for extensions like prompt all in one.
+# This is a dummy class for backward compatibility when model is not loaded - for extensions like prompt all in one.
 class FakeInitialModel:
     def __init__(self):
         self.cond_stage_model = None
         self.chunk_length = 75
 
     def get_prompt_lengths_on_ui(self, prompt):
-        r = len(prompt.strip('!,. ').replace(' ', ',').replace('.', ',').replace('!', ',').replace(',,', ',').replace(',,', ',').replace(',,', ',').replace(',,', ',').split(','))
-        return r, math.ceil(max(r, 1) / self.chunk_length) * self.chunk_length
+        r = len(prompt.replace(',', ' ').replace('.', ' ').replace('!', ' ').split())
+        return r, -1
 
     def is_webui_legacy_model(self):
         return False
