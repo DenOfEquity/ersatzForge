@@ -32,6 +32,8 @@ from backend.diffusion_engine.wan import Wan
 from backend.diffusion_engine.lumina2 import Lumina2, Zimage
 from backend.diffusion_engine.anima import Anima
 
+import modules_forge.colour_code as cc
+
 
 possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux2, Flux, Cosmos, Wan, Zimage, Lumina2, Anima]
 
@@ -57,56 +59,56 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             return comp
 
         if cls_name == 'AutoencoderKL':
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have VAE state dict!'
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'Missing VAE!'
 
             config = IntegratedAutoencoderKL.load_config(config_path)
 
-            with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
-                model = IntegratedAutoencoderKL.from_config(config)
+            with modeling_utils.no_init_weights():
+                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                    model = IntegratedAutoencoderKL.from_config(config)
 
-            if 'decoder.up_blocks.0.resnets.0.norm1.weight' in state_dict.keys(): #diffusers format
-                state_dict = huggingface_guess.diffusers_convert.convert_vae_state_dict(state_dict)
             load_state_dict(model, state_dict, ignore_start='loss.')
             return model
 
         if cls_name == 'AutoencoderKLFlux2':
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have VAE state dict!"
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Flux2 VAE!"
 
             config = AutoencoderKLFlux2.load_config(config_path)
 
-            with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
-                model = AutoencoderKLFlux2.from_config(config)
+            with modeling_utils.no_init_weights():
+                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                    model = AutoencoderKLFlux2.from_config(config)
 
             load_state_dict(model, state_dict, ignore_start="loss.")
             return model
 
         if cls_name == 'AutoencoderKLWan':
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have VAE state dict!'
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'Missing Wan2.1 VAE!'
 
             config = AutoencoderKLWan.load_config(config_path)
 
-            with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
-                model = AutoencoderKLWan.from_config(config)
+            with modeling_utils.no_init_weights():
+                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                    model = AutoencoderKLWan.from_config(config)
 
-            # if 'decoder.up_blocks.0.resnets.0.norm1.weight' in state_dict.keys(): #diffusers format
-                # state_dict = huggingface_guess.diffusers_convert.convert_vae_state_dict(state_dict)
-            load_state_dict(model, state_dict)#, ignore_start='loss.')
+            load_state_dict(model, state_dict)
             return model
 
         if cls_name == 'AutoencoderKLWan22':
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have VAE state dict!'
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'Missing Wan2.2 VAE!'
 
             config = AutoencoderKLWan22.load_config(config_path)
 
-            with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
-                model = AutoencoderKLWan22.from_config(config)
+            with modeling_utils.no_init_weights():
+                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                    model = AutoencoderKLWan22.from_config(config)
 
-            load_state_dict(model, state_dict)#, ignore_start='loss.')
+            load_state_dict(model, state_dict)
             return model
 
 
         if component_name.startswith('text_encoder') and cls_name in ['CLIPTextModel', 'CLIPTextModelWithProjection']:
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have CLIP state dict!'
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'Missing CLIP text encoder!'
 
             from transformers import CLIPTextConfig, CLIPTextModel
             config = CLIPTextConfig.from_pretrained(config_path)
@@ -114,7 +116,6 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             config.max_position_embeddings = state_dict['transformer.text_model.embeddings.position_embedding.weight'].shape[0]
 
             to_args = dict(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype())
-
             with modeling_utils.no_init_weights():
                 with using_forge_operations(**to_args, manual_cast_enabled=True):
                     model = IntegratedCLIP(CLIPTextModel, config, add_text_projection=True).to(**to_args)
@@ -128,7 +129,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             return model
 
         if cls_name == "Gemma2Model":
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have Gemma2 state dict!"
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Gemma2 text encoder!"
 
             from backend.nn.llm.llama import Gemma2_2B
 
@@ -138,14 +139,14 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
 
             if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
-                print(f"Using Detected Gemma2 Data Type: {state_dict_dtype}")
+                print(f"{cc.SETTING2}Using Detected Gemma2 Data Type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
                 if state_dict_dtype in ["nf4", "fp4", "gguf"]:
                     print("Using pre-quant state dict!")
                     if state_dict_dtype in ["gguf"]:
                         beautiful_print_gguf_state_dict_statics(state_dict)
             else:
-                print(f"Using Default Gemma2 Data Type: {storage_dtype}")
+                print(f"{cc.SETTING2}Using Default Gemma2 Data Type: {storage_dtype}{cc.RESET}")
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
@@ -156,12 +157,12 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                     with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
                         model = Gemma2_2B(config)
 
-            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[])
+            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end='scaled_fp8')
 
             return model
 
         if cls_name in ["Qwen3Model", "Qwen3ForCausalLM"]:
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have Qwen3 state dict!"
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Qwen3 text encoder!"
 
             config = read_arbitrary_config(config_path)
 
@@ -176,14 +177,14 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
 
             if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
-                print(f"Using Detected Qwen3 Data Type: {state_dict_dtype}")
+                print(f"{cc.SETTING2}Using Detected Qwen3 Data Type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
                 if state_dict_dtype in ["nf4", "fp4", "gguf"]:
                     print("Using pre-quant state dict!")
                     if state_dict_dtype in ["gguf"]:
                         beautiful_print_gguf_state_dict_statics(state_dict)
             else:
-                print(f"Using Default Qwen3 Data Type: {storage_dtype}")
+                print(f"{cc.SETTING2}Using Default Qwen3 Data Type: {storage_dtype}{cc.RESET}")
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
@@ -194,12 +195,12 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                     with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
                         model = Qwen3(config)
 
-            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[])
+            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end='scaled_fp8')
 
             return model
 
         if cls_name in ["T5EncoderModel", "UMT5EncoderModel"]:
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have T5 state dict!'
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'Missing T5 text encoder!'
 
             from backend.nn.t5 import IntegratedT5
             config = read_arbitrary_config(config_path)
@@ -249,14 +250,14 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
 
             if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, 'nf4', 'fp4', 'gguf']:
-                print(f'Using Detected T5 Data Type: {state_dict_dtype}')
+                print(f"{cc.SETTING2}Using Detected T5 Data Type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
                 if state_dict_dtype in ['nf4', 'fp4', 'gguf']:
-                    print('Using pre-quant state dict!')
+                    print("Using pre-quant state dict!")
                     if state_dict_dtype in ['gguf']:
                         beautiful_print_gguf_state_dict_statics(state_dict)
             else:
-                print(f'Using Default T5 Data Type: {storage_dtype}')
+                print(f"{cc.SETTING2}Using Default T5 Data Type: {storage_dtype}{cc.RESET}")
 
             if storage_dtype in ['nf4', 'fp4', 'gguf']:
                 with modeling_utils.no_init_weights():
@@ -355,10 +356,10 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             if unet_storage_dtype_overwrite is not None:
                 storage_dtype = unet_storage_dtype_overwrite
             elif state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, 'nf4', 'fp4', 'gguf']:
-                print(f'Using Detected UNet Type: {state_dict_dtype}')
+                print(f"{cc.SETTING2}Using Detected UNet Type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
                 if state_dict_dtype in ['nf4', 'fp4', 'gguf']:
-                    print('Using pre-quant state dict!')
+                    print("Using pre-quant state dict!")
                     if state_dict_dtype in ['gguf']:
                         beautiful_print_gguf_state_dict_statics(state_dict)
 
@@ -368,15 +369,17 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             if storage_dtype in ['nf4', 'fp4', 'gguf']:
                 initial_device = memory_management.unet_inital_load_device(parameters=state_dict_parameters, dtype=computation_dtype)
-                with using_forge_operations(device=initial_device, dtype=computation_dtype, manual_cast_enabled=False, bnb_dtype=storage_dtype):
-                    model = model_loader(unet_config)
+                with modeling_utils.no_init_weights():
+                    with using_forge_operations(device=initial_device, dtype=computation_dtype, manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                        model = model_loader(unet_config)
             else:
                 initial_device = memory_management.unet_inital_load_device(parameters=state_dict_parameters, dtype=storage_dtype)
                 need_manual_cast = storage_dtype != computation_dtype
                 to_args = dict(device=initial_device, dtype=storage_dtype)
 
-                with using_forge_operations(**to_args, manual_cast_enabled=need_manual_cast):
-                    model = model_loader(unet_config).to(**to_args)
+                with modeling_utils.no_init_weights():
+                    with using_forge_operations(**to_args, manual_cast_enabled=need_manual_cast):
+                        model = model_loader(unet_config).to(**to_args)
 
             load_state_dict(model, state_dict, ignore_errors=['scaled_fp8'], ignore_end='_extra_state')
 
@@ -393,7 +396,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             return model
 
-    print(f'Skipped: {component_name} = {lib_name}.{cls_name}')
+    print(f'{cc.WARNING}Skipped: {component_name} = {lib_name}.{cls_name}{cc.RESET}')
     return None
 
 
@@ -787,7 +790,6 @@ def replace_state_dict(sd, asd, guess):
                     k_o = "middle_block."      + str(2*x) + pk[k]
                     sd["model.diffusion_model." + k_o] = asd.pop(k_i)
 
-            print ("Loaded ResAdapter for " + model_type)
 
 # zimage turbo controlnet
     if "control_all_x_embedder.2-1.bias" in asd: #"control_layers.0.adaLN_modulation.0.bias"
@@ -954,5 +956,5 @@ def forge_loader(sd, additional_state_dicts=None):
         if any(isinstance(estimated_config, x) for x in M.matched_guesses):
             return M(estimated_config=estimated_config, huggingface_components=huggingface_components)
 
-    print('Failed to recognize model type!')
+    print(f'{cc.ERROR}Failed to recognize model type!{cc.RESET}')
     return None
