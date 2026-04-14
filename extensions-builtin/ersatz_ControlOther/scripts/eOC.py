@@ -427,7 +427,7 @@ class ersatzOtherControl(scripts.Script):
                                 k_height = 32 * ((image.size[1] + 31) // 32)
                             case _:
                                 if resize.isdigit():
-                                    maximum = int(size)
+                                    maximum = int(resize)
                                     if image.size[0] > image.size[1]:
                                         k_width = 32 * ((maximum + 16) // 32)
                                         k_height = int(32 * ((16 + (maximum * image.size[1] / image.size[0])) // 32))
@@ -437,6 +437,9 @@ class ersatzOtherControl(scripts.Script):
                                 else:
                                     k_width = 32 * ((image.size[0] + 31) // 32)
                                     k_height = 32 * ((image.size[1] + 31) // 32)
+
+                        k_width = min(4096, max(32, k_width))
+                        k_height = min(4096, max(32, k_height))
 
                         k_latent = pil_to_latent(image, k_width, k_height, 0, "KleinEdit")
                         k_latents.append(k_latent)
