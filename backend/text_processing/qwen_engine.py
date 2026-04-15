@@ -99,28 +99,23 @@ class Qwen3TextProcessingEngine:
 
                 # remove start/end tokens
                 if self.is_flux2:
+                    s = 3
                     e = 11
+                elif self.is_ERNIE:
+                    s = 1
+                    e = 0
                 else:
+                    s = 3
                     e = 5
                 count_z = len(line_z_values)
                 for i in range(count_z):
                     if i - 1 >= 0 and i + 1 < count_z:
-                        line_z_values[i] = line_z_values[i][3:-e]
+                        line_z_values[i] = line_z_values[i][s:-e] if e else line_z_values[i][s:]
                     elif i + 1 < count_z:
-                        line_z_values[i] = line_z_values[i][:-e]
+                        if e:
+                            line_z_values[i] = line_z_values[i][:-e]
                     elif i - 1 >= 0:
-                        line_z_values[i] = line_z_values[i][3:]
-
-                # current_length = 0
-                # for l in line_z_values:
-                    # current_length += len(l)
-
-                # if current_length % self.min_length != 0:
-                    # remaining_count = self.min_length - (current_length % self.min_length)
-
-                    # if remaining_count > 0:
-                        # pad = self.process_tokens([self.id_pad] * remaining_count, [1.0] * remaining_count)[0]
-                        # line_z_values.append(pad)
+                        line_z_values[i] = line_z_values[i][s:]
 
                 line_z_values = [torch.cat(line_z_values, dim=0, )]
 
