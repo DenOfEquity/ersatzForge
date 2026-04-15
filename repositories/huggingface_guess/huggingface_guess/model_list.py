@@ -732,7 +732,7 @@ class ERNIEImage(BASE):
 
     unet_config = {
         "image_model": "ernie",
-        "in_channels": 128,
+        "in_channels": 32,
     }
 
     sampling_settings = {
