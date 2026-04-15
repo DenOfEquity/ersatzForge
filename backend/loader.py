@@ -141,10 +141,10 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
                 print(f"{cc.SETTING2}Using Detected Gemma2 Data Type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
-                if state_dict_dtype in ["nf4", "fp4", "gguf"]:
+                if state_dict_dtype == "gguf":
+                    beautiful_print_gguf_state_dict_statics(state_dict)
+                elif state_dict_dtype in ["nf4", "fp4"]:
                     print("Using pre-quant state dict!")
-                    if state_dict_dtype in ["gguf"]:
-                        beautiful_print_gguf_state_dict_statics(state_dict)
             else:
                 print(f"{cc.SETTING2}Using Default Gemma2 Data Type: {storage_dtype}{cc.RESET}")
 
@@ -179,10 +179,10 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
                 print(f"{cc.SETTING2}Using Detected Qwen3 Data Type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
-                if state_dict_dtype in ["nf4", "fp4", "gguf"]:
+                if state_dict_dtype == "gguf":
+                    beautiful_print_gguf_state_dict_statics(state_dict)
+                elif state_dict_dtype in ["nf4", "fp4"]:
                     print("Using pre-quant state dict!")
-                    if state_dict_dtype in ["gguf"]:
-                        beautiful_print_gguf_state_dict_statics(state_dict)
             else:
                 print(f"{cc.SETTING2}Using Default Qwen3 Data Type: {storage_dtype}{cc.RESET}")
 
@@ -252,10 +252,10 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, 'nf4', 'fp4', 'gguf']:
                 print(f"{cc.SETTING2}Using Detected T5 Data Type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
-                if state_dict_dtype in ['nf4', 'fp4', 'gguf']:
+                if state_dict_dtype == "gguf":
+                    beautiful_print_gguf_state_dict_statics(state_dict)
+                elif state_dict_dtype in ["nf4", "fp4"]:
                     print("Using pre-quant state dict!")
-                    if state_dict_dtype in ['gguf']:
-                        beautiful_print_gguf_state_dict_statics(state_dict)
             else:
                 print(f"{cc.SETTING2}Using Default T5 Data Type: {storage_dtype}{cc.RESET}")
 
@@ -358,10 +358,10 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             elif state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, 'nf4', 'fp4', 'gguf']:
                 print(f"{cc.SETTING2}Using Detected UNet Type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
-                if state_dict_dtype in ['nf4', 'fp4', 'gguf']:
+                if state_dict_dtype == "gguf":
+                    beautiful_print_gguf_state_dict_statics(state_dict)
+                elif state_dict_dtype in ["nf4", "fp4"]:
                     print("Using pre-quant state dict!")
-                    if state_dict_dtype in ['gguf']:
-                        beautiful_print_gguf_state_dict_statics(state_dict)
 
             load_device = memory_management.get_torch_device()
             computation_dtype = memory_management.get_computation_dtype(load_device, parameters=state_dict_parameters, supported_dtypes=guess.supported_inference_dtypes)
