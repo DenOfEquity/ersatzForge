@@ -96,6 +96,8 @@ class NetworkOnDisk:
         elif str(self.metadata.get('ss_network_module', '')) == 'networks.lora_anima':
             return 'SdVersion.Anima'
 
+#SdVersion.ERNIE
+
         return 'SdVersion.Unknown'
 
     def set_hash(self, v):

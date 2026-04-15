@@ -93,6 +93,9 @@ function setupExtraNetworksForTab(tabname) {
                 else if (UIpreset == 'anima') {
                     if (sdversion != 'SdVersion.Anima') visible = false;
                 }
+                else if (UIpreset == 'ernie') {
+                    if (sdversion != 'SdVersion.ERNIE') visible = false;
+                }
 
                 if (visible) {
                     elem.classList.remove("hidden");

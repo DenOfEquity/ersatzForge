@@ -121,7 +121,7 @@ def make_checkpoint_manager_ui():
             shared.opts.set('sd_model_checkpoint', next(iter(sd_models.checkpoints_list.values())).name)
 
     ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value='-', 
-                                  choices=['sd', 'xl', 'sd3', 'flux', 'chroma', 'klein', 'zimage', 'anima', 'all'], scale=0, filterable=False)
+                                  choices=['sd', 'xl', 'sd3', 'flux', 'chroma', 'klein', 'zimage', 'anima', 'ernie', 'all'], scale=0, filterable=False)
     ui_checkpoint = gr.Dropdown(
         value=lambda: shared.opts.sd_model_checkpoint,
         label="Checkpoint",
@@ -484,6 +484,7 @@ Code order is: (all must be present)<br/>
     "preset_code_klein": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 4", "Flux2 Klein preset code", gr.Textbox, {"maxlines": 1}),
     "preset_code_zimage": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Z-Image preset code", gr.Textbox, {"maxlines": 1}),
     "preset_code_anima": shared.OptionInfo("None, 0, 1024, 1024, 4.0, None, Extended Reverse-Time SDE, Beta, 30", "Anima preset code", gr.Textbox, {"maxlines": 1}),
+    "preset_code_ernie": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler a, Beta, 8", "ERNIE preset code", gr.Textbox, {"maxlines": 1}),
 
 }))
 

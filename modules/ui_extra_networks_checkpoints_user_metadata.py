@@ -46,7 +46,7 @@ class CheckpointUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataE
     def create_editor(self):
         self.create_default_editor_elems()
 
-        self.sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Flux', 'Klein', 'Zimage', 'Anima', 'Unknown'], value='Unknown', label='Base model', interactive=True)
+        self.sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Anima', 'ERNIE', 'Flux', 'Klein', 'Zimage', 'Unknown'], value='Unknown', label='Base model', interactive=True)
 
         self.select_vae = gr.Dropdown(choices=[], value=None, label="Preferred additional module(s)", elem_id="checpoint_edit_user_metadata_preferred_vae", multiselect=True)
 
