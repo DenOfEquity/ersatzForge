@@ -11,6 +11,32 @@ from backend.attention import attention_pytorch as attention_function
 # from . import qwen_vl
 from backend.nn.cosmos_predict2 import LLMAdapter
 
+
+@dataclass
+class Ministral3_3BConfig:
+    vocab_size: int = 131072
+    hidden_size: int = 3072
+    intermediate_size: int = 9216
+    num_hidden_layers: int = 26
+    num_attention_heads: int = 32
+    num_key_value_heads: int = 8
+    max_position_embeddings: int = 262144
+    rms_norm_eps: float = 1e-5
+    rope_theta: float = 1000000.0
+    transformer_type: str = "llama"
+    head_dim = 128
+    rms_norm_add = False
+    mlp_activation = "silu"
+    qkv_bias = False
+    rope_dims = None
+    q_norm = None
+    k_norm = None
+    rope_scale = None
+    final_norm: bool = True
+    lm_head: bool = False
+    stop_tokens = [2]
+
+
 @dataclass
 class Qwen3_06BConfig:
     vocab_size: int = 151936
@@ -80,25 +106,6 @@ class Qwen3_8BConfig:
     final_norm: bool = True
 
 
-# @dataclass
-# class Qwen25_7BVLI_Config:
-    # vocab_size: int = 152064
-    # hidden_size: int = 3584
-    # intermediate_size: int = 18944
-    # num_hidden_layers: int = 28
-    # num_attention_heads: int = 28
-    # num_key_value_heads: int = 4
-    # max_position_embeddings: int = 128000
-    # rms_norm_eps: float = 1e-6
-    # rope_theta: float = 1000000.0
-    # transformer_type: str = "llama"
-    # head_dim = 128
-    # rms_norm_add = False
-    # mlp_activation = "silu"
-    # qkv_bias = True
-    # rope_dims = [16, 24, 24]
-
-
 @dataclass
 class Gemma2_2B_Config:
     vocab_size: int = 256000
@@ -121,6 +128,7 @@ class Gemma2_2B_Config:
     rope_scale = None
     final_norm: bool = True
     sliding_attention = None
+
 
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float, add=False):
@@ -430,6 +438,23 @@ class BaseLlama:
     def set_input_embeddings(self, embeddings):
         self.model.embed_tokens = embeddings
 
+    def forward(self, input_ids, *args, **kwargs):
+        return self.model(input_ids, *args, **kwargs)
+
+
+class Ministral3_3B(BaseLlama, torch.nn.Module):
+    def __init__(self, config_dict):
+        super().__init__()
+        config = Ministral3_3BConfig()
+
+        _config_dict = asdict(config)
+        for key, value in _config_dict.items():
+            if key in config_dict:
+                assert value == config_dict[key]
+
+        self.num_layers = config.num_hidden_layers
+        self.model = Llama2_(config)
+
 
 class Qwen3_06B(BaseLlama, nn.Module):
     def __init__(self, config_dict):
@@ -442,9 +467,7 @@ class Qwen3_06B(BaseLlama, nn.Module):
                 assert value == config_dict[key]
 
         self.num_layers = config.num_hidden_layers
-
         self.model = Llama2_(config)
-
         self.llm_adapter = LLMAdapter()
 
     def preprocess_text_embeds(self, text_embeds, text_ids):
@@ -452,9 +475,6 @@ class Qwen3_06B(BaseLlama, nn.Module):
             return self.llm_adapter(text_embeds, text_ids)
         else:
             return text_embeds
-
-    def forward(self, input_ids, *args, **kwargs):
-        return self.model(input_ids, *args, **kwargs)
 
 
 class Qwen3_4B(BaseLlama, torch.nn.Module):
@@ -468,11 +488,7 @@ class Qwen3_4B(BaseLlama, torch.nn.Module):
                 assert value == config_dict[key]
 
         self.num_layers = config.num_hidden_layers
-
         self.model = Llama2_(config)
-
-    def forward(self, input_ids, *args, **kwargs):
-        return self.model(input_ids, *args, **kwargs)
 
 
 class Qwen3_8B(BaseLlama, torch.nn.Module):
@@ -486,62 +502,7 @@ class Qwen3_8B(BaseLlama, torch.nn.Module):
                 assert value == config_dict[key]
 
         self.num_layers = config.num_hidden_layers
-
         self.model = Llama2_(config)
-
-    def forward(self, input_ids, *args, **kwargs):
-        return self.model(input_ids, *args, **kwargs)
-
-
-# class Qwen25_7BVLI(BaseLlama, nn.Module):
-    # def __init__(self, config_dict):
-        # super().__init__()
-        # config = Qwen25_7BVLI_Config()
-
-        # _config_dict = asdict(config)
-        # for key, value in _config_dict.items():
-            # if key in config_dict:
-                # assert value == config_dict[key]
-
-        # self.num_layers = config.num_hidden_layers
-
-        # self.model = Llama2_(config)
-        # self.visual = qwen_vl.Qwen2VLVisionTransformer(hidden_size=1280, output_hidden_size=config.hidden_size)
-
-    # def preprocess_embed(self, embed, device):
-        # if embed["type"] == "image":
-            # image, grid = qwen_vl.process_qwen2vl_images(embed["data"])
-            # return self.visual(image.to(device, dtype=torch.float32), grid), grid
-        # return None, None
-
-    # def forward(self, x, attention_mask=None, embeds=None, num_tokens=None, intermediate_output=None, final_layer_norm_intermediate=True, dtype=None, embeds_info=[]):
-        # grid = None
-        # position_ids = None
-        # offset = 0
-
-        # for e in embeds_info:
-            # if e.get("type") == "image":
-                # grid = e.get("extra", None)
-                # position_ids = torch.zeros((3, embeds.shape[1]), device=embeds.device)
-                # start = e.get("index")
-                # if position_ids is None:
-                    # position_ids = torch.zeros((3, embeds.shape[1]), device=embeds.device)
-                    # position_ids[:, :start] = torch.arange(0, start, device=embeds.device)
-                # end = e.get("size") + start
-                # len_max = int(grid.max()) // 2
-                # start_next = len_max + start
-                # position_ids[:, end:] = torch.arange(start_next + offset, start_next + (embeds.shape[1] - end) + offset, device=embeds.device)
-                # position_ids[0, start:end] = start + offset
-                # max_d = int(grid[0][1]) // 2
-                # position_ids[1, start:end] = torch.arange(start + offset, start + max_d + offset, device=embeds.device).unsqueeze(1).repeat(1, math.ceil((end - start) / max_d)).flatten(0)[: end - start]
-                # max_d = int(grid[0][2]) // 2
-                # position_ids[2, start:end] = torch.arange(start + offset, start + max_d + offset, device=embeds.device).unsqueeze(0).repeat(math.ceil((end - start) / max_d), 1).flatten(0)[: end - start]
-                # offset += len_max - (end - start)
-
-        # if grid is None:
-            # position_ids = None
-
-        # return self.model(x, attention_mask=attention_mask, embeds=embeds, num_tokens=num_tokens, intermediate_output=intermediate_output, final_layer_norm_intermediate=final_layer_norm_intermediate, dtype=dtype, position_ids=position_ids)
 
 
 class Gemma2_2B(BaseLlama, torch.nn.Module):
@@ -555,8 +516,4 @@ class Gemma2_2B(BaseLlama, torch.nn.Module):
                 assert value == config_dict[key]
 
         self.num_layers = config.num_hidden_layers
-
         self.model = Llama2_(config)
-
-    def forward(self, input_ids, *args, **kwargs):
-        return self.model(input_ids, *args, **kwargs)

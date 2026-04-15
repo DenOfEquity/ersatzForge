@@ -19,14 +19,15 @@ class PromptChunk:
 
 
 class Qwen3TextProcessingEngine:
-    def __init__(self, text_encoder, tokenizer, is_flux2=False):
+    def __init__(self, text_encoder, tokenizer, is_flux2=False, is_ernie=False):
         super().__init__()
 
         self.text_encoder = text_encoder
         self.tokenizer = tokenizer
         self.is_flux2 = is_flux2
+        self.is_ERNIE = is_ernie
 
-        self.id_pad = 151643
+        self.id_pad = 0 if is_ernie else 151643
         # self.min_length = 512 if is_flux2 else 1 #flux min 512? or pow2
         # self.llama_template = "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
         self.intermediate_output = [9, 18, 27] if is_flux2 else -2
@@ -50,6 +51,9 @@ class Qwen3TextProcessingEngine:
                 #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
                 chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198, 151667, 198, 198, 151668, 198, 198]
                 chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            elif self.is_ERNIE:
+                chunk.tokens = [1] + chunk.tokens
+                chunk.multipliers = [1.0] + chunk.multipliers
             else:
                 #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
                 chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198]

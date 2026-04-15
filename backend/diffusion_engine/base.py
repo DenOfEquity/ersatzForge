@@ -69,6 +69,7 @@ class ForgeDiffusionEngine:
         self.is_flux2 = False
         self.is_chromaDCT = False
         self.is_lumina2 = False
+        self.is_ernie = False
 
         return
 

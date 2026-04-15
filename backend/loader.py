@@ -31,11 +31,12 @@ from backend.diffusion_engine.cosmos import Cosmos
 from backend.diffusion_engine.wan import Wan
 from backend.diffusion_engine.lumina2 import Lumina2, Zimage
 from backend.diffusion_engine.anima import Anima
+from backend.diffusion_engine.ernie import ERNIE
 
 import modules_forge.colour_code as cc
 
 
-possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux2, Flux, Cosmos, Wan, Zimage, Lumina2, Anima]
+possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux2, Flux, Cosmos, Wan, Zimage, Lumina2, Anima, ERNIE]
 
 
 logging.getLogger("diffusers").setLevel(logging.ERROR)
@@ -115,16 +116,38 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             config.max_position_embeddings = state_dict['transformer.text_model.embeddings.position_embedding.weight'].shape[0]
 
-            to_args = dict(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype())
-            with modeling_utils.no_init_weights():
-                with using_forge_operations(**to_args, manual_cast_enabled=True):
-                    model = IntegratedCLIP(CLIPTextModel, config, add_text_projection=True).to(**to_args)
+            storage_dtype = memory_management.text_encoder_dtype()
+            state_dict_dtype = memory_management.state_dict_dtype(state_dict)
+
+            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
+                print(f"{cc.SETTING2}Using Detected CLIP Data Type: {state_dict_dtype}{cc.RESET}")
+                storage_dtype = state_dict_dtype
+                if state_dict_dtype == "gguf":
+                    beautiful_print_gguf_state_dict_statics(state_dict)
+                elif state_dict_dtype in ["nf4", "fp4"]:
+                    print("Using pre-quant state dict!")
+            else:
+                print(f"{cc.SETTING2}Using Default CLIP Data Type: {storage_dtype}{cc.RESET}")
+
+            if storage_dtype in ["nf4", "fp4", "gguf"]:
+                with modeling_utils.no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                        model = IntegratedCLIP(CLIPTextModel, config, add_text_projection=True)
+            else:
+                with modeling_utils.no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
+                        model = IntegratedCLIP(CLIPTextModel, config, add_text_projection=True)
+
+            # to_args = dict(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype())
+            # with modeling_utils.no_init_weights():
+                # with using_forge_operations(**to_args, manual_cast_enabled=True):
+                    # model = IntegratedCLIP(CLIPTextModel, config, add_text_projection=True).to(**to_args)
 
             load_state_dict(model, state_dict, ignore_errors=[
                 'transformer.text_projection.weight',
                 'transformer.text_model.embeddings.position_ids',
                 'logit_scale',
-            ], log_name=cls_name)
+            ], ignore_end='scaled_fp8', log_name=cls_name)
 
             return model
 
@@ -156,6 +179,39 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 with modeling_utils.no_init_weights():
                     with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
                         model = Gemma2_2B(config)
+
+            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end='scaled_fp8')
+
+            return model
+
+        if cls_name == "Mistral3Model":
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Ministral3_3B text encoder!"
+
+            from backend.nn.llm.llama import Ministral3_3B
+
+            config = read_arbitrary_config(config_path)
+
+            storage_dtype = memory_management.text_encoder_dtype()
+            state_dict_dtype = memory_management.state_dict_dtype(state_dict)
+
+            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
+                print(f"{cc.SETTING2}Using Detected Ministral Data Type: {state_dict_dtype}{cc.RESET}")
+                storage_dtype = state_dict_dtype
+                if state_dict_dtype == "gguf":
+                    beautiful_print_gguf_state_dict_statics(state_dict)
+                elif state_dict_dtype in ["nf4", "fp4"]:
+                    print("Using pre-quant state dict!")
+            else:
+                print(f"{cc.SETTING2}Using Default Ministral Data Type: {storage_dtype}{cc.RESET}")
+
+            if storage_dtype in ["nf4", "fp4", "gguf"]:
+                with modeling_utils.no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                        model = Ministral3_3B(config)
+            else:
+                with modeling_utils.no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
+                        model = Ministral3_3B(config)
 
             load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end='scaled_fp8')
 
@@ -272,31 +328,34 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             return model
 
-        if cls_name in ['UNet2DConditionModel', 'FluxTransformer2DModel', 'Flux2Transformer2DModel', 'SD3Transformer2DModel', 'ChromaTransformer2DModel', 'ChromaDCT', 'CosmosTransformer3DModel', "WanTransformer3DModel", "Lumina2Transformer2DModel"]:
+        if cls_name in ["UNet2DConditionModel", "FluxTransformer2DModel", "Flux2Transformer2DModel", "SD3Transformer2DModel", "ChromaTransformer2DModel", "ChromaDCT", "CosmosTransformer3DModel", "WanTransformer3DModel", "Lumina2Transformer2DModel", "ERNIEImageModel"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have model state dict!'
 
             model_loader = None
-            if cls_name == 'UNet2DConditionModel':
+            if cls_name == "UNet2DConditionModel":
                 model_loader = lambda c: IntegratedUNet2DConditionModel.from_config(c)
-            elif cls_name == 'FluxTransformer2DModel':
+            elif cls_name == "FluxTransformer2DModel":
                 from backend.nn.flux import IntegratedFluxTransformer2DModel
                 model_loader = lambda c: IntegratedFluxTransformer2DModel(**c)
-            elif cls_name == 'Flux2Transformer2DModel':
-                from backend.nn.flux2 import IntegratedFlux2Transformer2DModel
-                model_loader = lambda c: IntegratedFlux2Transformer2DModel(**c)
-            elif cls_name == 'ChromaDCT':
+            elif cls_name == "ERNIEImageModel":
+                from backend.nn.ernie import ERNIEImageModel
+                model_loader = lambda c: ERNIEImageModel(**c)
+            elif cls_name == "WanTransformer3DModel":
+                from backend.nn.wan import WanModel
+                model_loader = lambda c: WanModel(**c)
+            elif cls_name == "ChromaDCT":
                 from backend.nn.chromaDCT import IntegratedChromaDCTTransformer2DModel
                 model_loader = lambda c: IntegratedChromaDCTTransformer2DModel(**c)
-            elif cls_name == 'ChromaTransformer2DModel':
+            elif cls_name == "ChromaTransformer2DModel":
                 from backend.nn.chroma import IntegratedChromaTransformer2DModel
                 model_loader = lambda c: IntegratedChromaTransformer2DModel(**c)
-            elif cls_name == 'SD3Transformer2DModel':
+            elif cls_name == "SD3Transformer2DModel":
                 from backend.nn.mmditx import MMDiTX
                 model_loader = lambda c: MMDiTX(**c)
-            elif cls_name == 'CosmosTransformer3DModel':
+            elif cls_name == "CosmosTransformer3DModel":
                 from backend.nn.cosmos_predict2 import MiniTrainDIT
                 model_loader = lambda c: MiniTrainDIT(**c)
-            elif cls_name == 'WanTransformer3DModel':
+            elif cls_name == "WanTransformer3DModel":
                 from backend.nn.wan import WanModel
                 model_loader = lambda c: WanModel(**c)
             elif cls_name == "Lumina2Transformer2DModel":
@@ -747,20 +806,27 @@ def replace_state_dict(sd, asd, guess):
                 continue
             sd[f"{text_encoder_key_prefix}gemma2_2b.{k}"] = v
 
-    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 8B (Klein9B), 4B (Z Image, Klein4B), 06B (Anima)
+    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 8B (Klein9B), 4B (Z Image, Klein4B), 06B (Anima), ministral3_3b (ERNIE)
         size = asd["model.layers.0.post_attention_layernorm.weight"].shape[0]
         if size == 4096:
-            size_str = "8b"
+            size_str = "qwen3_8b"
+        elif size == 3072:
+            size_str = "ministral3_3b"
         elif size == 2560:
-            size_str = "4b"
+            size_str = "qwen3_4b"
         elif size == 1024:
-            size_str = "06b"
+            size_str = "qwen3_06b"
         else:
             size_str = None
 
         if size_str:
             for k, v in asd.items():
-                sd[f"{text_encoder_key_prefix}qwen3_{size_str}.{k}"] = v
+                if k.startswith("vision_tower."):
+                    continue
+                if k.startswith("multi_modal_projector."):
+                    continue
+                    
+                sd[f"{text_encoder_key_prefix}{size_str}.{k}"] = v
 
 
     # ResAdapter (bytedance) unet patch (sd1.5 or sdxl)
