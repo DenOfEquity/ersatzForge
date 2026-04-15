@@ -61,6 +61,8 @@ class KModel(torch.nn.Module):
                 scaler = 1.22
             case "IntegratedFlux2Transformer2DModel":
                 scaler = 1.3
+            case "ERNIEImageModel":
+                scaler = 0.85
             case _:
                 scaler = 1.65
 
