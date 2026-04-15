@@ -42,7 +42,6 @@ class ErnieImageEmbedND3(nn.Module):
 class ErnieImagePatchEmbedDynamic(nn.Module):
     def __init__(self, in_channels: int, embed_dim: int, patch_size: int):
         super().__init__()
-        self.patch_size = patch_size
         self.proj = nn.Conv2d(in_channels, embed_dim, kernel_size=patch_size, stride=patch_size, bias=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -180,9 +179,9 @@ class ERNIEImageModel(nn.Module):
         num_attention_heads: int = 32,
         num_layers: int = 36,
         ffn_hidden_size: int = 12288,
-        in_channels: int = 128,
-        out_channels: int = 128,
-        patch_size: int = 1,
+        in_channels: int = 32,
+        out_channels: int = 32,
+        patch_size: int = 2,
         text_in_dim: int = 3072,
         rope_theta: int = 256,
         rope_axes_dim: tuple = (32, 48, 48),
@@ -194,10 +193,10 @@ class ERNIEImageModel(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_attention_heads
         self.head_dim = hidden_size // num_attention_heads
-        self.patch_size = patch_size
         self.out_channels = out_channels
+        self.patch_size = patch_size
 
-        self.x_embedder = ErnieImagePatchEmbedDynamic(in_channels, hidden_size, patch_size)
+        self.x_embedder = ErnieImagePatchEmbedDynamic(in_channels * patch_size * patch_size, hidden_size, 1)
         self.text_proj = nn.Linear(text_in_dim, hidden_size, bias=False) if text_in_dim != hidden_size else None
 
         self.time_proj = Timesteps(hidden_size, flip_sin_to_cos=False)
@@ -216,22 +215,20 @@ class ERNIEImageModel(nn.Module):
         ])
 
         self.final_norm = ErnieImageAdaLNContinuous(hidden_size, eps)
-        self.final_linear = nn.Linear(hidden_size, patch_size * patch_size * out_channels)
+        self.final_linear = nn.Linear(hidden_size, 1, patch_size * patch_size * out_channels)
 
     def forward(self, x, timesteps, context, **kwargs):
         device, dtype = x.device, x.dtype
         
-        # patchify x
-        h, w = x.shape[-2], x.shape[-1]
-        pad_h = x.shape[-2] % 2
-        pad_w = x.shape[-1] % 2
-        if pad_h or pad_w:
+        ps = self.patch_size
+        if ps >= 2:
+            pad_h = (ps - x.shape[-2] % ps) % ps
+            pad_w = (ps - x.shape[-1] % ps) % ps
             x = torch.nn.functional.pad(x, (0, pad_w, 0, pad_h), mode="circular")
-        img = rearrange(x, "b c (h ph) (w pw) -> b (c ph pw) h w", ph=2, pw=2)
+        img = rearrange(x, "b c (h ph) (w pw) -> b (c ph pw) h w", ph=ps, pw=ps)
         
         B, C, H, W = img.shape
-        p, Hp, Wp = self.patch_size, H // self.patch_size, W // self.patch_size
-        N_img = Hp * Wp
+        N_img = H * W
 
         img_bsh = self.x_embedder(img)
 
@@ -246,10 +243,10 @@ class ERNIEImageModel(nn.Module):
         text_ids[:, :, 0] = torch.linspace(0, Tmax - 1, steps=Tmax, device=x.device, dtype=torch.float32)
         index = float(Tmax)
 
-        image_ids = torch.zeros((Hp, Wp, 3), device=device, dtype=torch.float32)
+        image_ids = torch.zeros((H, W, 3), device=device, dtype=torch.float32)
         image_ids[:, :, 0] = image_ids[:, :, 1] + index
-        image_ids[:, :, 1] = image_ids[:, :, 1] + torch.linspace(0.0, Hp - 1, steps=Hp, device=device, dtype=torch.float32).unsqueeze(1)
-        image_ids[:, :, 2] = image_ids[:, :, 2] + torch.linspace(0.0, Wp - 1, steps=Wp, device=device, dtype=torch.float32).unsqueeze(0)
+        image_ids[:, :, 1] = image_ids[:, :, 1] + torch.linspace(0.0, H - 1, steps=H, device=device, dtype=torch.float32).unsqueeze(1)
+        image_ids[:, :, 2] = image_ids[:, :, 2] + torch.linspace(0.0, W - 1, steps=W, device=device, dtype=torch.float32).unsqueeze(0)
 
         image_ids = image_ids.view(1, N_img, 3).expand(B, -1, -1)
 
@@ -270,14 +267,5 @@ class ERNIEImageModel(nn.Module):
         hidden_states = self.final_norm(hidden_states, c).type_as(hidden_states)
 
         patches = self.final_linear(hidden_states)[:, :N_img, :]
-        output = (
-            patches.view(B, Hp, Wp, p, p, self.out_channels)
-            .permute(0, 5, 1, 3, 2, 4)
-            .contiguous()
-            .view(B, self.out_channels, H, W)
-        )
 
-        # unpatchify
-        output = rearrange(output, "b (c ph pw) h w -> b c (h ph) (w pw)", h=Hp, w=Wp, ph=2, pw=2)
-
-        return output
+        return rearrange(patches, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=H, w=W, ph=ps, pw=ps)
