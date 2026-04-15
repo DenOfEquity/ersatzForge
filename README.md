@@ -21,6 +21,9 @@ a backup of my local (experimental, opinionated) changes to Forge2 webUI
 * extra samplers: SA-Solver, ER-SDE, Adaptive-ODE (params in Settings), Fixed-ODE; and extra options/variants.
 * assorted extra functionality in built-in extensions, controlnet preprocessors, Extras tab.
 * built-in latent manipulations such as Epsilon Scaling, CFG rescale, CFG normalization (see Settings)
-* dyPE high resolution generation for Flux (based on https://github.com/guyyariv/DyPE), works as far as I can test on my limited hardware
+* dyPE high resolution generation for Flux (based on https://github.com/guyyariv/DyPE), works (inconsistently) as far as I can test on my limited hardware
 * Lumina2
 * Z-Image-Turbo (1024x1024, fp8 model - 15s per iteration ⇒ 2:15 for 9 step generation on old laptop with 8GB VRAM GTX1070); including Union Control. And Base.
+* Mugen
+* Flux2.Klein 4B and 9B
+* ERNIE
