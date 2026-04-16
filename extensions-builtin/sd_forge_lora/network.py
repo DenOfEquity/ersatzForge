@@ -86,7 +86,9 @@ class NetworkOnDisk:
         elif str(self.metadata.get('ss_base_model_version', '')).startswith('sd_v1'):
             return 'SdVersion.SD1'
 
-        elif str(self.metadata.get('ss_base_model_version', '')) == 'zimage':
+        elif str(self.metadata.get('modelspec.architecture', '')).startswith('zimage'):
+            return 'SdVersion.Zimage'
+        elif str(self.metadata.get('ss_base_model_version', '')).lower() == 'zimage':
             return 'SdVersion.Zimage'
 
         elif str(self.metadata.get('modelspec.architecture', '')).startswith('anima'):
@@ -96,7 +98,10 @@ class NetworkOnDisk:
         elif str(self.metadata.get('ss_network_module', '')) == 'networks.lora_anima':
             return 'SdVersion.Anima'
 
-#SdVersion.ERNIE
+        elif str(self.metadata.get('modelspec.architecture', '')).startswith('ernie'):
+            return 'SdVersion.ERNIE'
+        elif str(self.metadata.get('ss_base_model_version', '')).lower() == 'ernie_image':
+            return 'SdVersion.ERNIE'
 
         return 'SdVersion.Unknown'
 
