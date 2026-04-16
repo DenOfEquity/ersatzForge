@@ -114,17 +114,22 @@ function get_img2img_tab_index() {
 
 
 function showSubmitButtons(tabname, show) {
-	interrupt = gradioApp().getElementById(tabname + '_interrupt')
-	skip = gradioApp().getElementById(tabname + '_skip')
-	if (show) {
-		interrupt.style.display = "none";
-		skip.style.display = "none";
-	}
-	else {
-		interrupt.innerText = "Interrupt";
-		interrupt.style.display = "block";
-		skip.style.display = "block";
-	}
+    const submit = gradioApp().getElementById(tabname + "_generate");
+    const interrupt = gradioApp().getElementById(tabname + "_interrupt");
+    const skip = gradioApp().getElementById(tabname + "_skip");
+    if (show) {
+        submit.disabled = false;
+		submit.style.zIndex = 0;
+        interrupt.style.display = "none";
+        skip.style.display = "none";
+    }
+    else {
+        submit.disabled = true;
+		submit.style.zIndex = -1;
+        interrupt.innerText = "Interrupt";
+        interrupt.style.display = "block";
+        skip.style.display = "block";
+    }
 }
 
 function showSubmitInterruptingPlaceholder(tabname) {
