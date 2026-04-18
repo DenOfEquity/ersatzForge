@@ -1,7 +1,7 @@
 # original version: https://github.com/Wan-Video/Wan2.1/blob/main/wan/modules/vae.py
 # Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
 
-# this is cut-down for single frame generation
+# this is cut-down for single frame generation, by DoE
 
 import torch
 import torch.nn as nn
@@ -15,7 +15,6 @@ class CausalConv3d(nn.Conv3d):
     """
     Causal 3d convolution.
     """
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._padding = (self.padding[2], self.padding[2], self.padding[1],
@@ -30,7 +29,6 @@ class CausalConv3d(nn.Conv3d):
 
 
 class RMS_norm(nn.Module):
-
     def __init__(self, dim, channel_first=True, images=True, bias=False):
         super().__init__()
         broadcastable_dims = (1, 1, 1) if not images else (1, 1)
@@ -46,27 +44,15 @@ class RMS_norm(nn.Module):
             x, dim=(1 if self.channel_first else -1)) * self.scale * self.gamma.to(x) + (self.bias.to(x) if self.bias is not None else 0)
 
 
-class Upsample(nn.Upsample):
-
-    def forward(self, x):
-        """
-        Fix bfloat16 support for nearest neighbor interpolation.
-        """
-        return super().forward(x.to(torch.float32)).type_as(x)
-
-
 class Resample(nn.Module):
-
     def __init__(self, dim, mode):
         assert mode in ('none', 'upsample2d', 'downsample2d')
         super().__init__()
-        self.dim = dim
-        self.mode = mode
 
         # layers
         if mode == 'upsample2d':
             self.resample = nn.Sequential(
-                Upsample(scale_factor=(2., 2.), mode='nearest-exact'),
+                nn.Upsample(scale_factor=(2., 2.), mode='nearest-exact'),
                 nn.Conv2d(dim, dim // 2, 3, padding=1))
         elif mode == 'downsample2d':
             self.resample = nn.Sequential(
@@ -76,36 +62,16 @@ class Resample(nn.Module):
             self.resample = nn.Identity()
 
     def forward(self, x):
-        b, c, t, h, w = x.size()
-        t = x.shape[2]
-        x = rearrange(x, 'b c t h w -> (b t) c h w')
-        x = self.resample(x)
-        x = rearrange(x, '(b t) c h w -> b c t h w', t=t)
+        if x.ndim == 4:
+            x = self.resample(x.to(torch.float32)).type_as(x)
+        else: # x.ndim == 5
+            b, c, t, h, w = x.size()
+            t = x.shape[2]
+            x = rearrange(x, 'b c t h w -> (b t) c h w')
+            x = self.resample(x.to(torch.float32)).type_as(x)
+            x = rearrange(x, '(b t) c h w -> b c t h w', t=t)
 
         return x
-
-    def init_weight(self, conv):
-        conv_weight = conv.weight
-        nn.init.zeros_(conv_weight)
-        c1, c2, t, h, w = conv_weight.size()
-        one_matrix = torch.eye(c1, c2)
-        init_matrix = one_matrix
-        nn.init.zeros_(conv_weight)
-        #conv_weight.data[:,:,-1,1,1] = init_matrix * 0.5
-        conv_weight.data[:, :, 1, 0, 0] = init_matrix  #* 0.5
-        conv.weight.data.copy_(conv_weight)
-        nn.init.zeros_(conv.bias.data)
-
-    def init_weight2(self, conv):
-        conv_weight = conv.weight.data
-        nn.init.zeros_(conv_weight)
-        c1, c2, t, h, w = conv_weight.size()
-        init_matrix = torch.eye(c1 // 2, c2)
-        #init_matrix = repeat(init_matrix, 'o ... -> (o 2) ...').permute(1,0,2).contiguous().reshape(c1,c2)
-        conv_weight[:c1 // 2, :, -1, 0, 0] = init_matrix
-        conv_weight[c1 // 2:, :, -1, 0, 0] = init_matrix
-        conv.weight.data.copy_(conv_weight)
-        nn.init.zeros_(conv.bias.data)
 
 
 class ResidualBlock(nn.Module):
@@ -137,7 +103,6 @@ class AttentionBlock(nn.Module):
     """
     Causal self-attention with a single head.
     """
-
     def __init__(self, dim):
         super().__init__()
         self.dim = dim
@@ -149,23 +114,18 @@ class AttentionBlock(nn.Module):
         self.optimized_attention = attention_function_single_head_spatial
 
     def forward(self, x):
-        identity = x
-        b, c, t, h, w = x.size()
-        x = rearrange(x, 'b c t h w -> (b t) c h w')
+        identity = x.clone()
+        if x.ndim == 5:
+             x = rearrange(x, 'b c t h w -> (b t) c h w')
+       
         x = self.norm(x)
-
-        # compute query, key, value
-        # q, k, v = self.to_qkv(x).chunk(3, dim=1)
-        # x = self.optimized_attention(q, k, v)
-        q, k, v = self.to_qkv(x).reshape(b * t, 1, c * 3, -1).permute(0, 1, 3, 2).contiguous().chunk(3, dim=-1)
-
-        # apply attention
-        x = F.scaled_dot_product_attention(q, k, v)
-        x = x.squeeze(1).permute(0, 2, 1).reshape(b * t, c, h, w)
-
-        # output
+        q, k, v = self.to_qkv(x).chunk(3, dim=1)
+        x = self.optimized_attention(q, k, v)
         x = self.proj(x)
-        x = rearrange(x, '(b t) c h w-> b c t h w', t=t)
+
+        if identity.ndim == 5:
+            x = rearrange(x, '(b t) c h w-> b c t h w', t=1)
+
         return x + identity
 
 
@@ -232,7 +192,6 @@ class Encoder3d(nn.Module):
 
 
 class Decoder3d(nn.Module):
-
     def __init__(self,
                  dim=128,
                  z_dim=4,
@@ -365,3 +324,231 @@ class AutoencoderKLWan(nn.Module, ConfigMixin):
         x = self.conv2(z)
         out = self.decoder(x)
         return out.squeeze(2)
+
+
+### Anzhc's 2D WAN VAE
+
+
+class QwenImageResidualBlock2D(nn.Module):
+    def __init__(self, in_dim, out_dim, dropout=0.0):
+        super().__init__()
+        self.norm1 = RMS_norm(in_dim)
+        self.conv1 = nn.Conv2d(in_dim, out_dim, 3, padding=1)
+        self.norm2 = RMS_norm(out_dim)
+        self.dropout = nn.Dropout(dropout)
+        self.conv2 = nn.Conv2d(out_dim, out_dim, 3, padding=1)
+        self.conv_shortcut = nn.Conv2d(in_dim, out_dim, 1) if in_dim != out_dim else nn.Identity()
+
+    def forward(self, x):
+        h = self.conv_shortcut(x)
+        x = F.silu(self.norm1(x))
+        x = self.conv1(x)
+        x = F.silu(self.norm2(x))
+        x = self.dropout(x)
+        x = self.conv2(x)
+        return x + h
+
+
+class QwenImageMidBlock2D(nn.Module):
+    def __init__(self, dim, dropout=0.0, num_layers=1):
+        super().__init__()
+        resnets = [QwenImageResidualBlock2D(dim, dim, dropout)]
+        attentions = []
+        for _ in range(num_layers):
+            attentions.append(AttentionBlock(dim))
+            resnets.append(QwenImageResidualBlock2D(dim, dim, dropout))
+        self.attentions = nn.ModuleList(attentions)
+        self.resnets = nn.ModuleList(resnets)
+
+    def forward(self, x):
+        x = self.resnets[0](x)
+        for attn, resnet in zip(self.attentions, self.resnets[1:]):
+            x = attn(x)
+            x = resnet(x)
+        return x
+
+
+class QwenImageEncoder2D(nn.Module):
+    def __init__(
+        self,
+        dim=96,
+        z_dim=32,
+        input_channels=3,
+        dim_mult=(1, 2, 4, 4),
+        num_res_blocks=2,
+        attn_scales=(),
+        dropout=0.0,
+    ):
+        super().__init__()
+        self.dim_mult = list(dim_mult)
+        self.attn_scales = list(attn_scales)
+
+        dims = [dim * multiplier for multiplier in [1] + self.dim_mult]
+        scale = 1.0
+
+        self.conv_in = nn.Conv2d(input_channels, dims[0], 3, padding=1)
+        self.down_blocks = nn.ModuleList([])
+        for index, (in_dim, out_dim) in enumerate(zip(dims[:-1], dims[1:])):
+            for _ in range(num_res_blocks):
+                self.down_blocks.append(QwenImageResidualBlock2D(in_dim, out_dim, dropout))
+                if scale in self.attn_scales:
+                    self.down_blocks.append(AttentionBlock(out_dim))
+                in_dim = out_dim
+            if index != len(self.dim_mult) - 1:
+                self.down_blocks.append(Resample(out_dim, mode="downsample2d"))
+                scale /= 2.0
+
+        self.mid_block = QwenImageMidBlock2D(out_dim, dropout, num_layers=1)
+        self.norm_out = RMS_norm(out_dim)
+        self.conv_out = nn.Conv2d(out_dim, z_dim, 3, padding=1)
+
+    def forward(self, x):
+        x = self.conv_in(x)
+        for layer in self.down_blocks:
+            x = layer(x)
+        x = self.mid_block(x)
+        x = F.silu(self.norm_out(x))
+        return self.conv_out(x)
+
+
+class QwenImageUpBlock2D(nn.Module):
+    def __init__(self, in_dim, out_dim, num_res_blocks, dropout=0.0, upsample_mode=None):
+        super().__init__()
+        resnets = []
+        current_dim = in_dim
+        for _ in range(num_res_blocks + 1):
+            resnets.append(QwenImageResidualBlock2D(current_dim, out_dim, dropout))
+            current_dim = out_dim
+        self.resnets = nn.ModuleList(resnets)
+        self.upsamplers = None
+        if upsample_mode is not None:
+            self.upsamplers = nn.ModuleList([Resample(out_dim, mode=upsample_mode)])
+
+    def forward(self, x):
+        for resnet in self.resnets:
+            x = resnet(x)
+        if self.upsamplers is not None:
+            x = self.upsamplers[0](x)
+        return x
+
+
+class QwenImageDecoder2D(nn.Module):
+    def __init__(
+        self,
+        dim=96,
+        z_dim=16,
+        output_channels=3,
+        dim_mult=(1, 2, 4, 4),
+        num_res_blocks=2,
+        attn_scales=(),
+        dropout=0.0,
+    ):
+        super().__init__()
+        self.dim_mult = list(dim_mult)
+
+        dims = [dim * multiplier for multiplier in [self.dim_mult[-1]] + self.dim_mult[::-1]]
+
+        self.conv_in = nn.Conv2d(z_dim, dims[0], 3, padding=1)
+        self.mid_block = QwenImageMidBlock2D(dims[0], dropout, num_layers=1)
+
+        self.up_blocks = nn.ModuleList([])
+        for index, (in_dim, out_dim) in enumerate(zip(dims[:-1], dims[1:])):
+            if index > 0:
+                in_dim = in_dim // 2
+            upsample_mode = "upsample2d" if index != len(self.dim_mult) - 1 else None
+            self.up_blocks.append(
+                QwenImageUpBlock2D(
+                    in_dim=in_dim,
+                    out_dim=out_dim,
+                    num_res_blocks=num_res_blocks,
+                    dropout=dropout,
+                    upsample_mode=upsample_mode,
+                )
+            )
+
+        self.norm_out = RMS_norm(out_dim)
+        self.conv_out = nn.Conv2d(out_dim, output_channels, 3, padding=1)
+
+    def forward(self, x):
+        x = self.conv_in(x)
+        x = self.mid_block(x)
+        for up_block in self.up_blocks:
+            x = up_block(x)
+        x = F.silu(self.norm_out(x))
+        return self.conv_out(x)
+
+
+class AutoencoderQwen2D(nn.Module, ConfigMixin):
+    config_name = 'config.json'
+
+    @register_to_config
+    def __init__(
+        self,
+        base_dim=96,
+        z_dim=16,
+        dim_mult=(1, 2, 4, 4),
+        num_res_blocks=2,
+        attn_scales=(),
+        temporal_downsample=(False, True, True),
+        image_channels=3,
+        dropout=0.0,
+    ):
+        super().__init__()
+        self.base_dim = base_dim
+        self.z_dim = z_dim
+        self.dim_mult = list(dim_mult)
+        self.num_res_blocks = num_res_blocks
+        self.attn_scales = list(attn_scales)
+        self.temporal_downsample = list(temporal_downsample)
+        self.temporal_upsample = list(self.temporal_downsample[::-1])
+
+        self.encoder = QwenImageEncoder2D(
+            dim=base_dim,
+            z_dim=z_dim * 2,
+            input_channels=image_channels,
+            dim_mult=self.dim_mult,
+            num_res_blocks=num_res_blocks,
+            attn_scales=self.attn_scales,
+            dropout=dropout,
+        )
+        self.quant_conv = nn.Conv2d(z_dim * 2, z_dim * 2, 1)
+        self.post_quant_conv = nn.Conv2d(z_dim, z_dim, 1)
+        self.decoder = QwenImageDecoder2D(
+            dim=base_dim,
+            z_dim=z_dim,
+            output_channels=image_channels,
+            dim_mult=self.dim_mult,
+            num_res_blocks=num_res_blocks,
+            attn_scales=self.attn_scales,
+            dropout=dropout,
+        )
+
+        self.scale_factor = 1.0
+        self.latents_mean = torch.tensor([
+            -0.7571, -0.7089, -0.9113, 0.1075, -0.1745, 0.9653, -0.1517, 1.5508,
+            0.4134, -0.0715, 0.5517, -0.3632, -0.1922, -0.9497, 0.2503, -0.2921
+        ]).view(1, 16, 1, 1)
+        self.latents_std = torch.tensor([
+            2.8184, 1.4541, 2.3275, 2.6558, 1.2196, 1.7708, 2.6052, 2.0743,
+            3.2687, 2.1526, 2.8652, 1.5579, 1.6382, 1.1253, 2.8251, 1.9160
+        ]).view(1, 16, 1, 1)
+
+    def process_in(self, latent):
+        latents_mean = self.latents_mean.to(latent.device, latent.dtype)
+        latents_std = self.latents_std.to(latent.device, latent.dtype)
+        return (latent - latents_mean) * self.scale_factor / latents_std
+
+    def process_out(self, latent):
+        latents_mean = self.latents_mean.to(latent.device, latent.dtype)
+        latents_std = self.latents_std.to(latent.device, latent.dtype)
+        return latent * latents_std / self.scale_factor + latents_mean
+
+    def encode(self, x, **kwargs):
+        moments = self.quant_conv(self.encoder(x))
+        mu, _ = moments.chunk(2, dim=1)
+        return mu
+
+    def decode(self, z, **kwargs):
+        out = self.decoder(self.post_quant_conv(z))
+        out = torch.clamp(out, min=-1.0, max=1.0)
+        return out
