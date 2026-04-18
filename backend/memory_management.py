@@ -489,13 +489,13 @@ class LoadedModel:
         print(f"{cc.INFO}[Memory Management]{cc.RESET} Target: {self.model.model.__class__.__name__}, ", end="")
 
         need_cpu_swap = False
-        if vram_set_state == VRAMState.NO_VRAM:
-            gpu_memory_available = 0
-            need_cpu_swap = True
-        elif 'Autoencoder' in self.model.model.__class__.__name__ or 'CLIPVisionModelWithProjection' in self.model.model.__class__.__name__:
+        if 'Autoencoder' in self.model.model.__class__.__name__ or 'CLIPVisionModelWithProjection' in self.model.model.__class__.__name__:
             # VAE must be fully on one device
             free_memory(memory_for_inference, self.device, keep_loaded=keep_loaded)
             need_cpu_swap = False
+        elif vram_set_state == VRAMState.NO_VRAM:
+            gpu_memory_available = 0
+            need_cpu_swap = True
         elif vram_set_state in [VRAMState.VERY_LOW_VRAM, VRAMState.LOW_VRAM, VRAMState.NORMAL_VRAM]:
             model_require = self.exclusive_memory
             previously_loaded = self.inclusive_memory
