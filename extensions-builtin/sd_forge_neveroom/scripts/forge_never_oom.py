@@ -41,6 +41,9 @@ class NeverOOMForForge(scripts.Script):
         if vae_enabled:
             print(f"{cc.SETTING}NeverOOM Enabled for VAE (always tiled){cc.RESET}")
             p.sd_model.forge_objects.vae.tile_info = (tile_size_x, tile_size_y, tile_overlap, tile_method)
+            p.extra_generation_params.update({
+                "tiled VAE"        : (tile_size_x, tile_size_y, tile_overlap, tile_method),
+            })  # informational only
         else:
             p.sd_model.forge_objects.vae.tile_info = None
 
