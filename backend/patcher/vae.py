@@ -56,7 +56,7 @@ def tiled_scale(samples, function, tile=(64, 64), overlap=8, upscale_amount=4, o
 # this tiled decoder lightly modified from diffusers.models.autoencoders.autoencoder_kl.py
 # faster than original (1 pass instead of 3) and better blending
 @torch.inference_mode()
-def tiled_decode_diffusers(samples, function, tile_x=64, tile_y=64, overlap=8, upscale=4, device="cpu"):
+def tiled_decode_diffusers(samples, function, tile_x=64, tile_y=64, overlap=8, upscale=4, out_channels=3, device="cpu"):
     def blend_v(a: torch.Tensor, b: torch.Tensor, blend_extent: int) -> torch.Tensor:
         blend_extent = min(a.shape[2], b.shape[2], blend_extent)
         for y in range(blend_extent):
@@ -69,33 +69,37 @@ def tiled_decode_diffusers(samples, function, tile_x=64, tile_y=64, overlap=8, u
             b[:, :, :, x] = a[:, :, :, -blend_extent + x] * (1 - x / blend_extent) + b[:, :, :, x] * (x / blend_extent)
         return b
 
+    output = torch.empty([samples.shape[0], out_channels, samples.shape[-2] * upscale, samples.shape[-1] * upscale], device=device)
+
     # Split samples into overlapping tiles and decode them separately.
     # The tiles have an overlap to avoid seams between tiles.
-    rows = []
-    for i in range(0, samples.shape[2], tile_y - overlap):
-        row = []
-        for j in range(0, samples.shape[3], tile_x - overlap):
-            tile = samples[:, :, i : i + tile_y, j : j + tile_x]
-            decoded = function(tile)
-            row.append(decoded)
-        rows.append(row)
+    for b in trange(samples.shape[0]):
+        rows = []
+        for i in range(0, samples.shape[2], tile_y - overlap):
+            row = []
+            for j in range(0, samples.shape[3], tile_x - overlap):
+                tile = samples[b:b+1, :, i : i + tile_y, j : j + tile_x]
+                decoded = function(tile)
+                row.append(decoded)
+            rows.append(row)
 
-    blend_extent = overlap * upscale
-    row_limitX = (tile_x - overlap) * upscale
-    row_limitY = (tile_y - overlap) * upscale
-    result_rows = []
-    for i, row in enumerate(rows):
-        result_row = []
-        for j, tile in enumerate(row):
-            # blend the above tile and the left tile to the current tile and add the current tile to the result row
-            if i > 0:
-                tile = blend_v(rows[i - 1][j], tile, blend_extent)
-            if j > 0:
-                tile = blend_h(row[j - 1], tile, blend_extent)
-            result_row.append(tile[:, :, :row_limitY, :row_limitX])
-        result_rows.append(torch.cat(result_row, dim=3))
+        blend_extent = overlap * upscale
+        row_limitX = (tile_x - overlap) * upscale
+        row_limitY = (tile_y - overlap) * upscale
+        result_rows = []
+        for i, row in enumerate(rows):
+            result_row = []
+            for j, tile in enumerate(row):
+                # blend the above tile and the left tile to the current tile and add the current tile to the result row
+                if i > 0:
+                    tile = blend_v(rows[i - 1][j], tile, blend_extent)
+                if j > 0:
+                    tile = blend_h(row[j - 1], tile, blend_extent)
+                result_row.append(tile[:, :, :row_limitY, :row_limitX])
+            result_rows.append(torch.cat(result_row, dim=3))
 
-    return torch.cat(result_rows, dim=2)
+        output[b:b+1] = torch.cat(result_rows, dim=2)
+    return output
 
 
 @torch.inference_mode()
@@ -112,20 +116,24 @@ def tiled_decode_DoE(samples, function, tile_x=64, tile_y=64, overlap=8, upscale
             b[:, :, :, x] = a[:, :, :, -blend_extent + x] * (1 - x / blend_extent) + b[:, :, :, x] * (x / blend_extent)
         return b
 
+    overlap = min(overlap, min(tile_x, tile_y) // 6)
+    H = samples.shape[-2]
+    W = samples.shape[-1]
+    
+    overlap_x = overlap if tile_x < W else 0
+    overlap_y = overlap if tile_y < H else 0
+
     o_tile_y = tile_y
     o_tile_x = tile_x
     output = torch.empty([samples.shape[0], out_channels, samples.shape[-2] * upscale, samples.shape[-1] * upscale], device=device)
-    tile_x -= 3 * overlap
-    tile_y -= 3 * overlap
+    tile_x -= overlap_x
+    tile_y -= overlap_y
     tile_x = min(samples.shape[-1], tile_x)
     tile_y = min(samples.shape[-2], tile_y)
 
-    H = samples.shape[-2]
-    W = samples.shape[-1]
 
-    #decode only
-    rows = []
     for b in trange(samples.shape[0]):
+        rows = []
         tile_samples = torch.nn.functional.adaptive_avg_pool2d(samples[b:b+1], (o_tile_y, o_tile_x))
         y = 0
         while y < H:
@@ -134,18 +142,20 @@ def tiled_decode_DoE(samples, function, tile_x=64, tile_y=64, overlap=8, upscale
             while x < W:
                 #latent positions, with padding top + bottom + left + right
                 plys = y
-                plye = min(y + tile_y + overlap, H)
+                plye = min(y + tile_y + overlap_y, H)
                 plxs = x
-                plxe = min(x + tile_x + overlap, W)
+                plxe = min(x + tile_x + overlap_x, W)
+
+                section = samples[b:b+1, :, plys:plye, plxs:plxe]
 
                 #overwrite padded tile, into correct position
                 plys_p = min(int(o_tile_y * plys / H), o_tile_y - (plye-plys))
                 plxs_p = min(int(o_tile_x * plxs / W), o_tile_x - (plxe-plxs))
-                plye_p = plys_p + plye - plys
-                plxe_p = plxs_p + plxe - plxs
+                plye_p = plys_p + section.shape[2]
+                plxe_p = plxs_p + section.shape[3]
                 t = torch.empty_like(tile_samples)
                 t.copy_(tile_samples)
-                t[:, :, plys_p : plye_p, plxs_p : plxe_p] = samples[b:b+1, :, plys:plye, plxs:plxe]
+                t[:, :, plys_p : plye_p, plxs_p : plxe_p] = section
 
                 #VAE decode
                 pixel_samples = function(t)
@@ -162,13 +172,13 @@ def tiled_decode_DoE(samples, function, tile_x=64, tile_y=64, overlap=8, upscale
 
                 row.append(p)
 
-                x += tile_x - overlap
+                x += tile_x - overlap_x
             rows.append(row)
-            y += tile_y - overlap
+            y += tile_y - overlap_y
 
         blend_extent = overlap * upscale
-        row_limitX = (tile_x - overlap) * upscale
-        row_limitY = (tile_y - overlap) * upscale
+        row_limitX = (tile_x - overlap_x) * upscale
+        row_limitY = (tile_y - overlap_y) * upscale
         result_rows = []
         for i, row in enumerate(rows):
             result_row = []
@@ -249,18 +259,18 @@ class VAE:
             method  = self.tile_info[3]
 
         decode_fn = lambda a: (self.first_stage_model.decode(a.to(self.vae_dtype).to(self.device)) + 1.0).to(torch.float32)
+
         match method:
             case "diffusers":
-                output = torch.clamp(tiled_decode_diffusers(samples, decode_fn, tile_x, tile_y, overlap, upscale=self.downscale_ratio, device=self.output_device) / 2.0, min=0.0, max=1.0)
+                output = tiled_decode_diffusers(samples, decode_fn, tile_x, tile_y, overlap, upscale=self.downscale_ratio, device=self.output_device) / 2.0
             case "DoE":
-                output = torch.clamp(tiled_decode_DoE(samples, decode_fn, tile_x, tile_y, overlap, upscale=self.downscale_ratio, device=self.output_device) / 2.0, min=0.0, max=1.0)
+                output = tiled_decode_DoE(samples, decode_fn, tile_x, tile_y, overlap, upscale=self.downscale_ratio, device=self.output_device) / 2.0
             case _:
-                output = torch.clamp(
-                    ((tiled_scale(samples, decode_fn, (tile_x // 2, tile_y * 2), overlap, upscale_amount=self.downscale_ratio, output_device=self.output_device) +
-                      tiled_scale(samples, decode_fn, (tile_x * 2, tile_y // 2), overlap, upscale_amount=self.downscale_ratio, output_device=self.output_device) +
-                      tiled_scale(samples, decode_fn, (tile_x, tile_y),          overlap, upscale_amount=self.downscale_ratio, output_device=self.output_device))
-                     / 3.0) / 2.0, min=0.0, max=1.0)
-        return output
+                output = (tiled_scale(samples, decode_fn, (tile_x // 2, tile_y * 2), overlap, upscale_amount=self.downscale_ratio, output_device=self.output_device) +
+                          tiled_scale(samples, decode_fn, (tile_x * 2, tile_y // 2), overlap, upscale_amount=self.downscale_ratio, output_device=self.output_device) +
+                          tiled_scale(samples, decode_fn, (tile_x, tile_y),          overlap, upscale_amount=self.downscale_ratio, output_device=self.output_device)) / 6.0
+        
+        return torch.clamp(output, min=0.0, max=1.0)
 
     def encode_tiled(self, pixel_samples, tile_x=512, tile_y=512, overlap=64):
         if hasattr(self, "tile_info") and self.tile_info is not None:
@@ -303,7 +313,7 @@ class VAE:
             else:
                 tile_x = 64
                 tile_y = 64
-            shape = (samples_in.shape[0], samples_in.shape[1], tile_y, tile_x)
+            shape = (1, samples_in.shape[1], tile_y, tile_x)
             memory_used = self.memory_used_decode(shape, self.vae_dtype)
             memory_management.load_models_gpu([self.patcher], memory_used)
             pixel_samples = self.decode_tiled(samples_in)
