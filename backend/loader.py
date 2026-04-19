@@ -350,9 +350,6 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             elif cls_name == "ERNIEImageModel":
                 from backend.nn.ernie import ERNIEImageModel
                 model_loader = lambda c: ERNIEImageModel(**c)
-            elif cls_name == "WanTransformer3DModel":
-                from backend.nn.wan import WanModel
-                model_loader = lambda c: WanModel(**c)
             elif cls_name == "ChromaDCT":
                 from backend.nn.chromaDCT import IntegratedChromaDCTTransformer2DModel
                 model_loader = lambda c: IntegratedChromaDCTTransformer2DModel(**c)
