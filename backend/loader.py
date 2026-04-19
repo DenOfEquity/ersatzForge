@@ -344,6 +344,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             elif cls_name == "FluxTransformer2DModel":
                 from backend.nn.flux import IntegratedFluxTransformer2DModel
                 model_loader = lambda c: IntegratedFluxTransformer2DModel(**c)
+            elif cls_name == 'Flux2Transformer2DModel':
+                from backend.nn.flux2 import IntegratedFlux2Transformer2DModel
+                model_loader = lambda c: IntegratedFlux2Transformer2DModel(**c)
             elif cls_name == "ERNIEImageModel":
                 from backend.nn.ernie import ERNIEImageModel
                 model_loader = lambda c: ERNIEImageModel(**c)
