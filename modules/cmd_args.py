@@ -19,6 +19,7 @@ parser.add_argument("--dump-sysinfo", action='store_true', help="launch.py argum
 parser.add_argument("--data-dir", type=normalized_filepath, default=os.path.dirname(os.path.dirname(os.path.realpath(__file__))), help="base path where all user data is stored")
 parser.add_argument("--models-dir", type=normalized_filepath, default=None, help="base path where models are stored; overrides --data-dir")
 parser.add_argument("--ckpt-dir", type=normalized_filepath, default=None, help="Path to directory with stable diffusion checkpoints")
+parser.add_argument("--lora-dir", type=normalized_filepath, help="Path to directory with Lora networks.", default=os.path.join(models_path, 'Lora'))
 parser.add_argument("--vae-dir", type=normalized_filepath, default=None, help="Path to directory with VAE files")
 parser.add_argument("--text-encoder-dir", type=normalized_filepath, default=None, help="Path to directory with text encoder models")
 parser.add_argument("--embeddings-dir", type=normalized_filepath, default=os.path.join(models_path, 'embeddings'), help="embeddings directory for textual inversion")
