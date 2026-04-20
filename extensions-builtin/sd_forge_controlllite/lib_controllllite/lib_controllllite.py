@@ -1,6 +1,8 @@
 import torch
 
 from modules import shared
+import modules_forge.colour_code as cc
+
 
 def extra_options_to_module_prefix(extra_options):
     # extra_options = {'transformer_index': 2, 'block_index': 8, 'original_shape': [2, 4, 128, 128], 'block': ('input', 7), 'n_heads': 20, 'dim_head': 64}
@@ -263,7 +265,7 @@ class LLLiteLoader:
 
         h, w = cond_image.shape[2:]
         if (h % 32) or (w % 32):
-            print ("[ControlLLLite] Image width and height must be multiples of 32.")
+            print (f"{cc.ERROR}[ControlLLLite] Generated image width and height must be multiples of 32.{cc.RESET}")
             return model
 
         model_lllite = model.clone()
