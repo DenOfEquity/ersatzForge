@@ -880,9 +880,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
         if p.refiner_checkpoint_info is None:
             raise Exception(f'Could not find checkpoint with name {p.refiner_checkpoint}')
 
-    if hasattr(shared.sd_model, 'fix_dimensions'):
-        p.width, p.height = shared.sd_model.fix_dimensions(p.width, p.height)
-
     p.sd_model_name = shared.sd_model.sd_checkpoint_info.name_for_extra
     p.sd_model_hash = shared.sd_model.sd_model_hash
     p.sd_vae_name = None #removeable? maybe needed for back-compat
@@ -1426,6 +1423,11 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         self.is_hr_pass = True
         target_width = self.hr_upscale_to_x
         target_height = self.hr_upscale_to_y
+
+        # may still need to fix width and height - using quick button when main model is changed
+        factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
+        target_width  = factor * ((target_width  + (factor // 2)) // factor)
+        target_height = factor * ((target_height + (factor // 2)) // factor)
 
         def save_intermediate(image, index):
             """saves image before applying HiRes fix, if enabled in options; takes as an argument either an image or batch with latent space images"""
