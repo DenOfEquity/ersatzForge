@@ -18,14 +18,26 @@ def rope(pos: torch.Tensor, dim: int, theta: int) -> torch.Tensor:
     out = torch.stack([torch.cos(out), torch.sin(out)], dim=0)
     return out.to(dtype=torch.float32, device=pos.device)
 
-def apply_rotary_emb(x_in: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
+# def apply_rotary_emb(x_in: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
+    # rot_dim = freqs_cis.shape[-1]
+    # x, x_pass = x_in[..., :rot_dim], x_in[..., rot_dim:]
+    # cos_ = freqs_cis[0]
+    # sin_ = freqs_cis[1]
+    # x1, x2 = x.chunk(2, dim=-1)
+    # x_rotated = torch.cat((-x2, x1), dim=-1)
+
+    # return torch.cat((x * cos_ + x_rotated * sin_, x_pass), dim=-1)
+
+def apply_rotary_emb_inplace(x: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
     rot_dim = freqs_cis.shape[-1]
-    x, x_pass = x_in[..., :rot_dim], x_in[..., rot_dim:]
-    cos_ = freqs_cis[0]
-    sin_ = freqs_cis[1]
-    x1, x2 = x.chunk(2, dim=-1)
-    x_rotated = torch.cat((-x2, x1), dim=-1)
-    return torch.cat((x * cos_ + x_rotated * sin_, x_pass), dim=-1)
+    half = rot_dim // 2
+
+    x1 = x[..., :half].clone()   # temp buffer
+    x2 = x[..., half:rot_dim]    # view
+
+    x[..., :half] = x1 * freqs_cis[0][..., :half] - x2 * freqs_cis[1][..., :half]
+    x[..., half:rot_dim] = x2 * freqs_cis[0][..., half:] + x1 * freqs_cis[1][..., half:]
+
 
 class ErnieImageEmbedND3(nn.Module):
     def __init__(self, dim: int, theta: int, axes_dim: tuple):
@@ -45,9 +57,8 @@ class ErnieImagePatchEmbedDynamic(nn.Module):
         self.proj = nn.Conv2d(in_channels, embed_dim, kernel_size=patch_size, stride=patch_size, bias=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.proj(x)
-        batch_size, dim, height, width = x.shape
-        return x.reshape(batch_size, dim, height * width).transpose(1, 2).contiguous()
+        x = self.proj(x)        
+        return rearrange(x, "b d h w -> b (h w) d").contiguous()
 
 class Timesteps(nn.Module):
     def __init__(self, num_channels: int, flip_sin_to_cos: bool = False):
@@ -95,29 +106,25 @@ class ErnieImageAttention(nn.Module):
 
         self.to_out = nn.ModuleList([nn.Linear(self.inner_dim, query_dim, bias=False)])
 
-    def forward(self, x: torch.Tensor, attention_mask: torch.Tensor = None, image_rotary_emb: torch.Tensor = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, image_rotary_emb: torch.Tensor = None) -> torch.Tensor:
         B, S, _ = x.shape
 
-        q_flat = self.to_q(x)
-        k_flat = self.to_k(x)
-        v_flat = self.to_v(x)
-
-        query = q_flat.view(B, S, self.heads, self.head_dim)
-        key = k_flat.view(B, S, self.heads, self.head_dim)
-
+        query = self.to_q(x).view(B, S, self.heads, self.head_dim)
         query = self.norm_q(query)
-        key = self.norm_k(key)
-
         if image_rotary_emb is not None:
-            query = apply_rotary_emb(query, image_rotary_emb)
-            key = apply_rotary_emb(key, image_rotary_emb)
-
-        query, key = query.to(x.dtype), key.to(x.dtype)
-
+            apply_rotary_emb_inplace(query, image_rotary_emb)
+        query = query.to(x.dtype)
         q_flat = query.reshape(B, S, -1)
+
+        key = self.to_k(x).view(B, S, self.heads, self.head_dim)
+        key = self.norm_k(key)
+        if image_rotary_emb is not None:
+            apply_rotary_emb_inplace(key, image_rotary_emb)
+        key = key.to(x.dtype)
         k_flat = key.reshape(B, S, -1)
 
-        hidden_states = attention_function(q_flat, k_flat, v_flat, self.heads, mask=attention_mask)
+        v_flat = self.to_v(x)
+        hidden_states = attention_function(q_flat, k_flat, v_flat, self.heads)
 
         return self.to_out[0](hidden_states)
 
@@ -144,21 +151,19 @@ class ErnieImageSharedAdaLNBlock(nn.Module):
         self.adaLN_mlp_ln = nn.RMSNorm(hidden_size, eps=1e-6)
         self.mlp = ErnieImageFeedForward(hidden_size, ffn_hidden_size)
 
-    def forward(self, x, rotary_pos_emb, temb, attention_mask=None):
+    def forward(self, x, rotary_pos_emb, temb):
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = temb
 
-        residual = x
         x_norm = self.adaLN_sa_ln(x)
-        x_norm = (x_norm.to(torch.float32) * (1 + scale_msa.to(torch.float32)) + shift_msa.to(torch.float32)).to(x.dtype)
+        x_norm = torch.addcmul(shift_msa, x_norm, 1 + scale_msa)
 
-        attn_out = self.self_attention(x_norm, attention_mask=attention_mask, image_rotary_emb=rotary_pos_emb)
-        x = residual + (gate_msa.to(torch.float32) * attn_out.to(torch.float32)).to(x.dtype)
+        attn_out = self.self_attention(x_norm, image_rotary_emb=rotary_pos_emb)
+        x += torch.mul(gate_msa, attn_out)
 
-        residual = x
         x_norm = self.adaLN_mlp_ln(x)
-        x_norm = (x_norm.to(torch.float32) * (1 + scale_mlp.to(torch.float32)) + shift_mlp.to(torch.float32)).to(x.dtype)
+        x_norm = torch.addcmul(shift_mlp, x_norm, 1 + scale_mlp)
 
-        return residual + (gate_mlp.to(torch.float32) * self.mlp(x_norm).to(torch.float32)).to(x.dtype)
+        return x + (gate_mlp.to(torch.float32) * self.mlp(x_norm).to(torch.float32)).to(x.dtype)
 
 class ErnieImageAdaLNContinuous(nn.Module):
     def __init__(self, hidden_size: int, eps: float = 1e-6):
@@ -169,7 +174,7 @@ class ErnieImageAdaLNContinuous(nn.Module):
     def forward(self, x: torch.Tensor, conditioning: torch.Tensor) -> torch.Tensor:
         scale, shift = self.linear(conditioning).chunk(2, dim=-1)
         x = self.norm(x)
-        x = x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+        x = torch.addcmul(shift.unsqueeze(1), x, 1 + scale.unsqueeze(1))
         return x
 
 class ERNIEImageModel(nn.Module):
@@ -268,4 +273,4 @@ class ERNIEImageModel(nn.Module):
 
         patches = self.final_linear(hidden_states)[:, :N_img, :]
 
-        return rearrange(patches, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=H, w=W, ph=ps, pw=ps)
+        return rearrange(patches, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=H, w=W, ph=ps, pw=ps).contiguous()
