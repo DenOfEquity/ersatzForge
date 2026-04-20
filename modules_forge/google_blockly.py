@@ -6,7 +6,7 @@ import gzip
 import importlib.util
 
 
-pyz_dir = os.path.abspath(os.path.realpath(os.path.join(__file__, '../../repositories/google_blockly_prototypes/forge')))
+pyz_dir = os.path.abspath(os.path.realpath(os.path.join(__file__, '../../packages/google_blockly_prototypes/forge')))
 module_suffix = ".pyz"
 
 
