@@ -3,26 +3,6 @@ import sys
 
 
 INITIALIZED = False
-MONITOR_MODEL_MOVING = False
-
-
-def monitor_module_moving():
-    if not MONITOR_MODEL_MOVING:
-        return
-
-    import torch
-    import traceback
-
-    old_to = torch.nn.Module.to
-
-    def new_to(*args, **kwargs):
-        traceback.print_stack()
-        print('Model Movement')
-
-        return old_to(*args, **kwargs)
-
-    torch.nn.Module.to = new_to
-    return
 
 
 def initialize_forge():
@@ -33,7 +13,7 @@ def initialize_forge():
 
     INITIALIZED = True
 
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'packages_3rdparty'))
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'packages'))
 
     bad_list = ['--lowvram', '--medvram', '--medvram-sdxl']
 
@@ -55,13 +35,6 @@ def initialize_forge():
         try_cuda_malloc()
 
     from backend import memory_management
-    import torch
-
-    monitor_module_moving()
-
-    device = memory_management.get_torch_device()
-    torch.zeros((1, 1)).to(device, torch.float32)
-    memory_management.soft_empty_cache()
 
     if memory_management.can_install_bnb():
         from modules_forge.bnb_installer import try_install_bnb
@@ -71,9 +44,6 @@ def initialize_forge():
     print('CUDA Using Stream:', stream.should_use_stream())
 
     from modules_forge.shared import diffusers_dir
-
-    # if 'TRANSFORMERS_CACHE' not in os.environ:
-    #     os.environ['TRANSFORMERS_CACHE'] = diffusers_dir
 
     if 'HF_HOME' not in os.environ:
         os.environ['HF_HOME'] = diffusers_dir
