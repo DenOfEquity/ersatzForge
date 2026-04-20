@@ -1,7 +1,7 @@
 import torch
 
-import packages_3rdparty.webui_lora_collection.lora as lora_utils_webui
-import packages_3rdparty.comfyui_lora_collection.lora as lora_utils_comfyui
+import packages.webui_lora_collection.lora as lora_utils_webui
+import packages.comfyui_lora_collection.lora as lora_utils_comfyui
 
 from backend import memory_management, utils
 
