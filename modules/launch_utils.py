@@ -25,7 +25,6 @@ args, _ = cmd_args.parser.parse_known_args()
 python = sys.executable
 git = os.environ.get('GIT', "git")
 index_url = os.environ.get('INDEX_URL', "")
-dir_repos = "repositories"
 
 # Whether to default to printing command output
 default_command_live = (os.environ.get('WEBUI_LAUNCH_LIVE_OUTPUT') == "1")
@@ -111,7 +110,7 @@ def is_installed(package):
 
 
 def repo_dir(name):
-    return os.path.join(script_path, dir_repos, name)
+    return os.path.join(script_path, "packages", name)
 
 
 def run_pip(command, desc=None, live=default_command_live):
@@ -374,8 +373,6 @@ def prepare_environment():
     if not is_installed("ngrok") and args.ngrok:
         run_pip("install ngrok", "ngrok")
         startup_timer.record("install ngrok")
-
-    os.makedirs(os.path.join(script_path, dir_repos), exist_ok=True)
 
     startup_timer.record("clone repositories")
 
