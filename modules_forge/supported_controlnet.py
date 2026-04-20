@@ -194,7 +194,7 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
     
         to_load = {p: f"{p}.weight" for p in prefixes}
     
-        from packages_3rdparty.comfyui_lora_collection.lora import load_lora
+        from packages.comfyui_lora_collection.lora import load_lora
         model_lora, _ = load_lora(controlnet_data, to_load)
         
         patcher = AnimaReferenceControlLoraPatcher()
