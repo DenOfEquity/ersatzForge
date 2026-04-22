@@ -53,10 +53,8 @@ class NeverOOMForForge(scripts.Script):
             memory_management.unload_all_models()
             match unet_enabled:
                 case 'Offload nn.Linear modules':
-                    self.original_vram_state = memory_management.vram_state
                     memory_management.vram_state = memory_management.VRAMState.VERY_LOW_VRAM
                 case 'Maximize offload':
-                    self.original_vram_state = memory_management.vram_state
                     memory_management.vram_state = memory_management.VRAMState.NO_VRAM
                 case _:
                     memory_management.vram_state = self.original_vram_state
