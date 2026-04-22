@@ -538,7 +538,7 @@ class ControlNetUiGroup(object):
             else ControlNetUiGroup.a1111_context.txt2img_submit_button
         ).click(
             fn=UiControlNetUnit,
-            inputs=list(unit_args),
+            inputs=list(unit_args) + [self.type_filter],
             outputs=unit,
             queue=False,
         )
