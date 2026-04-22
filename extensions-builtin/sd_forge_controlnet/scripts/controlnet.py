@@ -1,13 +1,15 @@
-import os
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Final
 
 import cv2
+import gradio
+import hashlib
+import numpy
+import os
+from PIL import Image
 import torch
 
-import modules.scripts as scripts
-from modules import shared, script_callbacks, masking, images
+from modules import shared, script_callbacks, masking, images, scripts
 from modules.ui_components import InputAccordion
-import gradio as gr
 
 from lib_controlnet import global_state, external_code
 from lib_controlnet.external_code import ControlNetUnit
@@ -23,22 +25,33 @@ from modules_forge.utils import HWC3, numpy_to_pytorch
 from lib_controlnet.enums import HiResFixOption
 from lib_controlnet.api import controlnet_api
 
-import numpy as np
-import hashlib
-import functools
-
-from PIL import Image
 from modules_forge.shared import try_load_supported_control_model
 from modules_forge.supported_controlnet import ControlModelPatcher
 
 
+# via Haoming02, ForgeNeo
+UNION_CONTROLNET_TYPES: Final[dict[str, int]] = {
+    "OpenPose": 0,
+    "Depth": 1,
+    "Scribble/SoftEdge": 2,
+    "Canny/Lineart/MLSD": 3,
+    "NormalMap": 4,
+    "Segmentation": 5,
+    "Tile": 6,
+    "Inpaint": 7,
+#    "Fuse": 8,  # for Unicontrol, unsupported, any combination of: lineart, depth, pose
+}
+
+def convert_control_type(control_type: str) -> int | None:
+    for keys, v in UNION_CONTROLNET_TYPES.items():
+        if control_type in keys:
+            return v
+
+    return None
+
+
 global_state.update_controlnet_filenames()
 
-
-@functools.lru_cache(maxsize=shared.opts.data.get("control_net_unit_count", 3))
-def cached_controlnet_loader(filename):
-    return try_load_supported_control_model(filename)
-#cached_controlnet_loader.cache_clear() # on mm.unload_all_models?
 
 class ControlNetCachedParameters:
     def __init__(self):
@@ -67,15 +80,15 @@ class ControlNetForForgeOfficial(scripts.Script):
         gen_type = "img2img" if is_img2img else "txt2img"
         elem_id_tabname = gen_type + "_controlnet"
         default_unit = ControlNetUnit(enabled=False, module="None", model="None")
-        with gr.Group(elem_id=elem_id_tabname):
-            with gr.Accordion("ControlNet Integrated", open=False, elem_id="controlnet",
+        with gradio.Group(elem_id=elem_id_tabname):
+            with gradio.Accordion("ControlNet Integrated", open=False, elem_id="controlnet",
                               elem_classes=["controlnet"]):
                 photopea = (
                     Photopea()
                     if not shared.opts.data.get("controlnet_disable_photopea_edit", False)
                     else None
                 )
-                with gr.Row(elem_id=elem_id_tabname + "_accordions", elem_classes="accordions"):
+                with gradio.Row(elem_id=elem_id_tabname + "_accordions", elem_classes="accordions"):
                     for i in range(max_models):
                         with InputAccordion(
                             value=False,
@@ -112,10 +125,10 @@ class ControlNetForForgeOfficial(scripts.Script):
     def try_crop_image_with_a1111_mask(
             p: StableDiffusionProcessing,
             unit: ControlNetUnit,
-            input_image: np.ndarray,
+            input_image: numpy.ndarray,
             resize_mode: external_code.ResizeMode,
             preprocessor
-    ) -> np.ndarray:
+    ) -> numpy.ndarray:
         a1111_mask_image: Optional[Image.Image] = getattr(p, "image_mask", None)
         is_only_masked_inpaint = (
                 issubclass(type(p), StableDiffusionProcessingImg2Img) and
@@ -132,7 +145,7 @@ class ControlNetForForgeOfficial(scripts.Script):
 
             mask = prepare_mask(a1111_mask_image, p)
 
-            crop_region = masking.get_crop_region(np.array(mask), p.inpaint_full_res_padding)
+            crop_region = masking.get_crop_region(numpy.array(mask), p.inpaint_full_res_padding)
             crop_region = masking.expand_crop_region(crop_region, p.width, p.height, mask.width, mask.height)
 
             input_image = [
@@ -146,8 +159,8 @@ class ControlNetForForgeOfficial(scripts.Script):
                 for x in input_image
             ]
 
-            input_image = [np.asarray(x)[:, :, 0] for x in input_image]
-            input_image = np.stack(input_image, axis=2)
+            input_image = [numpy.asarray(x)[:, :, 0] for x in input_image]
+            input_image = numpy.stack(input_image, axis=2)
         return input_image
 
     def get_input_data(self, p, unit, preprocessor, h, w):
@@ -159,14 +172,14 @@ class ControlNetForForgeOfficial(scripts.Script):
             for idx, item in enumerate(unit.batch_input_gallery):
                 img_path = item[0]
                 logger.info(f'Try to read image: {img_path}')
-                img = np.ascontiguousarray(cv2.imread(img_path)[:, :, ::-1]).copy()
+                img = numpy.ascontiguousarray(cv2.imread(img_path)[:, :, ::-1]).copy()
                 mask = None
                 if unit.batch_mask_gallery is not None and len(unit.batch_mask_gallery) > 0:
                     if len(unit.batch_mask_gallery) >= len(unit.batch_input_gallery):
                         mask_path = unit.batch_mask_gallery[idx]['name']
                     else:
                         mask_path = unit.batch_mask_gallery[0]['name']
-                    mask = np.ascontiguousarray(cv2.imread(mask_path)[:, :, ::-1]).copy()
+                    mask = numpy.ascontiguousarray(cv2.imread(mask_path)[:, :, ::-1]).copy()
                 if img is not None:
                     image_list.append([img, mask])
         elif unit.input_mode == external_code.InputMode.BATCH:
@@ -179,7 +192,7 @@ class ControlNetForForgeOfficial(scripts.Script):
                 if any(filename.lower().endswith(ext) for ext in image_extensions):
                     img_path = os.path.join(unit.batch_image_dir, filename)
                     logger.info(f'Try to read image: {img_path}')
-                    img = np.ascontiguousarray(cv2.imread(img_path)[:, :, ::-1]).copy()
+                    img = numpy.ascontiguousarray(cv2.imread(img_path)[:, :, ::-1]).copy()
                     mask = None
                     if unit.batch_mask_dir:
                         batch_mask_files = shared.listfiles(unit.batch_mask_dir)
@@ -188,7 +201,7 @@ class ControlNetForForgeOfficial(scripts.Script):
                         else:
                             mask_path = batch_mask_files[0]
                         mask_path = os.path.join(unit.batch_mask_dir, mask_path)
-                        mask = np.ascontiguousarray(cv2.imread(mask_path)[:, :, ::-1]).copy()
+                        mask = numpy.ascontiguousarray(cv2.imread(mask_path)[:, :, ::-1]).copy()
                     if img is not None:
                         image_list.append([img, mask])
         else:
@@ -205,14 +218,14 @@ class ControlNetForForgeOfficial(scripts.Script):
                 image = unit.generated_image
             elif unit.image is None:
                 resize_mode = external_code.resize_mode_from_value(p.resize_mode)
-                image = HWC3(np.asarray(a1111_i2i_image))
+                image = HWC3(numpy.asarray(a1111_i2i_image))
                 using_a1111_data = True
             elif (unit_image < 5).all() and (unit_image_fg > 5).any():
                 image = unit_image_fg
             else:
                 image = unit_image
 
-            if not isinstance(image, np.ndarray):
+            if not isinstance(image, numpy.ndarray):
                 raise ValueError("controlnet is enabled but no input image is given")
 
             image = HWC3(image)
@@ -221,7 +234,7 @@ class ControlNetForForgeOfficial(scripts.Script):
             unit_mask_image_fg = unit.mask_image_fg[:, :, 3] if unit.mask_image_fg is not None else None
 
             if using_a1111_data:
-                mask = HWC3(np.asarray(a1111_i2i_mask)) if a1111_i2i_mask is not None else None
+                mask = HWC3(numpy.asarray(a1111_i2i_mask)) if a1111_i2i_mask is not None else None
             elif unit_mask_image_fg is not None and (unit_mask_image_fg > 5).any():
                 mask = unit_mask_image_fg
             elif unit_mask_image is not None and (unit_mask_image > 5).any():
@@ -243,7 +256,7 @@ class ControlNetForForgeOfficial(scripts.Script):
             new_image_list = []
             for input_image, input_mask in image_list:
                 if input_mask is None:
-                    input_mask = np.zeros_like(input_image)
+                    input_mask = numpy.zeros_like(input_image)
                 input_mask = crop_and_resize_image(
                     input_mask,
                     external_code.ResizeMode.OUTER_FIT, h, w,
@@ -381,7 +394,7 @@ class ControlNetForForgeOfficial(scripts.Script):
 
         alignment_indices = [i % len(preprocessor_outputs) for i in range(p.batch_size * p.n_iter)] #batch_count * batch_size = number of input images
         # alignment_indices = [i % len(preprocessor_outputs) for i in range(p.batch_size)] #batch_size = number of inputs, batch_count = repeats (without tensor split in process_unit_before_every_sampling)
-        def attach_extra_result_image(img: np.ndarray, is_high_res: bool = False):
+        def attach_extra_result_image(img: numpy.ndarray, is_high_res: bool = False):
             if (
                 (is_high_res and hr_option.high_res_enabled) or
                 (not is_high_res and hr_option.low_res_enabled)
@@ -444,7 +457,7 @@ class ControlNetForForgeOfficial(scripts.Script):
         else:
             assert unit.model != 'None', 'You have not selected any control model!'
             model_filename = global_state.get_controlnet_filename(unit.model)
-            params.model = cached_controlnet_loader(model_filename)
+            params.model = try_load_supported_control_model(model_filename)#cached_controlnet_loader(model_filename)
             assert params.model is not None, logger.error(f"Recognizing Control Model failed: {model_filename}")
 
         params.preprocessor = preprocessor
@@ -529,7 +542,15 @@ class ControlNetForForgeOfficial(scripts.Script):
 
         params.model.advanced_mask_weighting = mask
 
-        params.model.process_before_every_sampling(p, cond, mask, *args, **kwargs)
+        model_filename = global_state.get_controlnet_filename(unit.model).lower()
+        control_type = convert_control_type(unit.type_filter)
+        if "union" in model_filename or "unicontrol" in model_filename:
+            if control_type is None:
+                logger.warning("Selecting a Control Type is recommended for Union ControlNet.")
+            elif control_type >= 8: # unicontrol also has an 8, for Fuse (combined conditioning in one image)
+                logger.warning("Control Type is not supported.")
+
+        params.model.process_before_every_sampling(p, cond, mask, *args, control_type=control_type, **kwargs)
 
         logger.info(f"ControlNet Method {params.preprocessor.name} patched.")
         return
@@ -608,31 +629,29 @@ def on_ui_settings():
         "Path to directory containing annotator model directories (requires restart, overrides corresponding command line flag)",
         section=section))
     shared.opts.add_option("control_net_unit_count", shared.OptionInfo(
-        3, "Multi-ControlNet: ControlNet unit number (requires restart)", gr.Slider,
+        3, "Multi-ControlNet: ControlNet unit number (requires restart)", gradio.Slider,
         {"minimum": 1, "maximum": 10, "step": 1}, section=section))
-    # shared.opts.add_option("control_net_model_cache_size", shared.OptionInfo(
-        # 5, "Model cache size (requires restart)", gr.Slider, {"minimum": 1, "maximum": 10, "step": 1}, section=section))
+    shared.opts.add_option("control_net_model_cache_size", shared.OptionInfo(
+        3, "Model cache size (requires restart)", gradio.Slider, {"minimum": 1, "maximum": 10, "step": 1}, section=section))
     shared.opts.add_option("control_net_append_detectmap", shared.OptionInfo(
-        False, "Append detectmap to output", gr.Checkbox, {"interactive": True}, section=section))
-    # shared.opts.add_option("control_net_detectmap_autosaving", shared.OptionInfo(
-        # False, "Allow detectmap auto saving", gr.Checkbox, {"interactive": True}, section=section))
+        False, "Append detectmap to output", gradio.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("control_net_allow_script_control", shared.OptionInfo(
-        False, "Allow other script to control this extension", gr.Checkbox, {"interactive": True}, section=section))
+        False, "Allow other script to control this extension", gradio.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("control_net_sync_field_args", shared.OptionInfo(
-        True, "Paste ControlNet parameters in infotext", gr.Checkbox, {"interactive": True}, section=section))
+        True, "Paste ControlNet parameters in infotext", gradio.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("controlnet_show_batch_images_in_ui", shared.OptionInfo(
-        False, "Show batch images in gradio gallery output", gr.Checkbox, {"interactive": True}, section=section))
+        False, "Show batch images in gradio gallery output", gradio.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("controlnet_increment_seed_during_batch", shared.OptionInfo(
-        False, "Increment seed after each controlnet batch iteration", gr.Checkbox, {"interactive": True},
+        False, "Increment seed after each controlnet batch iteration", gradio.Checkbox, {"interactive": True},
         section=section))
     shared.opts.add_option("controlnet_disable_openpose_edit", shared.OptionInfo(
-        False, "Disable openpose edit", gr.Checkbox, {"interactive": True}, section=section))
+        False, "Disable openpose edit", gradio.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("controlnet_disable_photopea_edit", shared.OptionInfo(
-        False, "Disable photopea edit", gr.Checkbox, {"interactive": True}, section=section))
+        False, "Disable photopea edit", gradio.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("controlnet_photopea_warning", shared.OptionInfo(
-        True, "Photopea popup warning", gr.Checkbox, {"interactive": True}, section=section))
+        True, "Photopea popup warning", gradio.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("controlnet_input_thumbnail", shared.OptionInfo(
-        True, "Input image thumbnail on unit header", gr.Checkbox, {"interactive": True}, section=section))
+        True, "Input image thumbnail on unit header", gradio.Checkbox, {"interactive": True}, section=section))
 
 
 script_callbacks.on_ui_settings(on_ui_settings)
