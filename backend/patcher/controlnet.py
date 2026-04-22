@@ -19,7 +19,8 @@ def apply_controlnet_advanced(
         negative_advanced_weighting=None,
         advanced_frame_weighting=None,
         advanced_sigma_weighting=None,
-        advanced_mask_weighting=None
+        advanced_mask_weighting=None,
+        control_type=None
 ):
     """
 
@@ -65,7 +66,7 @@ def apply_controlnet_advanced(
 
     """
 
-    cnet = controlnet.copy().set_cond_hint(image_bchw, strength, (start_percent, end_percent))
+    cnet = controlnet.copy().set_cond_hint(image_bchw, strength, (start_percent, end_percent)).set_control_type(control_type)
     cnet.positive_advanced_weighting = positive_advanced_weighting
     cnet.negative_advanced_weighting = negative_advanced_weighting
     cnet.advanced_frame_weighting = advanced_frame_weighting
@@ -181,6 +182,7 @@ class ControlBase:
         self.global_average_pooling = False
         self.timestep_range = None
         self.transformer_options = {}
+        self.control_type = None
 
         if device is None:
             device = memory_management.get_torch_device()
@@ -191,6 +193,13 @@ class ControlBase:
         self.cond_hint_original = cond_hint
         self.strength = strength
         self.timestep_percent_range = timestep_percent_range
+        return self
+
+    def set_control_type(self, control_type):
+        if control_type is None:
+            self.control_type = None
+        else:
+            self.control_type = [control_type]
         return self
 
     def pre_run(self, model, percent_to_timestep_function):
@@ -330,12 +339,12 @@ class ControlNet(ControlBase):
 
         if controlnet_model_function_wrapper is not None:
             wrapper_args = dict(x=x_noisy.to(dtype), hint=self.cond_hint, timesteps=timestep.float(),
-                                context=context.to(dtype), y=y)
+                                context=context.to(dtype), y=y, control_type=self.control_type)
             wrapper_args['model'] = self
             wrapper_args['inner_model'] = self.control_model
             control = controlnet_model_function_wrapper(**wrapper_args)
         else:
-            control = self.control_model(x=x_noisy.to(dtype), hint=self.cond_hint.to(self.device), timesteps=timestep.float(), context=context.to(dtype), y=y)
+            control = self.control_model(x=x_noisy.to(dtype), hint=self.cond_hint.to(self.device), timesteps=timestep.float(), context=context.to(dtype), y=y, control_type=self.control_type)
         return self.control_merge(None, control, control_prev, output_dtype)
 
     def copy(self):
@@ -534,7 +543,7 @@ class T2IAdapter(ControlBase):
 
         control_input = list(map(lambda a: None if a is None else a.clone(), self.control_input))
         mid = None
-        if self.t2i_model.xl == True:
+        if self.t2i_model.xl:
             mid = control_input[-1:]
             control_input = control_input[:-1]
         return self.control_merge(control_input, mid, control_prev, x_noisy.dtype)
@@ -553,7 +562,7 @@ def load_t2i_adapter(t2i_data):
         for i in range(4):
             for j in range(2):
                 prefix_replace["adapter.body.{}.resnets.{}.".format(i, j)] = "body.{}.".format(i * 2 + j)
-            prefix_replace["adapter.body.{}.".format(i, j)] = "body.{}.".format(i * 2)
+            prefix_replace["adapter.body.{}.".format(i)] = "body.{}.".format(i * 2)
         prefix_replace["adapter."] = ""
         t2i_data = state_dict.state_dict_prefix_replace(t2i_data, prefix_replace)
     keys = t2i_data.keys()
