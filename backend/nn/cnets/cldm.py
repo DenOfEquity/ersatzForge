@@ -1,6 +1,50 @@
+from collections import OrderedDict
+
+import torch
 import torch.nn as nn
 
+from backend.attention import attention_function
 from backend.nn.unet import timestep_embedding, exists, conv_nd, SpatialTransformer, TimestepEmbedSequential, ResBlock, Downsample
+
+
+# loading / using union-style controlnet keys copied from ForgeNeo by Haoming02
+
+class OptimizedAttention(nn.Module):
+    def __init__(self, c, nhead):
+        super().__init__()
+        self.heads = nhead
+        self.c = c
+
+        self.in_proj = nn.Linear(c, c * 3, bias=True)
+        self.out_proj = nn.Linear(c, c, bias=True)
+
+    def forward(self, x):
+        x = self.in_proj(x)
+        q, k, v = x.split(self.c, dim=2)
+        out = attention_function(q, k, v, self.heads)
+        return self.out_proj(out)
+
+
+class QuickGELU(nn.Module):
+    def forward(self, x: torch.Tensor):
+        return x * torch.sigmoid(1.702 * x)
+
+
+class ResBlockUnionControlnet(nn.Module):
+    def __init__(self, dim, nhead):
+        super().__init__()
+        self.attn = OptimizedAttention(dim, nhead)
+        self.ln_1 = nn.LayerNorm(dim)
+        self.mlp = nn.Sequential(OrderedDict([("c_fc", nn.Linear(dim, dim * 4)), ("gelu", QuickGELU()), ("c_proj", nn.Linear(dim * 4, dim))]))
+        self.ln_2 = nn.LayerNorm(dim)
+
+    def attention(self, x: torch.Tensor):
+        return self.attn(x)
+
+    def forward(self, x: torch.Tensor):
+        x = x + self.attention(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
+        return x
 
 
 class ControlNet(nn.Module):
@@ -34,6 +78,8 @@ class ControlNet(nn.Module):
             adm_in_channels=None,
             transformer_depth_middle=None,
             transformer_depth_output=None,
+            union_controlnet_type=None,
+            legacy=True,
             dtype=None,
             **kwargs,
     ):
@@ -166,6 +212,9 @@ class ControlNet(nn.Module):
                         num_heads = ch // num_head_channels
                         dim_head = num_head_channels
 
+                    if legacy:
+                        dim_head = ch // num_heads if use_spatial_transformer else num_head_channels
+
                     if exists(disable_self_attentions):
                         disabled_sa = disable_self_attentions[level]
                     else:
@@ -215,6 +264,9 @@ class ControlNet(nn.Module):
             num_heads = ch // num_head_channels
             dim_head = num_head_channels
 
+        if legacy:
+            dim_head = ch // num_heads if use_spatial_transformer else num_head_channels
+
         mid_block = [
             ResBlock(
                 ch,
@@ -243,14 +295,83 @@ class ControlNet(nn.Module):
         self.middle_block_out = self.make_zero_conv(ch)
         self._feature_size += ch
 
+        if union_controlnet_type is None:
+            self.task_embedding = None
+            self.control_add_embedding = None
+        else:
+            self.num_control_type = union_controlnet_type
+            num_trans_channel = 320
+            num_trans_head = 8
+            num_trans_layer = 1
+            num_proj_channel = 320
+            self.task_embedding = nn.Parameter(torch.empty(self.num_control_type, num_trans_channel))
+
+            self.transformer_layes = nn.Sequential(*[ResBlockUnionControlnet(num_trans_channel, num_trans_head) for _ in range(num_trans_layer)])
+            self.spatial_ch_projs = nn.Linear(num_trans_channel, num_proj_channel)
+
+            control_add_embed_dim = 256
+
+            class ControlAddEmbedding(nn.Module):
+                def __init__(self, in_dim, out_dim, num_control_type):
+                    super().__init__()
+                    self.num_control_type = num_control_type
+                    self.in_dim = in_dim
+                    self.linear_1 = nn.Linear(in_dim * num_control_type, out_dim)
+                    self.linear_2 = nn.Linear(out_dim, out_dim)
+
+                def forward(self, control_type, dtype, device):
+                    c_type = torch.zeros((self.num_control_type,), device=device)
+                    c_type[control_type] = 1.0
+                    c_type = timestep_embedding(c_type.flatten(), self.in_dim, repeat_only=False).to(dtype).reshape((-1, self.num_control_type * self.in_dim))
+                    return self.linear_2(torch.nn.functional.silu(self.linear_1(c_type)))
+
+            self.control_add_embedding = ControlAddEmbedding(control_add_embed_dim, time_embed_dim, self.num_control_type)
+
+    def union_controlnet_merge(self, hint, control_type, emb, context):
+        # https://github.com/xinsir6/ControlNetPlus
+        inputs = []
+        condition_list = []
+
+        for idx in range(min(1, len(control_type))):
+            controlnet_cond = self.input_hint_block(hint[idx], emb, context)
+            feat_seq = torch.mean(controlnet_cond, dim=(2, 3))
+            if idx < len(control_type):
+                feat_seq += self.task_embedding[control_type[idx]].to(dtype=feat_seq.dtype, device=feat_seq.device)
+
+            inputs.append(feat_seq.unsqueeze(1))
+            condition_list.append(controlnet_cond)
+
+        x = torch.cat(inputs, dim=1)
+        x = self.transformer_layes(x)
+        controlnet_cond_fuser = None
+        for idx in range(len(control_type)):
+            alpha = self.spatial_ch_projs(x[:, idx])
+            alpha = alpha.unsqueeze(-1).unsqueeze(-1)
+            o = condition_list[idx] + alpha
+            if controlnet_cond_fuser is None:
+                controlnet_cond_fuser = o
+            else:
+                controlnet_cond_fuser += o
+        return controlnet_cond_fuser
+
     def make_zero_conv(self, channels):
         return TimestepEmbedSequential(conv_nd(self.dims, channels, channels, 1, padding=0))
 
-    def forward(self, x, hint, timesteps, context, y=None, **kwargs):
+    def forward(self, x, hint, timesteps, context, y=None, control_type: list[int] = None, **kwargs):
         t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False).to(x.dtype)
         emb = self.time_embed(t_emb)
 
-        guided_hint = self.input_hint_block(hint, emb, context)
+        guided_hint = None
+
+        if self.control_add_embedding is not None:  # Union Controlnet
+            if control_type is not None and all([c < self.num_control_type for c in control_type]):
+                emb += self.control_add_embedding(control_type, emb.dtype, emb.device)
+                if len(hint.shape) < 5:
+                    hint = hint.unsqueeze(0)
+                guided_hint = self.union_controlnet_merge(hint, control_type, emb, context)
+
+        if guided_hint is None:  # Regular Controlnet
+            guided_hint = self.input_hint_block(hint, emb, context)
 
         outs = []
 
