@@ -76,6 +76,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             config = AutoencoderKLFlux2.load_config(config_path)
 
+            # check for small model
+            config["block_out_channels_decoder"] = [96, 192, 384, 384] if state_dict["decoder.conv_in.bias"].shape[0] == 384 else config["block_out_channels"]
+
             with modeling_utils.no_init_weights():
                 with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
                     model = AutoencoderKLFlux2.from_config(config)
