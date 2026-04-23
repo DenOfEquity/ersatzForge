@@ -746,7 +746,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "SDXL Shift": opts.sdxl_flow_shift if dynamic_args.get('SDXL_flow', False) else None,
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
     })
-    if noise_source_type == 'Perlin':
+    if noise_source_type in ["Perlin", "Perlin (GPU)"]:
         generation_params.update({
             "Perlin detail": opts.perlin_detail,
             "Perlin octaves": opts.perlin_octaves,
