@@ -42,10 +42,8 @@ class AnimaTextProcessingEngine:
         def next_chunk():
             nonlocal chunk
 
-            if not chunk.qwen_tokens:
-                chunk.qwen_tokens.append(self.id_pad)
-                chunk.qwen_multipliers.append(1.0)
-
+            chunk.qwen_tokens.append(self.id_pad)
+            chunk.qwen_multipliers.append(1.0)
             chunk.t5_tokens.append(self.id_end)
             chunk.t5_multipliers.append(1.0)
 
@@ -62,7 +60,7 @@ class AnimaTextProcessingEngine:
             chunk.t5_tokens.extend(T5_tokens)
             chunk.t5_multipliers.extend([weight] * len(T5_tokens))
 
-        if not chunks:
+        if chunk.qwen_tokens or not chunks:
             next_chunk()
 
         return chunks
@@ -76,31 +74,39 @@ class AnimaTextProcessingEngine:
             emphasis.last_extra_generation_params["Emphasis"] = self.emphasis.name
 
         for line in texts:
-            if line not in cache:
+            if line in cache:
+                result = cache[line]
+            else:
                 chunks: list[PromptChunk] = self.tokenize_line(line)
                 line_z_values = []
+                t5_tokens = []
+                t5_multipliers = []
 
-                for i, chunk in enumerate(chunks):
+                for chunk in chunks:
                     z: torch.Tensor = self.process_tokens([chunk.qwen_tokens], [chunk.qwen_multipliers])[0]
+                    line_z_values.append(z)
+                    t5_tokens.append(torch.tensor(chunk.t5_tokens, dtype=torch.int))
+                    t5_multipliers.append(torch.tensor(chunk.t5_multipliers))
 
-                    if i == 0:
-                        result = self.anima_preprocess(
-                                    z,
-                                    torch.tensor(chunk.t5_tokens, dtype=torch.int),
-                                    torch.tensor(chunk.t5_multipliers),
-                                )
-                    else:
-                        result = self.anima_preprocess(
-                                    z[1:],
-                                    torch.tensor(chunk.t5_tokens[1:], dtype=torch.int),
-                                    torch.tensor(chunk.t5_multipliers[1:]),
-                                )
+                count_z = len(line_z_values)
+                for i in range(0, count_z-1):
+                    line_z_values[i] = line_z_values[i][:-1]
+                    t5_tokens[i] = t5_tokens[i][:-1]
+                    t5_multipliers[i] = t5_multipliers[i][:-1]
 
-                    line_z_values.append(result)
+                line_z_values = torch.cat(line_z_values, dim=0, )
+                t5_tokens = torch.cat(t5_tokens, dim=0, )
+                t5_multipliers = torch.cat(t5_multipliers, dim=0, )
 
-                cache[line] = torch.cat(line_z_values, dim=0, )
+                result = self.anima_preprocess(
+                    line_z_values,
+                    t5_tokens,
+                    t5_multipliers,
+                )
 
-            zs.append(cache[line])
+                cache[line] = result
+
+            zs.extend(result)
 
         return zs
 
