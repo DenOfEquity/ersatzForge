@@ -252,41 +252,44 @@ def create_ui():
 
                             with gr.Column(elem_id="txt2img_dimensions_row", elem_classes="dimensions-tools"):
                                 QuickSetList = [
-                                    "QuickSet", 
-                                    "2048 × 512",    "1728 × 576",    "1408 × 704",    "1280 × 768",    "1216 × 832",
+                                    "", 
+                                    "2048 × 512",    "1728 × 576",    "1280 × 768",    "1216 × 832",
                                     "1024 × 1024",
-                                    "832 × 1216",    "768 × 1280",    "704 × 1408",    "576 × 1728",    "512 × 2048",
-                                    "21 : 9", "2 : 1", "16 : 9", "3 : 2", "4 : 3",
+                                    "832 × 1216",    "768 × 1280",    "576 × 1728",    "512 × 2048",
+                                    "21 : 9", "2 : 1", "16 : 9", "ɸ : 1", "3 : 2", "4 : 3",
                                     "1 : 1",
-                                    "3 : 4", "2 : 3", "9 : 16", "1 : 2","9 : 21",
+                                    "3 : 4", "2 : 3", "1 : ɸ", "9 : 16", "1 : 2","9 : 21",
                                     "÷ 2", "× 2",
                                 ]
                                 def set_res(setting, width, height):
-                                    match setting:
-                                        case "QuickSet":
-                                            return "QuickSet", gr.Skip(), gr.Skip()
-                                        case "÷ 2":
-                                            width //= 2
-                                            height //= 2
-                                        case "× 2":
-                                            width *= 2
-                                            height *= 2
-                                        case _:
-                                            if " : " in setting:
-                                                aspect = setting.split(" : ", 2)
-                                                ratio = float(aspect[0]) / float(aspect[1])
-                                                num_pixels = width * height
-                                                width = (num_pixels * ratio) ** 0.5
-                                                height = 16 * round((width / ratio) / 16)
-                                                width = height * ratio
-                                            else:
-                                                width, height = setting.split("×", 2)
-                                                width = float(width)
-                                                height = float(height)
-                                    return "QuickSet", int(16 * round(width/16)), int(16 * round(height / 16))
+                                    setting = setting.strip()
+                                    if setting.startswith(("÷", "/")):
+                                        factor = float(setting[1:])
+                                        width /= factor
+                                        height /= factor
+                                    elif setting.startswith(("×", "*", "x")):
+                                        factor = float(setting[1:])
+                                        width *= factor
+                                        height *= factor
+                                    elif ":" in setting:
+                                        setting = setting.replace("ɸ", "1.618034")
+                                        aspect = setting.split(" : ", 2)
+                                        ratio = float(aspect[0]) / float(aspect[1])
+                                        num_pixels = width * height
+                                        width = (num_pixels * ratio) ** 0.5
+                                        height = 16 * round((width / ratio) / 16)
+                                        width = height * ratio
+                                    elif "×" in setting:
+                                        width, height = setting.split("×", 2)
+                                        width = float(width)
+                                        height = float(height)
+                                    else:
+                                        return "", gr.skip(), gr.skip()
+
+                                    return "", int(16 * round(width/16)), int(16 * round(height / 16))
 
                                 res_switch_btn = ToolButton(value=switch_values_symbol, elem_id="txt2img_res_switch_btn", tooltip="Switch width/height")
-                                quick_set = gr.Dropdown(show_label=False, choices=QuickSetList, value="QuickSet", type="value")
+                                quick_set = gr.Dropdown(show_label=False, choices=QuickSetList, value="", type="value", allow_custom_value=True)
 
                                 res_switch_btn.click(fn=lambda w, h: (h, w), inputs=[width, height], outputs=[width, height], show_progress='hidden', queue=False)
                                 quick_set.input(fn=set_res, inputs=[quick_set, width, height], outputs=[quick_set, width, height], show_progress="hidden")
