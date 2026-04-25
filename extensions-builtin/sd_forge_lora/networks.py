@@ -31,7 +31,6 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
     lora_clip, lora_unmatch = load_lora(lora_unmatch, clip_keys)
 
     if len(lora_unmatch) > 12:
-        # print (lora_unmatch.keys())
         print(f"{cc.WARNING}[LORA] apparent version mismatch{cc.RESET} ({cc.MINOR}{len(lora_unmatch)} keys{cc.RESET}) for {model_flag}: {filename}")
 
     del lora, lora_unmatch
@@ -43,18 +42,22 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
         loaded_keys = new_model.add_patches(filename=filename, patches=lora_unet, strength_patch=strength_model, online_mode=online_mode)
         skipped_keys = [item for item in lora_unet if item not in loaded_keys]
         if len(skipped_keys) > 12:
-            print(f"{cc.WARNING}[LORA] Mismatch{cc.RESET} {filename} for {model_flag}-UNet with {cc.MINOR}{len(skipped_keys)} keys mismatched{cc.RESET} in {len(loaded_keys)} keys")
+            print(f"{cc.WARNING}[LORA] Mismatch{cc.RESET} {filename} for {model_flag}-{cc.LOAD2}UNet{cc.RESET} with {cc.MINOR}{len(skipped_keys)} keys mismatched{cc.RESET} and {len(loaded_keys)} loaded keys")
         else:
-            print(f"{cc.LOAD2}[LORA] Loaded{cc.RESET} {filename} for {model_flag}-UNet with {len(loaded_keys)} keys at weight {strength_model} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
+            print(f"{cc.LOAD2}[LORA] Loaded{cc.RESET} {filename} for {model_flag}-{cc.LOAD2}UNet{cc.RESET} with {len(loaded_keys)} keys at weight {strength_model} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
+
+        if len(loaded_keys) > 0:
             model = new_model
 
     if new_clip is not None and len(lora_clip) > 0:
         loaded_keys = new_clip.add_patches(filename=filename, patches=lora_clip, strength_patch=strength_clip, online_mode=online_mode)
         skipped_keys = [item for item in lora_clip if item not in loaded_keys]
         if len(skipped_keys) > 12:
-            print(f"{cc.WARNING}[LORA] Mismatch{cc.RESET} {filename} for {model_flag}-CLIP with {cc.MINOR}{len(skipped_keys)} keys mismatched{cc.RESET} in {len(loaded_keys)} keys")
+            print(f"{cc.WARNING}[LORA] Mismatch{cc.RESET} {filename} for {model_flag}-{cc.LOAD2}CLIP{cc.RESET} with {cc.MINOR}{len(skipped_keys)} keys mismatched{cc.RESET} and {len(loaded_keys)} loaded keys")
         else:
-            print(f"{cc.LOAD2}[LORA] Loaded{cc.RESET} {filename} for {model_flag}-CLIP with {len(loaded_keys)} keys at weight {strength_clip} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
+            print(f"{cc.LOAD2}[LORA] Loaded{cc.RESET} {filename} for {model_flag}-{cc.LOAD2}CLIP{cc.RESET} with {len(loaded_keys)} keys at weight {strength_clip} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
+
+        if len(loaded_keys) > 0:
             clip = new_clip
 
     return model, clip
