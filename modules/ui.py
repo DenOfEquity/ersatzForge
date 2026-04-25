@@ -112,7 +112,9 @@ def resize_from_to_html(width, height, scale_by):
     target_width  = factor * ((target_width  + (factor // 2)) // factor)
     target_height = factor * ((target_height + (factor // 2)) // factor)
 
-    return gr.Slider(info=f"resize: from {width}×{height} to {target_width}×{target_height}")
+    message = f"resize: from {width}×{height} to {target_width}×{target_height}"
+
+    return gr.Slider(info=message), message
 
 
 def process_interrogate(interrogation_function, mode, ii_input_dir, ii_output_dir, *ii_singles):
@@ -570,12 +572,14 @@ def create_ui():
 
                                     with gr.Tab(label="Resize by", id="by", elem_id="img2img_tab_resize_by") as tab_scale_by:
                                         scale_by = gr.Slider(info="(no image)", minimum=0.05, maximum=4.0, step=0.01, label="Scale", value=1.0, elem_id="img2img_scale")
+                                        scale_by_html = FormHTML("", elem_id="img2img_scale_resolution_preview", visible=False)
+                                        # FormHTML for compatibility with ForgeCouple
 
                                     on_change_args = dict(
                                         fn=resize_from_to_html,
                                         js="currentImg2imgSourceResolution",
                                         inputs=[dummy_component, dummy_component, scale_by],
-                                        outputs=scale_by,
+                                        outputs=[scale_by, scale_by_html],
                                         show_progress='hidden',
                                     )
 
