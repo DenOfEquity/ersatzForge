@@ -268,6 +268,16 @@ def load_lora(lora, to_load):
 def model_lora_keys_clip(model, key_map={}):
     sdk = model.state_dict().keys()
 
+    # Anima
+    if "qwen3.llm_adapter.embed.weight" in sdk:     # LLM adapter unique to Anima, shouldn't match any other Qwen3 model
+        text_model_lora_key = "lora_te_layers_{}_{}"
+        for b in range(28):
+            for c in LORA_CLIP_MAP:
+                k = "qwen3.model.layers.{}.{}.weight".format(b, c)
+                if k in sdk:
+                    lora_key = text_model_lora_key.format(b, LORA_CLIP_MAP[c])
+                    key_map[lora_key] = k
+
     text_model_lora_key = "lora_te_text_model_encoder_layers_{}_{}"
     clip_l_present = False
     for b in range(32): #TODO: clean up
