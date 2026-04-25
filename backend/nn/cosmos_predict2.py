@@ -155,7 +155,8 @@ class LearnablePosEmbAxis(nn.Module):
         )
 
         norm = torch.linalg.vector_norm(emb, dim=-1, keepdim=True, dtype=torch.float32)
-        norm = torch.add(1e-6, norm, alpha=(norm.numel() / emb.numel()) ** 0.5)
+
+        norm.add_(1e-6, alpha=(norm.numel() / emb.numel()) ** 0.5)
         return emb / norm.to(emb.dtype)
 
 
@@ -172,35 +173,6 @@ class GPT2FeedForward(nn.Module):
         x = self.activation(x)
         x = self.layer2(x)
         return x
-
-
-def torch_attention_op(q_B_S_H_D: torch.Tensor, k_B_S_H_D: torch.Tensor, v_B_S_H_D: torch.Tensor) -> torch.Tensor:
-    """Computes multi-head attention using PyTorch's native implementation.
-
-    This function provides a PyTorch backend alternative to Transformer Engine's attention operation.
-    It rearranges the input tensors to match PyTorch's expected format, computes scaled dot-product
-    attention, and rearranges the output back to the original format.
-
-    The input tensor names use the following dimension conventions:
-
-    - B: batch size
-    - S: sequence length
-    - H: number of attention heads
-    - D: head dimension
-
-    Args:
-        q_B_S_H_D: Query tensor with shape (batch, seq_len, n_heads, head_dim)
-        k_B_S_H_D: Key tensor with shape (batch, seq_len, n_heads, head_dim)
-        v_B_S_H_D: Value tensor with shape (batch, seq_len, n_heads, head_dim)
-
-    Returns:
-        Attention output tensor with shape (batch, seq_len, n_heads * head_dim)
-    """
-    in_shape = q_B_S_H_D.shape
-    q_B_H_S_D = rearrange(q_B_S_H_D, "b ... h k -> b h ... k").view(in_shape[0], in_shape[-2], -1, in_shape[-1])
-    k_B_H_S_D = rearrange(k_B_S_H_D, "b ... h v -> b h ... v").view(in_shape[0], in_shape[-2], -1, in_shape[-1])
-    v_B_H_S_D = rearrange(v_B_S_H_D, "b ... h v -> b h ... v").view(in_shape[0], in_shape[-2], -1, in_shape[-1])
-    return attention_function(q_B_H_S_D, k_B_H_S_D, v_B_H_S_D, in_shape[-2], skip_reshape=True)
 
 
 class Attention(nn.Module):
@@ -259,12 +231,9 @@ class Attention(nn.Module):
         self.k_norm = nn.RMSNorm(self.head_dim, eps=1e-6)
 
         self.v_proj = nn.Linear(context_dim, inner_dim, bias=False)
-        self.v_norm = nn.Identity()
 
         self.output_proj = nn.Linear(inner_dim, query_dim, bias=False)
         self.output_dropout = nn.Dropout(dropout) if dropout > 1e-4 else nn.Identity()
-
-        self.attn_op = torch_attention_op
 
     @staticmethod
     def apply_rotary_pos_emb(t: torch.Tensor, freqs: torch.Tensor) -> torch.Tensor:
@@ -272,40 +241,6 @@ class Attention(nn.Module):
         t_out = freqs[..., 0] * t_[..., 0] + freqs[..., 1] * t_[..., 1]
         t_out = t_out.movedim(-1, -2).reshape(*t.shape).type_as(t)
         return t_out
-
-    def compute_qkv(
-        self,
-        x: torch.Tensor,
-        context: Optional[torch.Tensor] = None,
-        rope_emb: Optional[torch.Tensor] = None,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        q = self.q_proj(x)
-        context = x if context is None else context
-        k = self.k_proj(context)
-        v = self.v_proj(context)
-
-        q = rearrange(q, "b ... (h d) -> b ... h d", h=self.n_heads, d=self.head_dim)
-        k = rearrange(k, "b ... (h d) -> b ... h d", h=self.n_heads, d=self.head_dim)
-        v = rearrange(v, "b ... (h d) -> b ... h d", h=self.n_heads, d=self.head_dim)
-
-        def apply_norm_and_rotary_pos_emb(
-            q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, rope_emb: Optional[torch.Tensor]
-        ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-            q = self.q_norm(q)
-            k = self.k_norm(k)
-
-            if self.is_selfattn and rope_emb is not None:  # only apply to self-attention!
-                q = self.apply_rotary_pos_emb(q, rope_emb)
-                k = self.apply_rotary_pos_emb(k, rope_emb)
-            return q, k, v
-
-        q, k, v = apply_norm_and_rotary_pos_emb(q, k, v, rope_emb)
-
-        return q, k, v
-
-    def compute_attention(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
-        result = self.attn_op(q, k, v)  # [B, S, H, D]
-        return self.output_dropout(self.output_proj(result))
 
     def forward(
         self,
@@ -319,8 +254,29 @@ class Attention(nn.Module):
             x (Tensor): The query tensor of shape [B, Mq, K]
             context (Optional[Tensor]): The key tensor of shape [B, Mk, K] or use x as context [self attention] if None
         """
-        q, k, v = self.compute_qkv(x, context, rope_emb=rope_emb)
-        return self.compute_attention(q, k, v)
+        if context is None:
+            context = x
+        q = self.q_proj(x)
+        q = rearrange(q, "b ... (h d) -> b ... h d", h=self.n_heads, d=self.head_dim)
+        q = self.q_norm(q)
+        if self.is_selfattn and rope_emb is not None:  # only apply to self-attention!
+            q = self.apply_rotary_pos_emb(q, rope_emb)
+        q = rearrange(q, "b ... h d -> b h (...) d")
+
+
+        k = self.k_proj(context)
+        k = rearrange(k, "b ... (h d) -> b ... h d", h=self.n_heads, d=self.head_dim)
+        k = self.k_norm(k)
+        if self.is_selfattn and rope_emb is not None:  # only apply to self-attention!
+            k = self.apply_rotary_pos_emb(k, rope_emb)
+        k = rearrange(k, "b ... h d -> b h (...) d")
+
+        v = self.v_proj(context)
+        v = rearrange(v, "b ... (h d) -> b h ... d", h=self.n_heads, d=self.head_dim)
+
+        result = attention_function(q, k, v, self.n_heads, skip_reshape=True)
+
+        return self.output_dropout(self.output_proj(result))
 
 
 class Timesteps(nn.Module):
@@ -329,7 +285,6 @@ class Timesteps(nn.Module):
         self.num_channels = num_channels
 
     def forward(self, timesteps_B_T: torch.Tensor) -> torch.Tensor:
-        assert timesteps_B_T.ndim == 2, f"Expected 2D input, got {timesteps_B_T.ndim}"
         timesteps = timesteps_B_T.flatten().to(torch.float32)
         half_dim = self.num_channels // 2
         exponent = -math.log(10000) * torch.arange(half_dim, dtype=torch.float32, device=timesteps.device)
@@ -338,11 +293,12 @@ class Timesteps(nn.Module):
         emb = torch.exp(exponent)
         emb = timesteps[:, None].to(torch.float32) * emb[None, :]
 
-        sin_emb = torch.sin(emb)
-        cos_emb = torch.cos(emb)
-        emb = torch.cat([cos_emb, sin_emb], dim=-1)
-
-        return rearrange(emb, "(b t) d -> b t d", b=timesteps_B_T.shape[0], t=timesteps_B_T.shape[1])
+        l = emb.shape[1]
+        emb_ = torch.empty((emb.shape[0], 1, l*2), device=emb.device, dtype=emb.dtype)
+        emb_[..., :l] = torch.cos(emb).unsqueeze(1)
+        emb_[..., l:] = torch.sin(emb).unsqueeze(1)
+        
+        return emb_
 
 
 class TimestepEmbedding(nn.Module):
@@ -396,8 +352,6 @@ class PatchEmbed(nn.Module):
         out_channels: int = 768,
     ):
         super().__init__()
-        # self.spatial_patch_size = spatial_patch_size
-        # self.temporal_patch_size = temporal_patch_size
 
         self.proj = nn.Sequential(
             Rearrange(
@@ -458,7 +412,6 @@ class FinalLayer(nn.Module):
         self.hidden_size = hidden_size
         n_adaln_chunks = 2
         self.use_adaln_lora = use_adaln_lora
-        # self.adaln_lora_dim = adaln_lora_dim
         if use_adaln_lora:
             self.adaln_modulation = nn.Sequential(
                 nn.SiLU(),
@@ -477,28 +430,13 @@ class FinalLayer(nn.Module):
         adaln_lora_B_T_3D: Optional[torch.Tensor] = None,
     ):
         if self.use_adaln_lora:
-            assert adaln_lora_B_T_3D is not None
             shift_B_T_D, scale_B_T_D = (
                 self.adaln_modulation(emb_B_T_D) + adaln_lora_B_T_3D[:, :, : 2 * self.hidden_size]
             ).chunk(2, dim=-1)
         else:
             shift_B_T_D, scale_B_T_D = self.adaln_modulation(emb_B_T_D).chunk(2, dim=-1)
 
-        shift_B_T_1_1_D, scale_B_T_1_1_D = rearrange(shift_B_T_D, "b t d -> b t 1 1 d"), rearrange(
-            scale_B_T_D, "b t d -> b t 1 1 d"
-        )
-
-        def _fn(
-            _x_B_T_H_W_D: torch.Tensor,
-            _norm_layer: nn.Module,
-            _scale_B_T_1_1_D: torch.Tensor,
-            _shift_B_T_1_1_D: torch.Tensor,
-        ) -> torch.Tensor:
-            return _norm_layer(_x_B_T_H_W_D) * (1 + _scale_B_T_1_1_D) + _shift_B_T_1_1_D
-
-        x_B_T_H_W_D = _fn(x_B_T_H_W_D, self.layer_norm, scale_B_T_1_1_D, shift_B_T_1_1_D)
-        x_B_T_H_W_O = self.linear(x_B_T_H_W_D)
-        return x_B_T_H_W_O
+        return self.linear( torch.addcmul(shift_B_T_D[:,:, None, None, :], self.layer_norm(x_B_T_H_W_D), scale_B_T_D[:,:, None, None, :].add_(1)) )
 
 
 class Block(nn.Module):
@@ -586,33 +524,12 @@ class Block(nn.Module):
             shift_cross_attn_B_T_D, scale_cross_attn_B_T_D, gate_cross_attn_B_T_D = self.adaln_modulation_cross_attn(emb_B_T_D).chunk(3, dim=-1)
             shift_mlp_B_T_D, scale_mlp_B_T_D, gate_mlp_B_T_D = self.adaln_modulation_mlp(emb_B_T_D).chunk(3, dim=-1)
 
-        # Reshape tensors from (B, T, D) to (B, T, 1, 1, D) for broadcasting
-        shift_self_attn_B_T_1_1_D = rearrange(shift_self_attn_B_T_D, "b t d -> b t 1 1 d")
-        scale_self_attn_B_T_1_1_D = rearrange(scale_self_attn_B_T_D, "b t d -> b t 1 1 d")
-        gate_self_attn_B_T_1_1_D  = rearrange(gate_self_attn_B_T_D,  "b t d -> b t 1 1 d")
-
-        shift_cross_attn_B_T_1_1_D = rearrange(shift_cross_attn_B_T_D, "b t d -> b t 1 1 d")
-        scale_cross_attn_B_T_1_1_D = rearrange(scale_cross_attn_B_T_D, "b t d -> b t 1 1 d")
-        gate_cross_attn_B_T_1_1_D  = rearrange(gate_cross_attn_B_T_D,  "b t d -> b t 1 1 d")
-
-        shift_mlp_B_T_1_1_D = rearrange(shift_mlp_B_T_D, "b t d -> b t 1 1 d")
-        scale_mlp_B_T_1_1_D = rearrange(scale_mlp_B_T_D, "b t d -> b t 1 1 d")
-        gate_mlp_B_T_1_1_D  = rearrange(gate_mlp_B_T_D,  "b t d -> b t 1 1 d")
-
         B, T, H, W, D = x_B_T_H_W_D.shape
 
-        def _fn(_x_B_T_H_W_D, _norm_layer, _scale_B_T_1_1_D, _shift_B_T_1_1_D):
-            return _norm_layer(_x_B_T_H_W_D) * (1 + _scale_B_T_1_1_D) + _shift_B_T_1_1_D
+        normalized_x_B_T_H_W_D = torch.addcmul(shift_self_attn_B_T_D[:, :, None, None, :], self.layer_norm_self_attn(x_B_T_H_W_D), scale_self_attn_B_T_D[:, :, None, None, :].add_(1))
 
-        normalized_x_B_T_H_W_D = _fn(
-            x_B_T_H_W_D,
-            self.layer_norm_self_attn,
-            scale_self_attn_B_T_1_1_D,
-            shift_self_attn_B_T_1_1_D,
-        )
         result_B_T_H_W_D = rearrange(
             self.self_attn(
-                # normalized_x_B_T_HW_D,
                 rearrange(normalized_x_B_T_H_W_D, "b t h w d -> b (t h w) d"),
                 None,
                 rope_emb=rope_emb_L_1_1_D,
@@ -623,47 +540,29 @@ class Block(nn.Module):
             h=H,
             w=W,
         )
-        x_B_T_H_W_D = x_B_T_H_W_D + gate_self_attn_B_T_1_1_D * result_B_T_H_W_D
+        x_B_T_H_W_D.addcmul_(gate_self_attn_B_T_D[:, :, None, None, :], result_B_T_H_W_D)
 
-        def _x_fn(
-            _x_B_T_H_W_D: torch.Tensor,
-            layer_norm_cross_attn: Callable,
-            _scale_cross_attn_B_T_1_1_D: torch.Tensor,
-            _shift_cross_attn_B_T_1_1_D: torch.Tensor,
-        ) -> torch.Tensor:
-            _normalized_x_B_T_H_W_D = _fn(
-                _x_B_T_H_W_D, layer_norm_cross_attn, _scale_cross_attn_B_T_1_1_D, _shift_cross_attn_B_T_1_1_D
-            )
-            _result_B_T_H_W_D = rearrange(
-                self.cross_attn(
-                    rearrange(_normalized_x_B_T_H_W_D, "b t h w d -> b (t h w) d"),
-                    crossattn_emb,
-                    rope_emb=rope_emb_L_1_1_D,
-                    transformer_options=transformer_options,
-                ),
-                "b (t h w) d -> b t h w d",
-                t=T,
-                h=H,
-                w=W,
-            )
-            return _result_B_T_H_W_D
-
-        result_B_T_H_W_D = _x_fn(
-            x_B_T_H_W_D,
-            self.layer_norm_cross_attn,
-            scale_cross_attn_B_T_1_1_D,
-            shift_cross_attn_B_T_1_1_D,
+        normalized_x_B_T_H_W_D = torch.addcmul(shift_cross_attn_B_T_D[:, :, None, None, :], self.layer_norm_cross_attn(x_B_T_H_W_D), scale_cross_attn_B_T_D[:, :, None, None, :].add_(1))
+        
+        result_B_T_H_W_D = rearrange(
+            self.cross_attn(
+                rearrange(normalized_x_B_T_H_W_D, "b t h w d -> b (t h w) d"),
+                crossattn_emb,
+                rope_emb=rope_emb_L_1_1_D,
+                transformer_options=transformer_options,
+            ),
+            "b (t h w) d -> b t h w d",
+            t=T,
+            h=H,
+            w=W,
         )
-        x_B_T_H_W_D = result_B_T_H_W_D * gate_cross_attn_B_T_1_1_D + x_B_T_H_W_D
+        
+        x_B_T_H_W_D.addcmul_(result_B_T_H_W_D, gate_cross_attn_B_T_D[:, :, None, None, :])
 
-        normalized_x_B_T_H_W_D = _fn(
-            x_B_T_H_W_D,
-            self.layer_norm_mlp,
-            scale_mlp_B_T_1_1_D,
-            shift_mlp_B_T_1_1_D,
-        )
+        normalized_x_B_T_H_W_D = torch.addcmul(shift_mlp_B_T_D[:, :, None, None, :], self.layer_norm_mlp(x_B_T_H_W_D), scale_mlp_B_T_D[:, :, None, None, :].add_(1))
+
         result_B_T_H_W_D = self.mlp(normalized_x_B_T_H_W_D)
-        x_B_T_H_W_D = x_B_T_H_W_D + gate_mlp_B_T_1_1_D * result_B_T_H_W_D
+        x_B_T_H_W_D.addcmul_(result_B_T_H_W_D, gate_mlp_B_T_D[:, :, None, None, :])
         return x_B_T_H_W_D
 
 
@@ -1028,7 +927,6 @@ class LLM_Attention(nn.Module):
         value_states = self.v_proj(context).view(kv_shape).transpose(1, 2)
 
         if position_embeddings is not None:
-            assert position_embeddings_context is not None
             cos, sin = position_embeddings
             query_states = LLM_apply_rotary_pos_emb(query_states, cos, sin)
             cos, sin = position_embeddings_context
