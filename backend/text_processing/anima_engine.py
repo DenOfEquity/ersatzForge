@@ -106,7 +106,7 @@ class AnimaTextProcessingEngine:
 
                 cache[line] = result
 
-            zs.extend(result)
+            zs.extend([result])
 
         return zs
 
