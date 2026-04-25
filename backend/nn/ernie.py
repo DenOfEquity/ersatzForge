@@ -158,7 +158,7 @@ class ErnieImageSharedAdaLNBlock(nn.Module):
         x_norm = torch.addcmul(shift_msa, x_norm, 1 + scale_msa)
 
         attn_out = self.self_attention(x_norm, image_rotary_emb=rotary_pos_emb)
-        x += torch.mul(gate_msa, attn_out)
+        x.addcmul_(gate_msa, attn_out)
 
         x_norm = self.adaLN_mlp_ln(x)
         x_norm = torch.addcmul(shift_mlp, x_norm, 1 + scale_mlp)
@@ -246,12 +246,11 @@ class ERNIEImageModel(nn.Module):
 
         text_ids = torch.zeros((B, Tmax, 3), device=device, dtype=torch.float32)
         text_ids[:, :, 0] = torch.linspace(0, Tmax - 1, steps=Tmax, device=x.device, dtype=torch.float32)
-        index = float(Tmax)
 
-        image_ids = torch.zeros((H, W, 3), device=device, dtype=torch.float32)
-        image_ids[:, :, 0] = image_ids[:, :, 1] + index
-        image_ids[:, :, 1] = image_ids[:, :, 1] + torch.linspace(0.0, H - 1, steps=H, device=device, dtype=torch.float32).unsqueeze(1)
-        image_ids[:, :, 2] = image_ids[:, :, 2] + torch.linspace(0.0, W - 1, steps=W, device=device, dtype=torch.float32).unsqueeze(0)
+        image_ids = torch.empty((H, W, 3), device=device, dtype=torch.float32)
+        image_ids[:, :, 0] = 0 # was float(Tmax)
+        image_ids[:, :, 1] = torch.linspace(0.0, H - 1, steps=H, device=device, dtype=torch.float32).unsqueeze(1)
+        image_ids[:, :, 2] = torch.linspace(0.0, W - 1, steps=W, device=device, dtype=torch.float32).unsqueeze(0)
 
         image_ids = image_ids.view(1, N_img, 3).expand(B, -1, -1)
 
