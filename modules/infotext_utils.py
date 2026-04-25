@@ -473,6 +473,10 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
         # no Hires Module infotext, use default
         res['HiRes VAE/TE'] = ['Use same choices']
 
+    if 'ELLA' not in res:
+        res['ELLA'] = 'CLIP (normal)'
+
+
     return res
 
 
