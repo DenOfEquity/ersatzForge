@@ -312,6 +312,7 @@ class Attention(nn.Module):
         x: torch.Tensor,
         context: Optional[torch.Tensor] = None,
         rope_emb: Optional[torch.Tensor] = None,
+        transformer_options={}, # compatibility with ForgeCouple
     ) -> torch.Tensor:
         """
         Args:
@@ -571,6 +572,7 @@ class Block(nn.Module):
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_T_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
+        transformer_options={},
     ) -> torch.Tensor:
         if extra_per_block_pos_emb is not None:
             x_B_T_H_W_D = x_B_T_H_W_D + extra_per_block_pos_emb
@@ -614,6 +616,7 @@ class Block(nn.Module):
                 rearrange(normalized_x_B_T_H_W_D, "b t h w d -> b (t h w) d"),
                 None,
                 rope_emb=rope_emb_L_1_1_D,
+                transformer_options=transformer_options,
             ),
             "b (t h w) d -> b t h w d",
             t=T,
@@ -636,6 +639,7 @@ class Block(nn.Module):
                     rearrange(_normalized_x_B_T_H_W_D, "b t h w d -> b (t h w) d"),
                     crossattn_emb,
                     rope_emb=rope_emb_L_1_1_D,
+                    transformer_options=transformer_options,
                 ),
                 "b (t h w) d -> b t h w d",
                 t=T,
@@ -900,6 +904,8 @@ class MiniTrainDIT(nn.Module):
         x_B_C_T_H_W = x.unsqueeze(2)
         orig_shape = list(x_B_C_T_H_W.shape)
 
+        transformer_options = kwargs.get("transformer_options", {})
+
         # Reference latents: concat along temporal dim (Flux2-style) by 'inpaint' on civitai
         ref_latents = kwargs.get('ref_latents', None)
         if ref_latents is not None:
@@ -944,6 +950,7 @@ class MiniTrainDIT(nn.Module):
                 x_B_T_H_W_D,
                 t_embedding_B_T_D,
                 crossattn_emb,
+                transformer_options=transformer_options,
                 **block_kwargs,
             )
 
