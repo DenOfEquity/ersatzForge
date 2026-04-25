@@ -249,6 +249,9 @@ class StableDiffusion(ForgeDiffusionEngine):
         te_device = memory_management.text_encoder_device()
         off_device = memory_management.text_encoder_offload_device()
 
+        if end_steps == [-1]: # called from extension, e.g. ForgeCouple
+            return self.text_processing_engine(prompt)
+
         if "ELLA" in shared.opts.use_ELLA and end_steps != [-1]:
             if self.ella is None:
                 self.ella = ELLA()
@@ -330,8 +333,6 @@ class StableDiffusion(ForgeDiffusionEngine):
         else:
             cond = self.text_processing_engine(prompt)
             return cond, False
-
-        return cond
 
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt):
