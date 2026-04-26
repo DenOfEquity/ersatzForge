@@ -22,10 +22,14 @@ from packages.comfyui_lora_collection import utils
 LORA_CLIP_MAP = {
     "mlp.fc1": "mlp_fc1",
     "mlp.fc2": "mlp_fc2",
+    "mlp.down_proj": "mlp_down_proj",
+    "mlp.gate_proj": "mlp_gate_proj",
+    "mlp.up_proj": "mlp_up_proj",
     "self_attn.k_proj": "self_attn_k_proj",
     "self_attn.q_proj": "self_attn_q_proj",
     "self_attn.v_proj": "self_attn_v_proj",
     "self_attn.out_proj": "self_attn_out_proj",
+    "self_attn.o_proj": "self_attn_o_proj",
 }
 
 
@@ -277,6 +281,7 @@ def model_lora_keys_clip(model, key_map={}):
                 if k in sdk:
                     lora_key = text_model_lora_key.format(b, LORA_CLIP_MAP[c])
                     key_map[lora_key] = k
+        return sdk, key_map
 
     text_model_lora_key = "lora_te_text_model_encoder_layers_{}_{}"
     clip_l_present = False
