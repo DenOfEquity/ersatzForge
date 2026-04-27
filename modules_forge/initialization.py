@@ -45,6 +45,9 @@ def initialize_forge():
 
     from modules_forge.shared import diffusers_dir
 
+    if 'TRANSFORMERS_CACHE' not in os.environ:
+        os.environ['TRANSFORMERS_CACHE'] = diffusers_dir
+
     if 'HF_HOME' not in os.environ:
         os.environ['HF_HOME'] = diffusers_dir
 
@@ -59,6 +62,13 @@ def initialize_forge():
 
     if 'HF_HUB_CACHE' not in os.environ:
         os.environ['HF_HUB_CACHE'] = diffusers_dir
+
+    if 'HF_XET_CACHE' not in os.environ:
+        os.environ['HF_XET_CACHE'] = diffusers_dir
+
+    os.environ['HF_HUB_DISABLE_TELEMETRY'] = "1"
+    os.environ['DO_NOT_TRACK'] = "1"
+    
 
     import modules_forge.patch_basic
     modules_forge.patch_basic.patch_all_basics()
