@@ -21,19 +21,21 @@ class NeverOOMForForge(scripts.Script):
 
     def ui(self, *args, **kwargs):
         with gr.Accordion(open=False, label=self.title()):
-            unet_enabled = gr.Radio(label='For UNet', choices=['Normal', 'Offload nn.Linear modules', 'Maximize offload'], value='Normal')
-            vae_enabled = gr.Checkbox(label='Enabled for VAE (always tiled)', value=False)
+            unet_enabled = gr.Radio(label="For UNet", choices=["Normal", "Offload nn.Linear modules", "Maximize offload"], value='Normal')
+            vae_enabled = gr.Checkbox(label="Enabled for VAE (always tiled)", value=False)
             with gr.Row():
                 tile_size_x  = gr.Slider(label="Tile width (pixels)",   value=512, minimum=128, maximum=1536, step=16)
                 tile_size_y  = gr.Slider(label="Tile height (pixels)",  value=512, minimum=128, maximum=1536, step=16)
             with gr.Row():
                 tile_overlap = gr.Slider(label="Tile overlap (pixels)", value=64,  minimum=16,  maximum=256,  step=16)
                 tile_method = gr.Radio(label="Tile decode method", choices=["original", "diffusers", "DoE"], value="original")
-
-        return unet_enabled, vae_enabled, tile_size_x, tile_size_y, tile_overlap, tile_method
+            controlnet_on_cpu = gr.Checkbox(label="Enabled for ControlNet (stored on CPU)", value=False)
+            with gr.Row():
+                tiled_conv2d = gr.Dropdown(label="Tiled conv2d", choices=["Disabled", "64", "96", "128"], value="Disabled", type="value", scale=0)
+        return unet_enabled, vae_enabled, controlnet_on_cpu, tile_size_x, tile_size_y, tile_overlap, tile_method, tiled_conv2d
 
     def process(self, p, *script_args, **kwargs):
-        unet_enabled, vae_enabled, tile_size_x, tile_size_y, tile_overlap, tile_method = script_args
+        unet_enabled, vae_enabled, controlnet_on_cpu, tile_size_x, tile_size_y, tile_overlap, tile_method, tiled_conv2d = script_args
 
         if unet_enabled != 'Normal':
             print(f"{cc.SETTING}NeverOOM Enabled for UNet ({unet_enabled}){cc.RESET}")
@@ -47,14 +49,30 @@ class NeverOOMForForge(scripts.Script):
         else:
             p.sd_model.forge_objects.vae.tile_info = None
 
+        if controlnet_on_cpu:
+            print(f"{cc.SETTING}NeverOOM Enabled for ControlNets (always on CPU){cc.RESET}")
+        memory_management.controlnet_on_cpu = controlnet_on_cpu
+
         memory_management.VAE_ALWAYS_TILED = vae_enabled
+
+        match tiled_conv2d:
+            case "64":
+                memory_management.tiled_conv2d = 64
+            case "96":
+                memory_management.tiled_conv2d = 96
+            case "128":
+                memory_management.tiled_conv2d = 128
+            case _:
+                memory_management.tiled_conv2d = 0
+        if memory_management.tiled_conv2d != 0:
+            print(f"{cc.SETTING}NeverOOM Enabled tiled conv2d{cc.RESET}")
 
         if self.previous_unet_enabled != unet_enabled:
             memory_management.unload_all_models()
             match unet_enabled:
-                case 'Offload nn.Linear modules':
+                case "Offload nn.Linear modules":
                     memory_management.vram_state = memory_management.VRAMState.VERY_LOW_VRAM
-                case 'Maximize offload':
+                case "Maximize offload":
                     memory_management.vram_state = memory_management.VRAMState.NO_VRAM
                 case _:
                     memory_management.vram_state = self.original_vram_state
