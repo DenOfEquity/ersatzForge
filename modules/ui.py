@@ -103,7 +103,7 @@ def resize_from_to_html(width, height, scale_by):
     target_height = int(float(height) * scale_by)
 
     if not target_width or not target_height:
-        return gr.Slider(info="(no image)")
+        return gr.Slider(info="(no image)"), ""
 
     if sd_models.model_data.sd_model is not None:
         factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
