@@ -31,6 +31,9 @@ class CPUState(Enum):
 
 
 # Determine VRAM State
+controlnet_on_cpu = False
+tiled_conv2d = 0
+
 vram_state = VRAMState.NORMAL_VRAM
 set_vram_to = VRAMState.NORMAL_VRAM
 cpu_state = CPUState.GPU
@@ -411,21 +414,26 @@ def build_module_profile(model, gpu_memory_available):
     mem_counter = 0
     linear_save = 0
 
+
     for m in model.modules():
         if hasattr(m, "force_gpu"): # could tag modules with a priority, instead of just force - but seems low value
             # print ("module *suggested* for GPU.")
-            m.total_mem, m.weight_mem = module_size(m)
+            if not hasattr(m, "total_mem"):
+                m.total_mem, m.weight_mem = module_size(m)
             gpu_modules.append(m)
             mem_counter += m.total_mem
         elif vram_state == VRAMState.VERY_LOW_VRAM and m.__class__.__name__.lower() == 'linear':
-            m.total_mem, m.weight_mem = module_size(m)
+            if not hasattr(m, "total_mem"):
+                m.total_mem, m.weight_mem = module_size(m)
             linear_save += m.total_mem
             cpu_modules.append(m)
         elif hasattr(m, "parameters_manual_cast"):
-            m.total_mem, m.weight_mem = module_size(m)
+            if not hasattr(m, "total_mem"):
+                m.total_mem, m.weight_mem = module_size(m)
             all_modules.append(m)
         elif hasattr(m, "weight"):
-            m.total_mem, m.weight_mem = module_size(m)
+            if not hasattr(m, "total_mem"):
+                m.total_mem, m.weight_mem = module_size(m)
             if mem_counter + m.total_mem < gpu_memory_available:
                 gpu_modules.append(m)
                 mem_counter += m.total_mem
@@ -461,7 +469,7 @@ class LoadedModel:
         self.exclusive_memory = 0
 
     def model_load(self, memory_for_inference=0, keep_loaded=[]):
-        global vram_state
+        global vram_state, controlnet_on_cpu
 
         torch_dev = self.model.load_device
 
@@ -493,9 +501,13 @@ class LoadedModel:
             # VAE must be fully on one device
             free_memory(memory_for_inference, self.device, keep_loaded=keep_loaded)
             need_cpu_swap = False
+        elif 'ControlNet' in self.model.model.__class__.__name__ and controlnet_on_cpu:
+            gpu_memory_available = 0
+            need_cpu_swap = True
         elif vram_set_state == VRAMState.NO_VRAM:
             gpu_memory_available = 0
             need_cpu_swap = True
+
         elif vram_set_state in [VRAMState.VERY_LOW_VRAM, VRAMState.LOW_VRAM, VRAMState.NORMAL_VRAM]:
             model_require = self.exclusive_memory
             previously_loaded = self.inclusive_memory
