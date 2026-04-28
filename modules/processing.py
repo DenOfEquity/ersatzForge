@@ -436,19 +436,11 @@ class StableDiffusionProcessing:
 
         for cache in self.cond_cache:
             if cached_params == cache[0]:
-                shared.sd_model.extra_generation_params.update(cache[2])
                 return cache[1]
 
-        new_cache = [cached_params, None, None]
+        new_cache = [cached_params, None]
         with devices.autocast():
             new_cache[1] = function(shared.sd_model, required_prompts, steps, hires_steps, opts.use_old_scheduling)
-
-            import backend.text_processing.emphasis
-
-            last_extra_generation_params = backend.text_processing.emphasis.last_extra_generation_params.copy()
-            shared.sd_model.extra_generation_params.update(last_extra_generation_params)
-            new_cache[2] = last_extra_generation_params
-            backend.text_processing.emphasis.last_extra_generation_params = {}
 
         self.cond_cache.append(new_cache)
         if len(self.cond_cache) > 4: # increase?
@@ -753,10 +745,16 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
             "Perlin persistence": opts.perlin_persist,
         })
 
+    if opts.emphasis != "Original":
+        generation_params.update({"Emphasis": opts.emphasis, })
+
     if sd_models.model_data.sd_model.is_flux and opts.dynamicPE_flux > 0:
         generation_params.update({ "dynamicPE flux": opts.dynamicPE_flux, })
     if sd_models.model_data.sd_model.is_lumina2 and opts.dynamicPE_lumina2 > 0:
         generation_params.update({ "dynamicPE lumina2": opts.dynamicPE_lumina2, })
+
+    if opts.sd_vae_decode_method != "Full":
+        generation_params.update({ "VAE Decoder": opts.sd_vae_decode_method, })
 
     if opts.forge_unet_storage_dtype != 'Automatic':
         generation_params['Diffusion in Low Bits'] = opts.forge_unet_storage_dtype
@@ -990,6 +988,13 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 sigmas_backup = p.sd_model.forge_objects.unet.model.predictor.sigmas
                 p.sd_model.forge_objects.unet.model.predictor.set_sigmas(rescale_zero_terminal_snr_sigmas(p.sd_model.forge_objects.unet.model.predictor.sigmas))
 
+            def infotext(index=0, use_main_prompt=False):
+                return create_infotext(p, p.prompts, p.seeds, p.subseeds, use_main_prompt=use_main_prompt, index=index, all_negative_prompts=p.negative_prompts)
+
+            # build all infotexts now, in case user changes Settings during inference
+            for it in range(len(p.seeds)):
+                infotexts.append(infotext(it))
+
             samples_ddim = p.sample(conditioning=p.c, unconditional_conditioning=p.uc, seeds=p.seeds, subseeds=p.subseeds, subseed_strength=p.subseed_strength, prompts=p.prompts)
 
             # for x_sample in samples_ddim:
@@ -1008,8 +1013,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             else:
                 devices.test_for_nans(samples_ddim, "unet")
 
-                if opts.sd_vae_decode_method != 'Full':
-                    p.extra_generation_params['VAE Decoder'] = opts.sd_vae_decode_method
                 x_samples_ddim = decode_latent_batch(p.sd_model, samples_ddim, target_device=devices.cpu)
 
             x_samples_ddim = torch.stack(x_samples_ddim).to(torch.float32)
@@ -1031,8 +1034,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 p.scripts.postprocess_batch_list(p, batch_params, batch_number=n)
                 x_samples_ddim = batch_params.images
 
-            def infotext(index=0, use_main_prompt=False):
-                return create_infotext(p, p.prompts, p.seeds, p.subseeds, use_main_prompt=use_main_prompt, index=index, all_negative_prompts=p.negative_prompts)
 
             save_samples = p.save_samples()
 
@@ -1043,7 +1044,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 x_sample = x_sample.astype(np.uint8)
 
                 if save_samples and opts.save_images_before_postprocess:
-                    images.save_image(Image.fromarray(x_sample), p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=infotext(i), p=p, suffix="-before-postprocess")
+                    images.save_image(Image.fromarray(x_sample), p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=infotexts[i], p=p, suffix="-before-postprocess")
 
                 if opts.face_restoration_model != "None" and opts.face_restoration_before_scripts:
                     devices.torch_gc()
@@ -1061,7 +1062,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                     devices.torch_gc()
                     image = Image.fromarray(modules.face_restoration.restore_faces(np.array(image)))
                     devices.torch_gc()
-
 
                 mask_for_overlay = getattr(p, "mask_for_overlay", None)
 
@@ -1093,14 +1093,11 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                     p.scripts.postprocess_image_after_composite(p, pp)
                     image = pp.image
 
-                text = infotext(i)
-                infotexts.append(text)
-
                 if save_samples:
-                    images.save_image(image, p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=text, p=p)
+                    images.save_image(image, p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=infotexts[i], p=p)
 
                 if opts.enable_pnginfo:
-                    image.info["parameters"] = text
+                    image.info["parameters"] = infotexts[i]
                 output_images.append(image)
 
             del x_samples_ddim
@@ -1347,9 +1344,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 image = torch.from_numpy(np.expand_dims(image, axis=0))
                 image = image.to(shared.device, dtype=torch.float32)
 
-                if opts.sd_vae_encode_method != 'Full':
-                    self.extra_generation_params['VAE Encoder'] = opts.sd_vae_encode_method
-
                 samples = images_tensor_to_samples(image, approximation_indexes.get(opts.sd_vae_encode_method), self.sd_model)
                 decoded_samples = None
                 devices.torch_gc()
@@ -1493,8 +1487,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             decoded_samples = torch.from_numpy(np.array(batch_images))
             decoded_samples = decoded_samples.to(shared.device, dtype=torch.float32)
 
-            if opts.sd_vae_encode_method != 'Full':
-                self.extra_generation_params['VAE Encoder'] = opts.sd_vae_encode_method
             samples = images_tensor_to_samples(decoded_samples, approximation_indexes.get(opts.sd_vae_encode_method))
 
             image_conditioning = self.img2img_image_conditioning(decoded_samples, samples)
