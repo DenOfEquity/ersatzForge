@@ -258,21 +258,6 @@ class ClassicTextProcessingEngine:
             z = self.process_tokens(tokens, multipliers)
             zs.append(z)
 
-        # if used_embeddings:
-            # names = []
-
-            # for name, embedding in used_embeddings.items():
-                # print(f'[Textual Inversion] Used Embedding [{name}] in CLIP of [{self.embedding_key}]')
-                # names.append(name.replace(":", "").replace(",", ""))
-
-            # if "TI" in last_extra_generation_params:
-                # last_extra_generation_params["TI"] += ", " + ", ".join(names)
-            # else:
-                # last_extra_generation_params["TI"] = ", ".join(names)
-
-        if any(x for x in texts if "(" in x or "[" in x) and self.emphasis.name != "Original":
-            emphasis.last_extra_generation_params["Emphasis"] = self.emphasis.name
-
         if self.return_pooled:
             return torch.hstack(zs), zs[0].pooled
         else:

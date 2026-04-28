@@ -80,8 +80,6 @@ class Qwen3TextProcessingEngine:
         cache = {}
 
         self.emphasis = emphasis.get_current_option(opts.emphasis)()
-        if any(x for x in texts if "(" in x or "[" in x) and self.emphasis.name != "Original":
-            emphasis.last_extra_generation_params["Emphasis"] = self.emphasis.name
 
         for line in texts:
             if line in cache:
@@ -100,20 +98,19 @@ class Qwen3TextProcessingEngine:
                 # remove start/end tokens
                 if self.is_flux2:
                     s = 3
-                    e = 11
+                    e = -11
                 elif self.is_ERNIE:
                     s = 1
-                    e = 0
+                    e = None
                 else:
                     s = 3
-                    e = 5
+                    e = -5
                 count_z = len(line_z_values)
                 for i in range(count_z):
                     if i - 1 >= 0 and i + 1 < count_z:
-                        line_z_values[i] = line_z_values[i][s:-e] if e else line_z_values[i][s:]
+                        line_z_values[i] = line_z_values[i][s:e]
                     elif i + 1 < count_z:
-                        if e:
-                            line_z_values[i] = line_z_values[i][:-e]
+                        line_z_values[i] = line_z_values[i][:e]
                     elif i - 1 >= 0:
                         line_z_values[i] = line_z_values[i][s:]
 

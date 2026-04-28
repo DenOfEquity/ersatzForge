@@ -62,8 +62,6 @@ class GemmaTextProcessingEngine:
         cache = {}
 
         self.emphasis = emphasis.get_current_option(opts.emphasis)()
-        if any(x for x in texts if "(" in x or "[" in x) and self.emphasis.name != "Original":
-            emphasis.last_extra_generation_params["Emphasis"] = self.emphasis.name
 
         for line in texts:
             if line != "":
