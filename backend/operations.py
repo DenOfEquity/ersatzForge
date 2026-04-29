@@ -543,10 +543,10 @@ class ForgeOperationsGGUF(ForgeOperations):
             super().__init__(*args, **kwargs)
             # self.parameters_manual_cast = current_manual_cast_enabled
             self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype))
-            # self.bias = None
+            self.bias = None
 
         def reset_parameters(self):
-            # self.bias = None
+            self.bias = None
             return None
 
         def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
