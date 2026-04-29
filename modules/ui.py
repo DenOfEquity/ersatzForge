@@ -585,16 +585,15 @@ def create_ui():
 
                                     scale_by.change(**on_change_args)
 
-                                    def updateWH (img, w, h):
+                                    def updateWH (img):
                                         if img and shared.opts.img2img_autosize:
                                             return img.size[0], img.size[1]
                                         else:
-                                            return w, h
+                                            return gr.skip(), gr.skip()
 
                                     img_sources = [init_img.background, init_img_inpaint]
                                     for i in img_sources:
-                                        i.change(fn=updateWH, inputs=[i, width, height], outputs=[width, height], show_progress='hidden')
-                                        i.change(**on_change_args)
+                                        i.change(fn=updateWH, inputs=[i], outputs=[width, height], show_progress='hidden').then(**on_change_args)
 
                             tab_scale_to.select(fn=lambda: 0, inputs=None, outputs=[selected_scale_tab])
                             tab_scale_by.select(fn=lambda: 1, inputs=None, outputs=[selected_scale_tab])
