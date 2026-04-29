@@ -533,6 +533,7 @@ def replace_state_dict(sd, asd, guess):
 
     ##  identify model type
     flux_test_key = "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale"
+    flux_test_key2 = "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.weight"
     sd3_test_key = "model.diffusion_model.final_layer.adaLN_modulation.1.bias"
     legacy_test_key = "model.diffusion_model.input_blocks.4.1.transformer_blocks.0.attn2.to_k.weight"
     cosmos_test_key = "model.diffusion_model.net.blocks.0.adaln_modulation_cross_attn.1.weight"
@@ -549,7 +550,7 @@ def replace_state_dict(sd, asd, guess):
                 model_type = "xlrf"     # sdxl refiner model
             case 2048:
                 model_type = "sdxl"
-    elif flux_test_key in sd:
+    elif flux_test_key in sd or flux_test_key2 in sd:
         model_type = "flux"
     elif sd3_test_key in sd:
         model_type = "sd3"
