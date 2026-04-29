@@ -384,7 +384,6 @@ class Lumina2DiT(nn.Module):
             ]
         )
 
-        self.norm_final = nn.RMSNorm(dim, eps=norm_eps, elementwise_affine=True)
         self.final_layer = FinalLayer(dim, patch_size, self.out_channels, z_modulation=z_modulation)
 
         if self.pad_tokens_multiple is not None:
