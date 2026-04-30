@@ -989,11 +989,11 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 p.sd_model.forge_objects.unet.model.predictor.set_sigmas(rescale_zero_terminal_snr_sigmas(p.sd_model.forge_objects.unet.model.predictor.sigmas))
 
             def infotext(index=0, use_main_prompt=False):
-                return create_infotext(p, p.prompts, p.seeds, p.subseeds, use_main_prompt=use_main_prompt, index=index, all_negative_prompts=p.negative_prompts)
+                return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, use_main_prompt=use_main_prompt, index=index, all_negative_prompts=p.all_negative_prompts)
 
             # build all infotexts now, in case user changes Settings during inference
             for it in range(len(p.seeds)):
-                infotexts.append(infotext(it))
+                infotexts.append(infotext(it + n * p.batch_size)) 
 
             samples_ddim = p.sample(conditioning=p.c, unconditional_conditioning=p.uc, seeds=p.seeds, subseeds=p.subseeds, subseed_strength=p.subseed_strength, prompts=p.prompts)
 
