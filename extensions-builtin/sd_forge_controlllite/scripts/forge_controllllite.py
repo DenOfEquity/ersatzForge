@@ -30,7 +30,7 @@ class ControlLLLiteAnimaPatcher(ControlModelPatcher):
         self._lllite_net.to(device=device, dtype=dtype)
 
         # cond is (B, 3, H, W) in [0, 1]; conditioning1 expects [-1, 1]
-        cond_image = cond# * 2.0 - 1.0
+        cond_image = cond * 2.0 - 1.0
         self._lllite_net.set_cond_image(cond_image.to(device=device, dtype=dtype))
         self._lllite_net.set_multiplier(self.strength)
 
