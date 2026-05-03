@@ -417,6 +417,7 @@ def model_lora_keys_unet(model, key_map={}):
                 key_lora = k[:-len(".weight")]
                 key_map["diffusion_model.{}".format(key_lora)] = to
                 key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to
+                key_map["transformer.{}".format(key_lora)] = to
 
     if 'flux' in model.config.huggingface_repo.lower() or 'Chroma' == model.config.huggingface_repo: #Diffusers lora Flux
         diffusers_keys = utils.flux_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
@@ -426,5 +427,12 @@ def model_lora_keys_unet(model, key_map={}):
                 key_map["transformer.{}".format(k[:-len(".weight")])] = to  # simpletrainer and probably regular diffusers flux lora format
                 key_map["lycoris_{}".format(k[:-len(".weight")].replace(".", "_"))] = to  # simpletrainer lycoris
                 key_map["lora_transformer_{}".format(k[:-len(".weight")].replace(".", "_"))] = to  # onetrainer
+
+    if 'ernie' in model.config.huggingface_repo.lower():
+        for k in sdk:
+            if k.startswith("diffusion_model.") and k.endswith(".weight"):
+                key_lora = k[len("diffusion_model."):-len(".weight")]
+                key_map["transformer.{}".format(key_lora)] = k
+
 
     return sdk, key_map
