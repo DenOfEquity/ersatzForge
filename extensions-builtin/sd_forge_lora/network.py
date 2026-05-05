@@ -65,6 +65,22 @@ class NetworkOnDisk:
         elif str(self.metadata.get('ss_base_model_version', '')) == 'flux2_klein_9b':
             return 'SdVersion.Klein'
 
+        elif str(self.metadata.get('modelspec.architecture', '')).startswith('zimage'):
+            return 'SdVersion.Zimage'
+        elif str(self.metadata.get('ss_base_model_version', '')).lower() == 'zimage':
+            return 'SdVersion.Zimage'
+
+        elif str(self.metadata.get('modelspec.architecture', '')).startswith('anima'):
+            return 'SdVersion.Anima'
+        elif str(self.metadata.get('ss_base_model_version', '')) == 'anima':
+            return 'SdVersion.Anima'
+        elif str(self.metadata.get('ss_network_module', '')) == 'networks.lora_anima':
+            return 'SdVersion.Anima'
+
+        elif str(self.metadata.get('modelspec.architecture', '')).startswith('ernie'):
+            return 'SdVersion.ERNIE'
+        elif str(self.metadata.get('ss_base_model_version', '')).lower() == 'ernie_image':
+            return 'SdVersion.ERNIE'
 
         elif str(self.metadata.get('modelspec.architecture', '')) == 'stable-diffusion-3-3-5-medium/lora':
             return 'SdVersion.SD3'
@@ -86,22 +102,6 @@ class NetworkOnDisk:
         elif str(self.metadata.get('ss_base_model_version', '')).startswith('sd_v1'):
             return 'SdVersion.SD1'
 
-        elif str(self.metadata.get('modelspec.architecture', '')).startswith('zimage'):
-            return 'SdVersion.Zimage'
-        elif str(self.metadata.get('ss_base_model_version', '')).lower() == 'zimage':
-            return 'SdVersion.Zimage'
-
-        elif str(self.metadata.get('modelspec.architecture', '')).startswith('anima'):
-            return 'SdVersion.Anima'
-        elif str(self.metadata.get('ss_base_model_version', '')) == 'anima':
-            return 'SdVersion.Anima'
-        elif str(self.metadata.get('ss_network_module', '')) == 'networks.lora_anima':
-            return 'SdVersion.Anima'
-
-        elif str(self.metadata.get('modelspec.architecture', '')).startswith('ernie'):
-            return 'SdVersion.ERNIE'
-        elif str(self.metadata.get('ss_base_model_version', '')).lower() == 'ernie_image':
-            return 'SdVersion.ERNIE'
 
         return 'SdVersion.Unknown'
 
