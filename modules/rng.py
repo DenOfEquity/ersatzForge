@@ -256,7 +256,7 @@ class ImageRNG:
                 subnoise = randn(subseed, noise_shape)
 
             if noise_shape != self.shape:
-                noise = randn(seed, noise_shape)
+                noise = randn(seed, noise_shape, generator=generator)
             else:
                 noise = randn(seed, self.shape, generator=generator)
 
