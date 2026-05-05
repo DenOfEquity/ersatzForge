@@ -199,7 +199,8 @@ class ChatterboxTurboTTS:
         local_path = snapshot_download(
             repo_id=REPO_ID,
             # Optional: Filter to download only what you need
-            allow_patterns=["*.safetensors", "*.json", "*.txt", "*.pt", "*.model"]
+            allow_patterns=["*.safetensors", "*.json", "*.txt", "*.pt", "*.model"],
+            local_files_only=True,
         )
 
         return cls.from_local(local_path, device)
