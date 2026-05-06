@@ -655,28 +655,30 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
     os.makedirs(path, exist_ok=True)
 
     if forced_filename is None:
-        if short_filename or seed is None:
-            file_decoration = ""
-        elif hasattr(p, "override_settings"):
-            if grid:
-                file_decoration = p.override_settings.get("grid_filename_pattern")
-            else:
-                file_decoration = p.override_settings.get("samples_filename_pattern")
+        if short_filename or seed is None: # from Extras
+            basecount = get_next_sequence_number(path, "")
+            fullfn = os.path.join(path, f"{basecount:05}{suffix}.{extension}")
         else:
-            file_decoration = None
-
-        if file_decoration is None:
-            if grid:
-                file_decoration = opts.grid_filename_pattern or basename or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
+            if hasattr(p, "override_settings"):
+                if grid:
+                    file_decoration = p.override_settings.get("grid_filename_pattern")
+                else:
+                    file_decoration = p.override_settings.get("samples_filename_pattern")
             else:
-                file_decoration = opts.samples_filename_pattern or basename or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
+                file_decoration = None
 
-        initial_filename = namegen.apply(file_decoration)
-        if initial_filename == file_decoration:
-            basecount = get_next_sequence_number(path, initial_filename)
-            fullfn = os.path.join(path, f"{initial_filename}-{basecount:05}{suffix}.{extension}")
-        else:
-            fullfn = os.path.join(path, f"{initial_filename}{suffix}.{extension}")
+            if file_decoration is None:
+                if grid:
+                    file_decoration = opts.grid_filename_pattern or basename or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
+                else:
+                    file_decoration = opts.samples_filename_pattern or basename or ("[seed]" if opts.save_to_dirs else "[seed]-[prompt_spaces]")
+
+            initial_filename = namegen.apply(file_decoration)
+            if initial_filename == file_decoration:
+                basecount = get_next_sequence_number(path, initial_filename)
+                fullfn = os.path.join(path, f"{initial_filename}-{basecount:05}{suffix}.{extension}")
+            else:
+                fullfn = os.path.join(path, f"{initial_filename}{suffix}.{extension}")
     else:
         fullfn = os.path.join(path, f"{forced_filename}.{extension}")
 
