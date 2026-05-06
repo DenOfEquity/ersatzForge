@@ -62,16 +62,16 @@ class Toprow:
     def create_submit_box(self):
         with gr.Row(elem_id=f"{self.id_part}_generate_box", elem_classes=["generate-box"] + (["generate-box-compact"]), render=False) as submit_box:
             self.submit_box = submit_box
-            if self.id_part == "extras":
-                shared.opts.extras_save = True
-                autosave_extras = ToolButton(value="💾", variant="primary" if shared.opts.extras_save else "secondary")
+            
+            setattr(shared.opts, f"{self.id_part}_save", True)
+            autosave = ToolButton(value="💾", variant="primary", elem_id=f"{self.id_part}_autosave", tooltip=f"Autosave {self.id_part}")
+            def toggleAutosave():
+                new_setting = getattr(shared.opts, f"{self.id_part}_save", True) ^ True
+                setattr(shared.opts, f"{self.id_part}_save", new_setting)
+                print (f"[{self.id_part}] Autosave result(s): {new_setting}")
+                return gr.update(variant="primary" if new_setting else "secondary")
 
-                def toggleAutosaveExtras():
-                    shared.opts.extras_save ^= True
-                    print (f"[Extras] Autosave result(s): {shared.opts.extras_save}")
-                    return gr.update(variant="primary" if shared.opts.extras_save else "secondary")
-
-                autosave_extras.click(fn=toggleAutosaveExtras, inputs=None, outputs=[autosave_extras])
+            autosave.click(fn=toggleAutosave, inputs=None, outputs=[autosave])
 
             self.interrupt = gr.Button('Interrupt', elem_id=f"{self.id_part}_interrupt", elem_classes="generate-box-interrupt", tooltip="End generation")
             self.skip = gr.Button('Skip', elem_id=f"{self.id_part}_skip", elem_classes="generate-box-skip", tooltip="Stop generation of current batch and continues onto next batch")

@@ -473,9 +473,16 @@ class StableDiffusionProcessing:
     def parse_extra_network_prompts(self):
         self.prompts, self.extra_network_data = extra_networks.parse_prompts(self.prompts)
 
+    def check_autosave(self) -> bool:
+        if hasattr(self, "resize_mode"): # Img2img
+            return getattr(opts, "img2img_save", True)
+        else:                            # Txt2img; Extras uses different code path
+            return getattr(opts, "txt2img_save", True)
+        return True
+
     def save_samples(self) -> bool:
         """Returns whether generated images need to be written to disk"""
-        return opts.samples_save and not self.do_not_save_samples and not state.interrupted and not state.skipped
+        return self.check_autosave() and opts.samples_save and not self.do_not_save_samples and not state.interrupted and not state.skipped
 
 
 class Processed:
@@ -966,16 +973,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
             p.extra_generation_params.update(p.sd_model.extra_generation_params)
 
-            # params.txt should be saved after scripts.process_batch, since the
-            # infotext could be modified by that callback
-            # Example: a wildcard processed by process_batch sets an extra model
-            # strength, which is saved as "Model Strength: 1.0" in the infotext
-            if n == 0 and not shared.cmd_opts.no_prompt_history:
-                with open(os.path.join(paths.data_path, "params.txt"), "w", encoding="utf8") as file:
-                    processed = Processed(p, [])
-                    file.write(processed.infotext(p, 0))
-                    # also write append a permanent log? datetime: infotext
-
             for comment in p.sd_model.comments:
                 p.comment(comment)
 
@@ -1104,6 +1101,12 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
             devices.torch_gc()
 
+            # params.txt should be saved late, due to scripts.process_batch, HiResFix
+            if n == 0 and not shared.cmd_opts.no_prompt_history:
+                with open(os.path.join(paths.data_path, "params.txt"), "w", encoding="utf8") as file:
+                    # also write append a permanent log? datetime: infotext
+                    file.write(infotexts[0])
+
         if not infotexts:
             infotexts.append(Processed(p, []).infotext(p, 0))
 
@@ -1121,7 +1124,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                     grid.info["parameters"] = text
                 output_images.insert(0, grid)
                 index_of_first_image = 1
-            if opts.grid_save:
+            if opts.grid_save and p.check_autosave():
                 images.save_image(grid, p.outpath_grids, "grid", p.all_seeds[0], p.all_prompts[0], opts.grid_format, info=text, p=p, grid=True)
 
     if not p.disable_extra_networks and p.extra_network_data:
