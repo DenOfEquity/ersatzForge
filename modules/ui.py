@@ -291,7 +291,7 @@ def create_ui():
                                     return "", int(16 * round(width/16)), int(16 * round(height / 16))
 
                                 res_switch_btn = ToolButton(value=switch_values_symbol, elem_id="txt2img_res_switch_btn", tooltip="Switch width/height")
-                                quick_set = gr.Dropdown(show_label=False, choices=QuickSetList, value="", type="value", allow_custom_value=True)
+                                quick_set = gr.Dropdown(show_label=False, choices=QuickSetList, value="", type="value", allow_custom_value=True, elem_id="txt2img_quickset", tooltip="Resolution QuickSet")
 
                                 res_switch_btn.click(fn=lambda w, h: (h, w), inputs=[width, height], outputs=[width, height], show_progress='hidden', queue=False)
                                 quick_set.input(fn=set_res, inputs=[quick_set, width, height], outputs=[quick_set, width, height], show_progress="hidden")
