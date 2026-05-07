@@ -557,8 +557,6 @@ class ForgeCanvas {
             this.adjustInitialPositionAndScale();
             this.drawImage();
             this.updateBackgroundImageData();
-            this.history = [];
-            this.historyIndex == -1;
             this.saveState();
             document.getElementById(`imageInput_${this.uuid}`).value = null;
             document.getElementById(`uploadHint_${this.uuid}`).style.display = "none";
@@ -575,7 +573,7 @@ class ForgeCanvas {
             canvas.height = 1;
             this.adjustInitialPositionAndScale();
             this.drawImage();
-            this.saveState();
+            this.updateUndoRedoButtons();
         }
     }
 
@@ -586,8 +584,6 @@ class ForgeCanvas {
             const ctx = canvas.getContext("2d");
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(image, 0, 0);
-            this.history = [];
-            this.historyIndex == -1;
             this.saveState();
         };
         if (base64) {
@@ -596,7 +592,7 @@ class ForgeCanvas {
             const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
             const ctx = canvas.getContext("2d");
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            this.saveState();
+            this.updateUndoRedoButtons();
         }
     }
 
@@ -662,7 +658,6 @@ class ForgeCanvas {
         image.style.height = "0";
         this.history = [];
         this.historyIndex = -1;
-        this.saveState();
         if (!this.no_upload) {
             document.getElementById(`uploadHint_${this.uuid}`).style.display = "inline-block";
         }
@@ -681,6 +676,14 @@ class ForgeCanvas {
         this.updateDrawingData();
     }
 
+    restoreState() {
+        const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
+        const ctx = canvas.getContext("2d");
+        const imageData = this.history[this.historyIndex];
+        ctx.putImageData(imageData, 0, 0);
+        this.updateDrawingData();
+    }
+
     undo() {
         if (this.historyIndex > 0) {
             this.historyIndex--;
@@ -695,14 +698,6 @@ class ForgeCanvas {
             this.restoreState();
             this.updateUndoRedoButtons();
         }
-    }
-
-    restoreState() {
-        const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-        const ctx = canvas.getContext("2d");
-        const imageData = this.history[this.historyIndex];
-        ctx.putImageData(imageData, 0, 0);
-        this.updateDrawingData();
     }
 
     updateUndoRedoButtons() {
