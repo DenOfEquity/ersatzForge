@@ -14,7 +14,6 @@ from backend.utils import read_arbitrary_config, load_torch_file, beautiful_prin
 from backend.state_dict import try_filter_state_dict, load_state_dict, state_dict_prefix_replace
 from backend.operations import using_forge_operations
 from backend.nn.vae import IntegratedAutoencoderKL, AutoencoderKLFlux2
-from backend.nn.vae_wan import AutoencoderKLWan, AutoencoderQwen2D
 from backend.nn.vae_wan22 import AutoencoderKLWan22
 from backend.nn.clip import IntegratedCLIP
 from backend.nn.unet import IntegratedUNet2DConditionModel
@@ -92,15 +91,14 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             # check name+shape of key to optionally use Anzhc's 2D (single frame) model - quick test decoding 1024x1536, saved ~2GB peak VRAM
             key2 = "decoder.mid_block.resnets.0.norm1.gamma"
             if key2 in state_dict and state_dict[key2].shape == torch.Size([384, 1, 1]):
-                config = AutoencoderQwen2D.load_config(config_path)
-                with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
-                        model = AutoencoderQwen2D.from_config(config)
+                from backend.nn.vae_wan import AutoencoderQwen2D as Wan21VAE
             else:
-                config = AutoencoderKLWan.load_config(config_path)
-                with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
-                        model = AutoencoderKLWan.from_config(config)
+                from backend.nn.vae_wan import AutoencoderKLWan as Wan21VAE
+
+            config = Wan21VAE.load_config(config_path)
+            with modeling_utils.no_init_weights():
+                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                    model = Wan21VAE.from_config(config)
 
             load_state_dict(model, state_dict)
             return model
@@ -908,7 +906,7 @@ def replace_state_dict(sd, asd, guess):
 
 
 def preprocess_state_dict(sd):
-    if not any(k.startswith("model.diffusion_model") for k in sd.keys()):
+    if not any(k.startswith(("model.diffusion_model", "net.")) for k in sd.keys()):
         sd = {f"model.diffusion_model.{k}": v for k, v in sd.items()}
 
     return sd
