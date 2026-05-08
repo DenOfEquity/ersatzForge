@@ -22,14 +22,7 @@ environment_whitelist = {
     "TORCH_COMMAND",
     "REQS_FILE",
     "XFORMERS_PACKAGE",
-    "CLIP_PACKAGE",
     "OPENCLIP_PACKAGE",
-    "ASSETS_REPO",
-    "STABLE_DIFFUSION_REPO",
-    "K_DIFFUSION_REPO",
-    "ASSETS_COMMIT_HASH",
-    "STABLE_DIFFUSION_COMMIT_HASH",
-    "K_DIFFUSION_COMMIT_HASH",
     "COMMANDLINE_ARGS",
     "IGNORE_CMD_ARGS_ERRORS",
 }
@@ -105,7 +98,6 @@ def get_dict():
         "Platform": platform.platform(),
         "Python": platform.python_version(),
         "Version": launch_utils.git_tag(),
-        "Commit": launch_utils.commit_hash(),
         "Git status": git_status(script_path),
         "Script path": script_path,
         "Data path": data_path,
@@ -217,7 +209,7 @@ def get_config():
 def set_config(req: dict[str, Any], is_api=False, run_callbacks=True, save_config=True):
     from modules import shared, sd_models
     from modules_forge import main_entry
-    
+
     should_refresh_model_loading_params = False
 
     memory_changes = {}
