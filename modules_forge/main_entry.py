@@ -121,7 +121,8 @@ def make_checkpoint_manager_ui():
             shared.opts.set('sd_model_checkpoint', next(iter(sd_models.checkpoints_list.values())).name)
 
     ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value='-', 
-                                  choices=['sd', 'xl', 'sd3', 'flux', 'chroma', 'klein', 'zimage', 'anima', 'ernie', 'all'], scale=0, filterable=False)
+                                  choices=['all', 'anima', 'chroma', 'ernie', 'flux', 'klein', 'sd', 'sd3', 'xl', 'zimage'], scale=0, filterable=False)
+
     ui_checkpoint = gr.Dropdown(
         value=lambda: shared.opts.sd_model_checkpoint,
         label="Checkpoint",
