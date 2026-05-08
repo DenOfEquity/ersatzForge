@@ -444,9 +444,9 @@ def model_config_from_unet(state_dict, unet_key_prefix, use_base_if_no_match=Fal
 
 def unet_prefix_from_state_dict(state_dict):
     candidates = [
-        "model.diffusion_model.net.", #cosmos predict2
+        "net.", #cosmos predict2
         "model.diffusion_model.",  # ldm/sgm models
-        "model.model.",  # audio models
+#        "model.model.",  # audio models
 #        "model.", # aura flow and others
     ]
     counts = {k: 0 for k in candidates}
