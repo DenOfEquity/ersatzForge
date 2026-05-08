@@ -51,16 +51,10 @@ class VideoRopePosition3DEmb(nn.Module):
         dim_w = dim_h
         dim_t = dim - 2 * dim_h
         assert dim == dim_h + dim_w + dim_t, f"bad dim: {dim} != {dim_h} + {dim_w} + {dim_t}"
-        self.register_buffer(
-            "dim_spatial_range",
-            torch.arange(0, dim_h, 2)[: (dim_h // 2)].to(torch.float32) / dim_h,
-            persistent=False,
-        )
-        self.register_buffer(
-            "dim_temporal_range",
-            torch.arange(0, dim_t, 2)[: (dim_t // 2)].to(torch.float32) / dim_t,
-            persistent=False,
-        )
+
+        # these were self.register_buffer with persistent=False
+        self.dim_spatial_range = torch.arange(0, dim_h, 2, dtype=torch.float32)[: (dim_h // 2)] / dim_h
+        self.dim_temporal_range = torch.arange(0, dim_t, 2, dtype=torch.float32)[: (dim_t // 2)] / dim_t
 
         self.h_ntk_factor = h_extrapolation_ratio ** (dim_h / (dim_h - 2))
         self.w_ntk_factor = w_extrapolation_ratio ** (dim_w / (dim_w - 2))
@@ -89,7 +83,7 @@ class VideoRopePosition3DEmb(nn.Module):
         temporal_freqs =  1.0 / (t_theta**self.dim_temporal_range.to(device=device))
 
         B, T, H, W, _ = x_B_T_H_W_C.shape
-        seq = torch.arange(max(H, W, T), dtype=torch.float, device=device)
+        seq = torch.arange(max(H, W, T), dtype=torch.float32, device=device)
         uniform_fps = (fps is None) or isinstance(fps, (int, float)) or (fps.min() == fps.max())
         assert (
             uniform_fps or B == 1 or T == 1
@@ -1012,8 +1006,8 @@ class LLMAdapter(nn.Module):
 
         x = self.in_proj(self.embed(target_input_ids))
         context = source_hidden_states
-        position_ids = torch.arange(x.shape[1], device=x.device).unsqueeze(0)
-        position_ids_context = torch.arange(context.shape[1], device=x.device).unsqueeze(0)
+        position_ids = torch.arange(x.shape[1], dtype=torch.float32, device=x.device).unsqueeze(0)
+        position_ids_context = torch.arange(context.shape[1], dtype=torch.float32, device=x.device).unsqueeze(0)
         position_embeddings = self.rotary_emb(x, position_ids)
         position_embeddings_context = self.rotary_emb(x, position_ids_context)
         for block in self.blocks:
