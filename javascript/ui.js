@@ -118,10 +118,17 @@ function showSubmitButtons(tabname, show) {
     const interrupt = gradioApp().getElementById(tabname + "_interrupt");
     const skip = gradioApp().getElementById(tabname + "_skip");
     if (show) {
-        submit.disabled = false;
-		submit.style.zIndex = 0;
-        interrupt.style.display = "none";
-        skip.style.display = "none";
+        if ((opts.generate_forever_t2i && tabname === "txt2img") || (opts.generate_forever_i2i && tabname === "img2img")) {
+            submit.disabled = false;
+            submit.click();
+            submit.disabled = true;
+        }
+        else {
+            submit.disabled = false;
+		    submit.style.zIndex = 0;
+            interrupt.style.display = "none";
+            skip.style.display = "none";
+        }
     }
     else {
         submit.disabled = true;
