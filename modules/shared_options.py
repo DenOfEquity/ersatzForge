@@ -140,8 +140,9 @@ options_templates.update(options_section(('sd', "Stable Diffusion", "sd"), {
     "upcast_attn": OptionInfo(False, "Upcast cross attention layer to float32"),
     "randn_source": OptionInfo("GPU", "Random number generator source.", gr.Radio, {"choices": ["GPU", "CPU", "NV", "Perlin", "Perlin (GPU)"]}, infotext="RNG").info("changes seeds drastically; use CPU to produce the same picture across different videocard vendors; use NV to produce same picture as on NVidia videocards"),
     "perlin_detail": OptionInfo(1.0, "Perlin noise detail level", gr.Slider, {"minimum": 0, "maximum": 2, "step": 0.01}, infotext="Perlin detail"),
-    "perlin_octaves": OptionInfo(1, "Perlin noise octaves", gr.Slider, {"minimum": 1, "maximum": 7, "step": 1}, infotext="Perlin octaves").info("2**(octaves-1) must divide exactly into latent width and height. Value will be clamped automatically when used."),
-    "perlin_persist": OptionInfo(1.0, "Perlin noise persistence", gr.Slider, {"minimum": 0.01, "maximum": 2, "step": 0.01}, infotext="Perlin persistence").info("Persistence is the influence of successive octaves of noise."),
+    "perlin_octaves": OptionInfo(1, "Perlin noise octaves", gr.Slider, {"minimum": 1, "maximum": 7, "step": 1}, infotext="Perlin octaves"),
+    "perlin_persist": OptionInfo(1.0, "Perlin noise persistence", gr.Slider, {"minimum": 0.01, "maximum": 3, "step": 0.01}, infotext="Perlin persistence").info("Persistence is the influence of successive octaves of noise."),
+
     "tiling": OptionInfo("None", "Tiling", gr.Radio, {"choices": ["None", "X", "Y", "X and Y"]}, infotext='Tiling').info("produce a tileable picture"),
     "hires_fix_refiner_pass": OptionInfo("second pass", "Hires fix: which pass to enable refiner for", gr.Radio, {"choices": ["first pass", "second pass", "both passes"]}, infotext="Hires refiner"),
     "use_ELLA": OptionInfo("CLIP (normal)", "Use ELLA for SD1.5", gr.Radio, {"choices": ["CLIP (normal)", "ELLA only", "ELLA (per step) only", "CLIP + ELLA", "CLIP + ELLA (per step)"]}, infotext="ELLA").info("ELLA text encoder and ELLA model will be automatically downloaded. Info: https://github.com/TencentQQGYLab/ELLA"),
@@ -274,6 +275,7 @@ options_templates.update(options_section(('ui_alternatives', "UI alternatives", 
 options_templates.update(options_section(('ui', "User interface", "ui"), {
     "localization": OptionInfo("None", "Localization", gr.Dropdown, lambda: {"choices": ["None"] + list(localization.localizations.keys())}, refresh=lambda: localization.list_localizations(cmd_opts.localizations_dir)).needs_reload_ui(),
     "quick_setting_list": OptionInfo([], "Quicksettings list", ui_components.DropdownMulti, lambda: {"choices": list(shared.opts.data_labels.keys())}).js("info", "settingsHintsShowQuicksettings").info("setting entries that appear at the top of page rather than in settings tab").needs_reload_ui(),
+#make a 'useful' list for quicksettings?
     "ui_tab_order": OptionInfo([], "UI tab order", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)}).needs_reload_ui(),
     "hidden_tabs": OptionInfo([], "Hidden UI tabs", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)[2:]}).needs_reload_ui(),
     "tabs_without_quick_settings_bar": OptionInfo(["Spaces"], "UI tabs without Quicksettings bar (top row)", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)}),

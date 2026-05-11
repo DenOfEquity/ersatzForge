@@ -80,14 +80,19 @@ def rand_perlin_2d_octaves(shape, generator, octaves=1, persistence=0.5):
 # input width/height is latent width/height, not image
 def create_noisy_latents_perlin(seed, shape, generator=None):
     detail_level = shared.opts.perlin_detail
-    octaves = shared.opts.perlin_octaves    # must scale into actual latent size
-    power2 = [1, 2, 4, 8, 16, 32, 64, 128]  # seven octaves max, arbitrarily
-    while shape[-1] % power2[octaves-1] != 0:
-        octaves -= 1
-    while shape[-2] % power2[octaves-1] != 0:
-        octaves -= 1
+    octaves = shared.opts.perlin_octaves
     persistence = shared.opts.perlin_persist
-    channels, height, width = shape
+    
+    channels, H, W = shape
+
+    power2 = [1, 2, 4, 8, 16, 32, 64, 128][octaves-1]  # Settings limits to seven octaves max, arbitrarily
+    height = H
+    if H % power2 != 0:
+        height = H + power2 - (H % power2)
+    width = W
+    if W % power2 != 0:
+        width = W + power2 - (W % power2)
+
     if generator is None and seed != -1:
         torch.manual_seed(seed)
     noise = torch.empty((channels, height, width), dtype=torch.float32, device=generator.device)
@@ -98,7 +103,10 @@ def create_noisy_latents_perlin(seed, shape, generator=None):
         # result.clamp_(result,-5,5)
         noise[j, :, :] = result
 
-    return noise
+    oH = (height - H) // 2
+    oW = (width - W) // 2
+    return noise[:, oH:oH+H, oW:oW+W]
+
 #### end: perlin
 
 
@@ -207,6 +215,9 @@ def create_generator(seed):
             return torch.Generator(device).manual_seed(int(seed))
         case "Perlin":
             return torch.Generator(devices.cpu).manual_seed(int(seed))
+        case "Simplex":
+            device = devices.cpu if devices.device.type == 'mps' else devices.device
+            return torch.Generator(device).manual_seed(int(seed))
         case "NV":
             return rng_philox.Generator(seed)
         case "CPU":
