@@ -215,9 +215,6 @@ def create_generator(seed):
             return torch.Generator(device).manual_seed(int(seed))
         case "Perlin":
             return torch.Generator(devices.cpu).manual_seed(int(seed))
-        case "Simplex":
-            device = devices.cpu if devices.device.type == 'mps' else devices.device
-            return torch.Generator(device).manual_seed(int(seed))
         case "NV":
             return rng_philox.Generator(seed)
         case "CPU":
