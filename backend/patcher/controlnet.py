@@ -436,6 +436,7 @@ class ControlLora(ControlNet):
         super().pre_run(model, percent_to_timestep_function)
         controlnet_config = model.diffusion_model.config.copy()
         controlnet_config.pop("out_channels")
+        controlnet_config["hint_width"] = self.control_weights["input_hint_block.0.weight"].shape[0]
         controlnet_config["hint_channels"] = self.control_weights["input_hint_block.0.weight"].shape[1]
 
         dtype = model.storage_dtype
