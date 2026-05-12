@@ -47,7 +47,7 @@ def calculate_weight_fooocus(weight, alpha, v):
 
 class FooocusInpaintPatcher(ControlModelPatcher):
     @staticmethod
-    def try_build_from_state_dict(state_dict, ckpt_path):
+    def try_build_from_state_dict(state_dict, ckpt_path, metadata=None):
         if 'diffusion_model.time_embed.0.weight' in state_dict:
             if len(state_dict['diffusion_model.time_embed.0.weight']) == 3:
                 return FooocusInpaintPatcher(state_dict, ckpt_path)
