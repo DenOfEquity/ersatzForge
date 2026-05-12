@@ -5,7 +5,9 @@ from modules_forge.shared import add_supported_control_model
 from modules_forge.supported_controlnet import ControlModelPatcher
 from lib_ipadapter.IPAdapterPlus import IPAdapterApply, InsightFaceLoader
 from pathlib import Path
-import random, numpy, math
+import random
+import numpy
+import math
 from cv2 import circle, ellipse2Poly, fillConvexPoly
 
 cached_insightfaceA = None  # antelopev2
@@ -237,7 +239,7 @@ add_supported_preprocessor(PreprocessorForPuLID('PuLID (ortho_v2)'))
 
 class IPAdapterPatcher(ControlModelPatcher):
     @staticmethod
-    def try_build_from_state_dict(state_dict, ckpt_path):
+    def try_build_from_state_dict(state_dict, ckpt_path, metadata=None):
         model = state_dict
 
         if ckpt_path.lower().endswith(".safetensors"):
@@ -271,7 +273,7 @@ class IPAdapterPatcher(ControlModelPatcher):
     def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
         unet = process.sd_model.forge_objects.unet.clone()
 
-        if 'pulid' in cond[0] and cond[0]['pulid'] == True:
+        if 'pulid' in cond[0] and cond[0]['pulid']:
             if isinstance(cond, list):  # should always be True
                 images = []
                 for c in cond:
