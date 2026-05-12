@@ -87,10 +87,10 @@ def try_load_supported_control_model(ckpt_path):
     control_model = _CONTROL_MODEL_CACHE.get(ckpt_path)
 
     if control_model is None:
-        state_dict = utils.load_torch_file(ckpt_path, safe_load=True)
+        state_dict, metadata = utils.load_torch_file(ckpt_path, safe_load=True, return_metadata=True)
         for supported_type in supported_control_models:
             state_dict_copy = dict(state_dict)
-            control_model = supported_type.try_build_from_state_dict(state_dict_copy, ckpt_path)
+            control_model = supported_type.try_build_from_state_dict(state_dict_copy, ckpt_path, metadata)
             if control_model is not None:
                 _CONTROL_MODEL_CACHE.put(ckpt_path, control_model)
                 break
