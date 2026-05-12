@@ -1,3 +1,5 @@
+import torch
+
 from modules_forge.shared import add_supported_control_model
 from modules_forge.supported_controlnet import ControlModelPatcher
 from lib_controllllite.lib_controllllite import LLLiteLoader
@@ -11,9 +13,10 @@ opLLLiteLoader = LLLiteLoader().load_lllite
 
 
 class ControlLLLiteAnimaPatcher(ControlModelPatcher):
-    def __init__(self, state_dict):
+    def __init__(self, state_dict, inpaint_masked_input: bool = False):
         super().__init__()
         self.state_dict = state_dict
+        self.inpaint_masked_input = inpaint_masked_input
         self._lllite_net = None
 
     def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
@@ -31,6 +34,17 @@ class ControlLLLiteAnimaPatcher(ControlModelPatcher):
 
         # cond is (B, 3, H, W) in [0, 1]; conditioning1 expects [-1, 1]
         cond_image = cond * 2.0 - 1.0
+
+        if self._lllite_net.conditioning1.conv1.in_channels == 4:
+            if self.inpaint_masked_input:
+                if process.inpainting_mask_invert:
+                    cond_image *= (mask > 0.5).to(cond_image.dtype)
+                    inpaint_mask = (1.0 - mask) * 2.0 - 1.0
+                else:
+                    cond_image *= (mask < 0.5).to(cond_image.dtype)
+                    inpaint_mask = mask * 2.0 - 1.0
+            cond_image = torch.cat([cond_image, inpaint_mask], dim=1)
+
         self._lllite_net.set_cond_image(cond_image.to(device=device, dtype=dtype))
         self._lllite_net.set_multiplier(self.strength)
 
@@ -52,9 +66,10 @@ class ControlLLLiteAnimaPatcher(ControlModelPatcher):
 
 class ControlLLLitePatcher(ControlModelPatcher):
     @staticmethod
-    def try_build_from_state_dict(state_dict, ckpt_path):
+    def try_build_from_state_dict(state_dict, ckpt_path, metadata={}):
         if any("lllite_dit" in k for k in state_dict):
-            return ControlLLLiteAnimaPatcher(state_dict)
+            inpaint_masked_input = metadata.get("lllite.inpaint_masked_input", "false").lower() in ("true", "1", "yes")
+            return ControlLLLiteAnimaPatcher(state_dict, inpaint_masked_input=inpaint_masked_input)
         if not any("lllite" in k for k in state_dict):
             return None
         return ControlLLLitePatcher(state_dict)
