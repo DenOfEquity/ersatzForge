@@ -12,7 +12,7 @@ from modules_forge.shared import add_supported_control_model
 
 class ControlModelPatcher:
     @staticmethod
-    def try_build_from_state_dict(state_dict, ckpt_path):
+    def try_build_from_state_dict(state_dict, ckpt_path, metadata=None):
         return None
 
     def __init__(self, model_patcher=None):
@@ -38,7 +38,7 @@ class ControlModelPatcher:
 
 class ControlNetPatcher(ControlModelPatcher):
     @staticmethod
-    def try_build_from_state_dict(controlnet_data, ckpt_path):
+    def try_build_from_state_dict(controlnet_data, ckpt_path, metadata=None):
         if "lora_controlnet" in controlnet_data:
             return ControlNetPatcher(ControlLora(controlnet_data))
 
@@ -106,9 +106,10 @@ class ControlNetPatcher(ControlModelPatcher):
             prefix = ""
         else:
             net = load_t2i_adapter(controlnet_data)
-            if net is None:
-                return None
-            return ControlNetPatcher(net)
+            if net is not None:
+                return ControlNetPatcher(net)
+
+            return None
 
         if controlnet_config is None:
             unet_dtype = memory_management.state_dict_dtype(controlnet_data)
@@ -181,10 +182,10 @@ class ControlNetPatcher(ControlModelPatcher):
 
 add_supported_control_model(ControlNetPatcher)
 
-# anima contronet (Reference latents) by 'inpaint' on civitai
+# anima controlnet (Reference latents) by 'inpaint' on civitai
 class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
     @staticmethod
-    def try_build_from_state_dict(controlnet_data, ckpt_path):
+    def try_build_from_state_dict(controlnet_data, ckpt_path, metadata=None):
         is_anima_ref = (
             "diffusion_model.blocks.0.adaln_modulation_cross_attn.1.lora_A.weight" in controlnet_data and
             "zero_convs.0.0.weight" not in controlnet_data and
