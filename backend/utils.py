@@ -2,7 +2,8 @@ import gguf
 import torch
 import os
 import json
-import safetensors.torch
+from safetensors import safe_open
+
 import backend.misc.checkpoint_pickle
 from backend.operations_gguf import ParameterGGUF
 
@@ -19,11 +20,23 @@ def read_arbitrary_config(directory):
     return config_data
 
 
-def load_torch_file(ckpt, safe_load=False, device=None):
+def load_torch_file(ckpt, safe_load=False, device=None, return_metadata=False):
+    metadata = {}
     if device is None:
         device = torch.device("cpu")
-    if ckpt.lower().endswith(".safetensors") or ckpt.lower().endswith(".sft"):
-        sd = safetensors.torch.load_file(ckpt, device=device.type)
+
+    if ckpt.lower().endswith((".safetensors", ".sft")):
+        try:
+            with safe_open(ckpt, framework="pt", device=device.type) as f:
+                sd = {}
+                for k in f.keys():
+                    tensor = f.get_tensor(k)
+                    sd[k] = tensor
+                if return_metadata:
+                    metadata = f.metadata()
+        except Exception:
+            raise ValueError(f'\nModel "{ckpt}" is corrupt or invalid...\nPlease download the model again\n') from None
+
     elif ckpt.lower().endswith(".gguf"):
         reader = gguf.GGUFReader(ckpt)
         sd = {}
@@ -44,7 +57,7 @@ def load_torch_file(ckpt, safe_load=False, device=None):
             sd = pl_sd["state_dict"]
         else:
             sd = pl_sd
-    return sd
+    return (sd, metadata) if return_metadata else sd
 
 
 def set_attr(obj, attr, value):
