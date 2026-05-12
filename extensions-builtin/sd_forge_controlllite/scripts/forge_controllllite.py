@@ -36,13 +36,18 @@ class ControlLLLiteAnimaPatcher(ControlModelPatcher):
         cond_image = cond * 2.0 - 1.0
 
         if self._lllite_net.conditioning1.conv1.in_channels == 4:
+            # maybe API can send cond and mask of different size / dtype / device, but that's their problem
             if self.inpaint_masked_input:
                 if process.inpainting_mask_invert:
                     cond_image *= (mask > 0.5).to(cond_image.dtype)
-                    inpaint_mask = (1.0 - mask) * 2.0 - 1.0
                 else:
                     cond_image *= (mask < 0.5).to(cond_image.dtype)
-                    inpaint_mask = mask * 2.0 - 1.0
+
+            if process.inpainting_mask_invert:
+                inpaint_mask = (1.0 - mask) * 2.0 - 1.0
+            else:
+                inpaint_mask = mask * 2.0 - 1.0
+
             cond_image = torch.cat([cond_image, inpaint_mask], dim=1)
 
         self._lllite_net.set_cond_image(cond_image.to(device=device, dtype=dtype))
