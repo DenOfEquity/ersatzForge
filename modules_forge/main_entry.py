@@ -416,10 +416,10 @@ def on_preset_change(preset=None):
                 gr.update(visible=False) if codes[0] == "None" else gr.update(visible=True, value=int(codes[0])),   # ui_clip_skip
                 gr.skip(),  #storage type
                 gr.update(visible=False, value=0) if codes[1] == "None" else gr.update(visible=True, value=int(codes[1])),   # mem
-                gr.update(value=int(codes[2])),
-                gr.update(value=int(codes[2])),
-                gr.update(value=int(codes[3])),
-                gr.update(value=int(codes[3])),
+                gr.skip() if codes[2] == "0" else gr.update(value=int(codes[2])),
+                gr.skip() if codes[2] == "0" else gr.update(value=int(codes[2])),
+                gr.skip() if codes[3] == "0" else gr.update(value=int(codes[3])),
+                gr.skip() if codes[3] == "0" else gr.update(value=int(codes[3])),
                 gr.update(visible=False, value=1.0) if codes[4] == "None" else gr.update(visible=True, value=float(codes[4])), #cfg t2i
                 gr.update(visible=False, value=1.0) if codes[4] == "None" else gr.update(visible=True, value=float(codes[4])), #cfg i2i
                 gr.update(visible=False, value=0.0) if codes[5] == "None" else gr.update(visible=True, value=float(codes[5])), #dcfg t2i
@@ -471,8 +471,8 @@ Code order is: (all must be present)<br/>
 <ol>
 <li>clip skip : <em>can be </em>None<em>, in which case the control will be hidden</em> <sub>note: value can be changed by loading Infotext</sub></li>
 <li>reserved VRAM : <em>can be </em>None</li>
-<li>width</li>
-<li>height</li>
+<li>width : <em>can be </em>0<em>, in which case the current value will be preserved</em></li>
+<li>height : <em>can be </em>0<em>, in which case the current value will be preserved</em></li>
 <li>CFG : <em>also applies to <strong>HiRes-fix</strong>; can be </em>None</li>
 <li>distilled CFG : <em>also applies to <strong>HiRes-fix</strong>; can be </em>None</li>
 <li>sampler</li>
