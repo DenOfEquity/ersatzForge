@@ -10,7 +10,6 @@ from modules.shared import opts
 class PromptChunk:
     def __init__(self):
         self.qwen_tokens = []
-        self.qwen_multipliers = []
         self.t5_tokens = []
         self.t5_multipliers = []
 
@@ -43,7 +42,6 @@ class AnimaTextProcessingEngine:
             nonlocal chunk
 
             chunk.qwen_tokens.append(self.id_pad)
-            chunk.qwen_multipliers.append(1.0)
             chunk.t5_tokens.append(self.id_end)
             chunk.t5_multipliers.append(1.0)
 
@@ -56,7 +54,6 @@ class AnimaTextProcessingEngine:
                 continue
 
             chunk.qwen_tokens.extend(Qwen_tokens)
-            chunk.qwen_multipliers.extend([1.0] * len(Qwen_tokens))
             chunk.t5_tokens.extend(T5_tokens)
             chunk.t5_multipliers.extend([weight] * len(T5_tokens))
 
@@ -81,7 +78,7 @@ class AnimaTextProcessingEngine:
                 t5_multipliers = []
 
                 for chunk in chunks:
-                    z: torch.Tensor = self.process_tokens([chunk.qwen_tokens], [chunk.qwen_multipliers])[0]
+                    z: torch.Tensor = self.process_tokens([chunk.qwen_tokens])[0]
                     line_z_values.append(z)
                     t5_tokens.append(torch.tensor(chunk.t5_tokens, dtype=torch.int))
                     t5_multipliers.append(torch.tensor(chunk.t5_multipliers))
@@ -117,7 +114,13 @@ class AnimaTextProcessingEngine:
 
         cross_attn = self.text_encoder.preprocess_text_embeds(cross_attn, t5xxl_ids)
         if t5xxl_weights is not None:
-            cross_attn *= t5xxl_weights.unsqueeze(0).unsqueeze(-1).to(cross_attn)
+            if self.emphasis.name == "No norm":
+                cross_attn *= t5xxl_weights.unsqueeze(0).unsqueeze(-1).to(cross_attn)
+            elif self.emphasis.name == "Original":
+                original_mean = cross_attn.mean()
+                cross_attn *= t5xxl_weights.unsqueeze(0).unsqueeze(-1).to(cross_attn)
+                new_mean = cross_attn.mean()
+                cross_attn *= (original_mean / new_mean)
 
         if cross_attn.shape[1] < 512:
             cross_attn = torch.nn.functional.pad(cross_attn, (0, 0, 0, 512 - cross_attn.shape[1]))
@@ -161,7 +164,7 @@ class AnimaTextProcessingEngine:
 
         return torch.cat(embeds_out), torch.tensor(attention_masks, device=device, dtype=torch.long), num_tokens, embeds_info
 
-    def process_tokens(self, batch_tokens, batch_multipliers):
+    def process_tokens(self, batch_tokens):
         embeds, mask, count, info = self.process_embeds(batch_tokens)
         z, _ = self.text_encoder(input_ids=None, embeds=embeds, attention_mask=mask, num_tokens=count, embeds_info=info)
         return z
