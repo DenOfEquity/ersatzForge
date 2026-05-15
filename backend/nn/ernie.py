@@ -1,4 +1,4 @@
-# lifted from ComfyUI, with minor modifications
+# lifted from ComfyUI, with modifications
 
 import math
 import torch
@@ -7,14 +7,16 @@ import torch.nn.functional as F
 from einops import rearrange
 
 from backend.attention import attention_function
+from modules import shared
 
 
-def rope(pos: torch.Tensor, dim: int, theta: int) -> torch.Tensor:
+def rope(pos: torch.Tensor, dim: int, theta: int, timestep_scaling: float) -> torch.Tensor:
     assert dim % 2 == 0
 
     scale = torch.arange(0, dim, 2, dtype=torch.float32, device=pos.device) / dim
     omega = 1.0 / (theta**scale)
-    out = torch.einsum("...n,d->...nd", pos, omega)
+    
+    out = timestep_scaling * torch.einsum("...n,d->...nd", pos, omega)
     out = torch.stack([torch.cos(out), torch.sin(out)], dim=0)
     return out.to(dtype=torch.float32, device=pos.device)
 
@@ -46,10 +48,11 @@ class ErnieImageEmbedND3(nn.Module):
         self.theta = theta
         self.axes_dim = list(axes_dim)
 
-    def forward(self, ids: torch.Tensor) -> torch.Tensor:
-        emb = torch.cat([rope(ids[..., i], self.axes_dim[i], self.theta) for i in range(3)], dim=-1)
+    def forward(self, ids: torch.Tensor, timestep_scaling: float) -> torch.Tensor:
+        emb = torch.cat([rope(ids[..., i], self.axes_dim[i], self.theta, timestep_scaling) for i in range(3)], dim=-1)
         emb = emb.unsqueeze(3)  # [2, B, S, 1, head_dim//2]
         return torch.stack([emb, emb], dim=-1).reshape(*emb.shape[:-1], -1)  # [B, S, 1, head_dim]
+
 
 class ErnieImagePatchEmbedDynamic(nn.Module):
     def __init__(self, in_channels: int, embed_dim: int, patch_size: int):
@@ -254,7 +257,17 @@ class ERNIEImageModel(nn.Module):
 
         image_ids = image_ids.view(1, N_img, 3).expand(B, -1, -1)
 
-        rotary_pos_emb = self.pos_embed(torch.cat([image_ids, text_ids], dim=1)).to(x.dtype)
+        if shared.opts.scalePE_ernie:
+            scale = (shared.opts.scalePE_ernie // 16) / max(H, W)
+            time = timesteps[0].item()
+            if time > 0.5:
+                time **= 7.0
+                timestep_scaling = 1.0 + time*(scale - 1.0) #(scale*time) + (1.0-time)
+            else:
+                timestep_scaling = 1.0
+        else:
+            timestep_scaling = 1.0
+        rotary_pos_emb = self.pos_embed(torch.cat([image_ids, text_ids], dim=1), timestep_scaling).to(x.dtype)
         del image_ids, text_ids
 
         sample = self.time_proj(timesteps * 1000.0).to(dtype)
