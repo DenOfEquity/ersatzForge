@@ -17,10 +17,14 @@ BLOCKID17=["BASE","IN01","IN02","IN04","IN05","IN07","IN08","M00","OUT03","OUT04
 BLOCKID12=["BASE","IN04","IN05","IN07","IN08","M00","OUT00","OUT01","OUT02","OUT03","OUT04","OUT05"]
 BLOCKID20=["BASE","IN00","IN01","IN02","IN03","IN04","IN05","IN06","IN07","IN08","M00","OUT00","OUT01","OUT02","OUT03","OUT04","OUT05","OUT06","OUT07","OUT08"]
 BLOCKIDFLUX = ["CLIP", "T5", "IN"] + ["D{:002}".format(x) for x in range(19)] + ["S{:002}".format(x) for x in range(38)] + ["OUT"] # Len: 61
+BLOCKIDKLEIN = ["QWEN", "IN"] + ["D{:002}".format(x) for x in range(8)] + ["S{:002}".format(x) for x in range(24)] + ["OUT"] # Len: 35
 BLOCKIDZIT = ["J{:002}".format(x) for x in range(30)]
+BLOCKIDANIMA = ["B{:002}".format(x) for x in range(28)] + ["OUT"] # 29 total
+BLOCKIDERNIE = ["L{:002}".format(x) for x in range(36)] # 36 total + TE?
 #todo chroma
-BLOCKNUMS = [12, 17, 20, 26, len(BLOCKIDZIT), len(BLOCKIDFLUX)]
-BLOCKIDS=[BLOCKID12, BLOCKID17, BLOCKID20, BLOCKID26, BLOCKIDZIT, BLOCKIDFLUX]
+
+BLOCKNUMS = [12, 17, 20, 26, len(BLOCKIDZIT), len(BLOCKIDFLUX), len(BLOCKIDKLEIN), len(BLOCKIDANIMA), len(BLOCKIDERNIE)]
+BLOCKIDS=[BLOCKID12, BLOCKID17, BLOCKID20, BLOCKID26, BLOCKIDZIT, BLOCKIDFLUX, BLOCKIDANIMA, BLOCKIDERNIE]
 
 BLOCKS=["encoder",
 "diffusion_model_input_blocks_0_",
@@ -117,8 +121,17 @@ class ersatzLBW(scripts.Script):
 
     def process(self, p, enabled, loraratios, elemental):
         if enabled:
-            self.is_flux = getattr(shared.sd_model, 'is_flux', False)
-            self.is_zit  = getattr(shared.sd_model, 'is_lumina2', False)
+            self.model = "sd"
+            if getattr(shared.sd_model, 'is_flux', False):
+                self.model = "flux"
+            elif getattr(shared.sd_model, 'is_flux2', False):
+                self.model = "klein"
+            elif getattr(shared.sd_model, 'is_lumina2', False):
+                self.model = "zit"
+            elif getattr(shared.sd_model, 'is_cosmos_predict2', False):
+                self.model = "anima"
+            elif getattr(shared.sd_model, 'is_ernie', False):
+                self.model = "ernie"
 
             lratios = {}
             elementals = {}
@@ -277,12 +290,19 @@ def loradealer(self, prompts, lratios, elementals, extra_network_data = None):
                     ratios = to26(ratios)
                 setnow = True
             else:
-                if self.is_flux:
-                    ratios = [1] * 61
-                elif self.is_zit:
-                    ratios = [1] * 30
-                else:
-                    ratios = [1] * 26
+                match self.model:
+                    case "flux":
+                        ratios = [1] * 61
+                    case "klein":
+                        ratios = [1] * 35
+                    case "zit":
+                        ratios = [1] * 30
+                    case "anima":
+                        ratios = [1] * 29
+                    case "ernie":
+                        ratios = [1] * 36
+                    case _:
+                        ratios = [1] * 26
 
             if elem in elementals:
                 setnow = True
@@ -314,10 +334,10 @@ def loradealer(self, prompts, lratios, elementals, extra_network_data = None):
 
         if go_lbw or load:
             lora_patches = shared.sd_model.forge_objects_after_applying_lora.unet.lora_patches 
-            lbwf(lora_patches, unet_multipliers, lorars, elements, starts, self.is_flux, self.is_zit)
+            lbwf(lora_patches, unet_multipliers, lorars, elements, starts, self.model)
 
             lora_patches = shared.sd_model.forge_objects_after_applying_lora.clip.patcher.lora_patches
-            lbwf(lora_patches, te_multipliers, lorars, elements, starts, self.is_flux, self.is_zit)
+            lbwf(lora_patches, te_multipliers, lorars, elements, starts, self.model)
 
 
 def syntaxdealer(items, target, index): #type "unet=", "x=", "lwbe=" 
@@ -335,11 +355,11 @@ def syntaxdealer(items, target, index): #type "unet=", "x=", "lwbe="
 
 
 def multidealer(t, u):
-    if t is None and u is None:
+    if (t is None and u is None) or (t == "" and u == ""):
         return 1, 1
-    elif t is None:
+    elif t is None or t == "":
         return float(u), float(u)
-    elif u is None:
+    elif u is None or u == "":
         return float(t), float(t)
     else:
         return float(t), float(u)
@@ -360,7 +380,7 @@ def getinheritedweight(weight, offset):
 
 LORAS = ["lora", "loha", "lokr"]
 
-def lbwf(after_applying_lora_patches, ms, lwei, elements, starts, flux, zit):
+def lbwf(after_applying_lora_patches, ms, lwei, elements, starts, model):
     errormodules = []
     dict_lora_patches = dict(after_applying_lora_patches.items())
 
@@ -378,7 +398,7 @@ def lbwf(after_applying_lora_patches, ms, lwei, elements, starts, flux, zit):
             n_vals = []
             lvs = [v for v in vals if v[1][0] in LORAS]
             for v in lvs:
-                ratio, picked = ratiodealer(key.replace(".", "_"), lw, e, flux, zit)
+                ratio, picked = ratiodealer(key.replace(".", "_"), lw, e, model)
                 n_vals.append([ratio * m if s is None or s == 0 else 0, *v[1:]])
                 if not picked:
                     errormodules.append(key)
@@ -395,31 +415,47 @@ def lbwf(after_applying_lora_patches, ms, lwei, elements, starts, flux, zit):
         print("[LoRA Block weight] Unknown modules:", errormodules)
 
 
-def ratiodealer(key, lwei, elemental:str, flux=False, zit=False):
+def ratiodealer(key, lwei, elemental:str, model="sd"):
     ratio = 1
     picked = False
     elemental = elemental.replace("\n", ",")
     elemental = elemental.split(",")
     elemkey = ""
-    
-    if flux:
-        block = elemkey = get_flux_blocks(key)
-        if block in BLOCKIDFLUX:
-            ratio = lwei[BLOCKIDFLUX.index(block)]
-            picked = True
-    elif zit:
-        block = elemkey = get_zit_blocks(key)
-        if block in BLOCKIDZIT:
-            ratio = lwei[BLOCKIDZIT.index(block)]
-            picked = True
-    else:
-        for i,block in enumerate(BLOCKS):
-            if block in key:
-                if i == 26 or i == 27:
-                    i = 0
-                ratio = lwei[i] 
+
+    match model:
+        case "flux":
+            block = elemkey = get_flux_blocks(key)
+            if block in BLOCKIDFLUX:
+                ratio = lwei[BLOCKIDFLUX.index(block)]
                 picked = True
-                elemkey = BLOCKID26[i]
+        case "klein":
+            block = elemkey = get_klein_blocks(key)
+            if block in BLOCKIDKLEIN:
+                ratio = lwei[BLOCKIDKLEIN.index(block)]
+                picked = True
+        case "zit":
+            block = elemkey = get_zit_blocks(key)
+            if block in BLOCKIDZIT:
+                ratio = lwei[BLOCKIDZIT.index(block)]
+                picked = True
+        case "anima":
+            block = elemkey = get_anima_blocks(key)
+            if block in BLOCKIDANIMA:
+                ratio = lwei[BLOCKIDANIMA.index(block)]
+                picked = True
+        case "ernie":
+            block = elemkey = get_ernie_blocks(key)
+            if block in BLOCKIDERNIE:
+                ratio = lwei[BLOCKIDERNIE.index(block)]
+                picked = True
+        case _:
+            for i,block in enumerate(BLOCKS):
+                if block in key:
+                    if i == 26 or i == 27:
+                        i = 0
+                    ratio = lwei[i] 
+                    picked = True
+                    elemkey = BLOCKID26[i]
 
     if len(elemental) > 0:
         skey = key + elemkey
@@ -427,7 +463,18 @@ def ratiodealer(key, lwei, elemental:str, flux=False, zit=False):
             ds = d.split(":")
             if len(ds) != 3:
                 continue
-            dbs, dws, dr = (hyphener(ds[0], BLOCKIDFLUX if flux else (BLOCKIDZIT if zit else BLOCKID26)), ds[1], ds[2])
+            match model:
+                case  "flux":
+                    dbs, dws, dr = (hyphener(ds[0], BLOCKIDFLUX), ds[1], ds[2])
+                case "klein":
+                    dbs, dws, dr = (hyphener(ds[0], BLOCKIDKLEIN), ds[1], ds[2])
+                case "zit":
+                    dbs, dws, dr = (hyphener(ds[0], BLOCKIDZIT), ds[1], ds[2])
+                case "anima":
+                    dbs, dws, dr = (hyphener(ds[0], BLOCKIDANIMA), ds[1], ds[2])
+                case _:
+                    dbs, dws, dr = (hyphener(ds[0], BLOCKID26), ds[1], ds[2])
+
             dbs, dws = (dbs.split(" "), dws.split(" "))
             dbn, dbs = (True, dbs[1:]) if dbs[0] == "NOT" else (False, dbs)
             dwn, dws = (True, dws[1:]) if dws[0] == "NOT" else (False, dws)
@@ -493,14 +540,12 @@ def get_flux_blocks(key):
         return "T5"
     if "clip_" in key:
         return "CLIP"
-    if "t5xxl" in key:
-        return "T5"
     
     match = re.search(r'\_(\d+)\_', key)
     if "double_blocks" in key:
-        return f"D{match.group(1).zfill(2) }"
+        return f"D{match.group(1).zfill(2)}"
     if "single_blocks" in key:
-        return f"S{match.group(1).zfill(2) }"
+        return f"S{match.group(1).zfill(2)}"
     if "_in" in key:
         return "IN"
     if "final_layer" in key:
@@ -513,5 +558,37 @@ def get_zit_blocks(key):
     
     match = re.search(r'\_(\d+)\_', key)
     if "diffusion_model_layers" in key:
-        return f"J{match.group(1).zfill(2) }"
+        return f"J{match.group(1).zfill(2)}"
     return "Not Merge"
+
+def get_klein_blocks(key):
+    # if "vae" in key:
+        # return "VAE"
+    # if "qwen" in key:
+        # return "QWEN"
+    
+    match = re.search(r'\_(\d+)\_', key)
+    if "double_blocks" in key:
+        return f"D{match.group(1).zfill(2)}"
+    if "single_blocks" in key:
+        return f"S{match.group(1).zfill(2)}"
+    if "_in" in key:
+        return "IN"
+    if "final_layer" in key:
+        return "OUT"
+    return "Not Merge"
+
+def get_anima_blocks(key):
+    match = re.search(r'\_(\d+)\_', key)
+    if "blocks" in key:
+        return f"B{match.group(1).zfill(2)}"
+    if "final_layer" in key:
+        return "OUT"
+    return "Not Merge"
+
+def get_ernie_blocks(key):
+    match = re.search(r'\_(\d+)\_', key)
+    if "diffusion_model_layers" in key:
+        return f"L{match.group(1).zfill(2)}"
+    return "Not Merge"
+
