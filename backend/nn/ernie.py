@@ -155,7 +155,7 @@ class ErnieImageSharedAdaLNBlock(nn.Module):
         self.mlp = ErnieImageFeedForward(hidden_size, ffn_hidden_size)
 
     def forward(self, x, rotary_pos_emb, temb):
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = temb
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = temb.chunk(6, dim=-1)
 
         x_norm = self.adaLN_sa_ln(x)
         x_norm = torch.addcmul(shift_msa, x_norm, 1 + scale_msa)
@@ -257,14 +257,10 @@ class ERNIEImageModel(nn.Module):
 
         image_ids = image_ids.view(1, N_img, 3).expand(B, -1, -1)
 
-        if shared.opts.scalePE_ernie:
+        time = timesteps[0].item()
+        if shared.opts.scalePE_ernie and time > 0.5:
             scale = (shared.opts.scalePE_ernie // 16) / max(H, W)
-            time = timesteps[0].item()
-            if time > 0.5:
-                time **= 7.0
-                timestep_scaling = 1.0 + time*(scale - 1.0) #(scale*time) + (1.0-time)
-            else:
-                timestep_scaling = 1.0
+            timestep_scaling = 1.0 + (time ** 7.0)*(scale - 1.0)
         else:
             timestep_scaling = 1.0
         rotary_pos_emb = self.pos_embed(torch.cat([image_ids, text_ids], dim=1), timestep_scaling).to(x.dtype)
@@ -273,13 +269,8 @@ class ERNIEImageModel(nn.Module):
         sample = self.time_proj(timesteps * 1000.0).to(dtype)
         c = self.time_embedding(sample)
 
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = [
-            t.unsqueeze(1).contiguous() for t in self.adaLN_modulation(c).chunk(6, dim=-1)
-        ]
-
-        temb = [shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp]
         for layer in self.layers:
-            hidden_states = layer(hidden_states, rotary_pos_emb, temb)
+            hidden_states = layer(hidden_states, rotary_pos_emb, self.adaLN_modulation(c).unsqueeze(1))
 
         hidden_states = self.final_norm(hidden_states, c).type_as(hidden_states)
 
