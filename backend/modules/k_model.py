@@ -63,6 +63,8 @@ class KModel(torch.nn.Module):
                 scaler = 1.3
             case "ERNIEImageModel":
                 scaler = 0.65
+            case "MiniTrainDIT":
+                scaler = 0.78
             case _:
                 scaler = 1.65
 
