@@ -755,12 +755,19 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
     if opts.emphasis != "Original":
         generation_params.update({"Emphasis": opts.emphasis, })
 
-    if sd_models.model_data.sd_model.is_flux and opts.dynamicPE_flux > 0:
-        generation_params.update({ "dynamicPE flux": opts.dynamicPE_flux, })
-    elif sd_models.model_data.sd_model.is_lumina2 and opts.dynamicPE_lumina2 > 0:
-        generation_params.update({ "dynamicPE lumina2": opts.dynamicPE_lumina2, })
-    elif sd_models.model_data.sd_model.is_ernie and opts.scalePE_ernie > 0:
-        generation_params.update({ "scalePE ernie": opts.scalePE_ernie, })
+    if sd_models.model_data.sd_model.is_flux:
+        if opts.dynamicPE_flux > 0:
+            generation_params.update({ "dynamicPE flux": opts.dynamicPE_flux, })
+        elif opts.scalePE_flux > 0:
+            generation_params.update({ "scalePE flux": opts.scalePE_flux, })
+    elif sd_models.model_data.sd_model.is_lumina2:
+        if opts.dynamicPE_lumina2 > 0:
+            generation_params.update({ "dynamicPE lumina2": opts.dynamicPE_lumina2, })
+        elif opts.scalePE_lumina2 > 0:
+            generation_params.update({ "scalePE lumina2": opts.scalePE_lumina2, })
+    elif sd_models.model_data.sd_model.is_ernie:
+        if opts.scalePE_ernie > 0:
+            generation_params.update({ "scalePE ernie": opts.scalePE_ernie, })
 
     if opts.sd_vae_decode_method != "Full":
         generation_params.update({ "VAE Decoder": opts.sd_vae_decode_method, })

@@ -168,8 +168,10 @@ options_templates.update(options_section(('dyPE', "dynamicPE", "sd"), {
 <br />
 It's not magic, distortions are still possible.
 """),
-    "dynamicPE_flux": OptionInfo(0, "Base resolution for dynamic PE for Flux", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="dynamicPE flux").info("1024 is reasonable for Flux; slightly higher (1280) seems effective too. This Setting applies when the model is loaded. 0: disabled"),
+    "dynamicPE_flux": OptionInfo(0, "Base resolution for dynamic PE for Flux.1", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="dynamicPE flux").info("1024 is reasonable for Flux; slightly higher (1280) seems effective too. This Setting applies when the model is loaded. 0: disabled"),
     "dynamicPE_lumina2": OptionInfo(0, "Base resolution for dynamic PE for Lumina2 / Z-Image", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="dynamicPE lumina2").info("1408-1728 seems effective for Z-Image-Turbo. This Setting applies when the model is loaded. 0: disabled"),
+    "scalePE_flux": OptionInfo(0, "Base resolution for Position Embedding Scaling for Flux.1", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="scalePE flux").info("Dynamic PE is used preferentially over this. This Setting applies when the model is used; model reload not required after change. 0: disabled"),
+    "scalePE_lumina2": OptionInfo(0, "Base resolution for Position Embedding Scaling for Lumina2 / Z-Image", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="scalePE lumina2").info("Dynamic PE is used preferentially over this. This Setting applies when the model is used; model reload not required after change. 0: disabled"),
     "scalePE_ernie": OptionInfo(0, "Base resolution for Position Embedding Scaling for ERNIE", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="scalePE ernie").info("This Setting applies when the model is used; model reload not required after change. 0: disabled"),
 }))
 
