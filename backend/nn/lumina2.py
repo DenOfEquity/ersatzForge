@@ -403,7 +403,7 @@ class Lumina2DiT(nn.Module):
 
         return x
 
-    def patchify_and_embed(self, x: torch.Tensor, context: torch.Tensor, control: torch.Tensor, t: torch.Tensor, num_tokens, timestep=None) -> tuple[torch.Tensor, torch.Tensor, list[tuple[int, int]], list[int], torch.Tensor]:
+    def patchify_and_embed(self, x: torch.Tensor, context: torch.Tensor, control: torch.Tensor, t: torch.Tensor, num_tokens, timestep=None, timestep_scaling=1.0) -> tuple[torch.Tensor, torch.Tensor, list[tuple[int, int]], list[int], torch.Tensor]:
         bsz = x.shape[0]
         pH = pW = self.patch_size
         device = x.device
@@ -420,16 +420,6 @@ class Lumina2DiT(nn.Module):
         H_tokens, W_tokens = H // pH, W // pW
         row_ids = torch.arange(H_tokens, dtype=torch.float32, device=device).view(-1, 1).repeat(1, W_tokens).flatten()
         col_ids = torch.arange(W_tokens, dtype=torch.float32, device=device).view(1, -1).repeat(H_tokens, 1).flatten()
-        # if not self.use_dynamicPE and shared.opts.rope_scaling:
-            # h_scale = 1.0
-            # w_scale = 1.0
-            # limit = 2048 // 16
-            # if H_tokens > limit:
-                # h_scale = limit / H_tokens
-            # if W_tokens > limit:
-                # w_scale = limit / W_tokens
-            # row_ids *= min(h_scale, w_scale)
-            # col_ids *= min(h_scale, w_scale)
 
         position_ids = torch.zeros(bsz, x.shape[1], 3, dtype=torch.float32, device=device)
         position_ids[:,:, 0] = num_tokens + 1
@@ -450,7 +440,7 @@ class Lumina2DiT(nn.Module):
 
         ids = torch.cat((cap_pos_ids, position_ids), dim=1)
         if self.use_dynamicPE:
-            self.rope_embedder.set_timestep(timestep.item())
+            self.rope_embedder.set_timestep(timestep)
             pes = []
             for i in range(ids.shape[0]):
                 pe = self.rope_embedder(ids[i])
@@ -460,7 +450,7 @@ class Lumina2DiT(nn.Module):
                 pes.append(out.unsqueeze(1))
             freqs_cis = torch.cat(pes, dim=0)
         else:
-            freqs_cis = self.rope_embedder(ids)
+            freqs_cis = self.rope_embedder(ids, timestep_scaling)
         freqs_cis = freqs_cis.movedim(1, 2).to(dtype)
 
         hints = None
@@ -516,7 +506,6 @@ class Lumina2DiT(nn.Module):
         else: # Z image
             adaln_input = self.t_embedder(t*1000.0, dtype=x.dtype)
 
-        #cache this?
         if self.pad_tokens_multiple is not None:
             pad_t = (-context.shape[1]) % self.pad_tokens_multiple
             pad = context.new_zeros([bs, pad_t, context.shape[2]])
@@ -524,10 +513,21 @@ class Lumina2DiT(nn.Module):
         context = self.cap_embedder(context)
         #pad using cap_pad_token here? #self.cap_pad_token.repeat(bs, pad_t, 1).to(cap_feats)
 
+        time = timesteps[0].item()
+        if shared.opts.scalePE_lumina2 and not self.use_dynamicPE:
+            scale_s = (shared.opts.scalePE_lumina2 // 16) / (max(h+pad_h, w+pad_w) // 2)
+            scale_e = (2.0 + scale_s) / 3.0
+
+            timestep_scaling = 1.0 + (time ** 3.3) * (scale_s - 1.0)
+            if abs(1.0 - scale_e) > abs(1.0 - timestep_scaling):
+                timestep_scaling = scale_e            
+        else:
+            timestep_scaling = 1.0
+
         # entire batch will have same length context because of calc_cond_uncond_batch
         # (it seems the Lumina processing originally handled different lengths, but I've simplified it out as that'll never happen in this webUI)
-        num_tokens = context.shape[1] # doesn't account for padding
-        x, control, freqs_cis = self.patchify_and_embed(x, context, control, adaln_input, num_tokens=num_tokens, timestep=t)
+        num_tokens = context.shape[1] # no padding
+        x, control, freqs_cis = self.patchify_and_embed(x, context, control, adaln_input, num_tokens=num_tokens, timestep=time, timestep_scaling=timestep_scaling)
         freqs_cis = freqs_cis.to(x.device)
 
 

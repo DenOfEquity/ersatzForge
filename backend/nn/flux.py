@@ -30,12 +30,12 @@ def attention(q, k, v, pe):
     return x
 
 
-def rope(pos, dim, theta):
+def rope(pos, dim, theta, timestep_scaling):
     scale = torch.arange(0, dim, 2, dtype=torch.float32, device=pos.device) / dim
     omega = 1.0 / (theta ** scale)
 
     # out = torch.einsum("...n,d->...nd", pos, omega)
-    out = pos.unsqueeze(-1) * omega.unsqueeze(0)
+    out = timestep_scaling * pos.unsqueeze(-1) * omega.unsqueeze(0)
 
     cos_out = torch.cos(out)
     sin_out = torch.sin(out)
@@ -90,10 +90,10 @@ class EmbedND(nn.Module):
         self.theta = theta
         self.axes_dim = axes_dim
 
-    def forward(self, ids):
+    def forward(self, ids, timestep_scaling):
         n_axes = ids.shape[-1]
         emb = torch.cat(
-            [rope(ids[..., i], self.axes_dim[i], self.theta) for i in range(n_axes)],
+            [rope(ids[..., i], self.axes_dim[i], self.theta, timestep_scaling) for i in range(n_axes)],
             dim=-3,
         )
         del ids, n_axes
@@ -135,7 +135,6 @@ def get_1d_rotary_pos_embed(
         theta: float = 10000.0,
         linear_factor=1.0,
         ntk_factor=1.0,
-        freqs_dtype=torch.float32,
         yarn=False,
         max_pe_len=None,
         ori_max_pe_len=64,
@@ -180,7 +179,7 @@ def get_1d_rotary_pos_embed(
 
     if yarn and max_pe_len is not None and max_pe_len > ori_max_pe_len:
         if not isinstance(max_pe_len, torch.Tensor):
-            max_pe_len = torch.tensor(max_pe_len, dtype=freqs_dtype, device=device)
+            max_pe_len = torch.tensor(max_pe_len, dtype=torch.float32, device=device)
 
         scale = torch.clamp_min(max_pe_len / ori_max_pe_len, 1.0)
 
@@ -189,12 +188,12 @@ def get_1d_rotary_pos_embed(
         gamma_0 = 16
         gamma_1 = 2
 
-        freqs_base = 1.0 / (theta ** (torch.arange(0, dim, 2, dtype=freqs_dtype, device=device) / dim))
+        freqs_base = 1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim))
 
         freqs_linear = 1.0 / torch.einsum(
             '..., f -> ... f',
             scale,
-            (theta ** (torch.arange(0, dim, 2, dtype=freqs_dtype, device=device) / dim))
+            (theta ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim))
         )
 
         new_base = find_newbase_ntk(dim, theta, scale)
@@ -202,7 +201,7 @@ def get_1d_rotary_pos_embed(
             new_base = new_base.view(-1, 1)
         freqs_ntk = 1.0 / torch.pow(
             new_base,
-            (torch.arange(0, dim, 2, dtype=freqs_dtype, device=device) / dim)
+            (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim)
         )
         if freqs_ntk.dim() > 1:
             freqs_ntk = freqs_ntk.squeeze()
@@ -215,7 +214,7 @@ def get_1d_rotary_pos_embed(
         low = max(0, low)
         high = min(dim // 2, high)
 
-        freqs_mask = (1 - linear_ramp_mask(low, high, dim // 2).to(device).to(freqs_dtype))
+        freqs_mask = (1 - linear_ramp_mask(low, high, dim // 2).to(device).to(torch.float32))
         freqs = freqs_linear * (1 - freqs_mask) + freqs_ntk * freqs_mask
 
         if dype:
@@ -226,12 +225,12 @@ def get_1d_rotary_pos_embed(
         low = max(0, low)
         high = min(dim // 2, high)
 
-        freqs_mask = (1 - linear_ramp_mask(low, high, dim // 2).to(device).to(freqs_dtype))
+        freqs_mask = (1 - linear_ramp_mask(low, high, dim // 2).to(device).to(torch.float32))
         freqs = freqs * (1 - freqs_mask) + freqs_base * freqs_mask
 
     else:
         theta_ntk = theta * ntk_factor
-        freqs = 1.0 / (theta_ntk ** (torch.arange(0, dim, 2, dtype=freqs_dtype, device=device) / dim)) / linear_factor
+        freqs = 1.0 / (theta_ntk ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim)) / linear_factor
 
     freqs = torch.outer(pos.squeeze(0), freqs)
 
@@ -278,14 +277,12 @@ class FluxPosEmbed(nn.Module):
         cos_out = []
         sin_out = []
         pos = ids.to(torch.float32)
-        freqs_dtype = torch.float32
 
         for i in range(n_axes):
             common_kwargs = {
                 'dim': self.axes_dim[i],
                 'pos': pos[:, i],
                 'theta': self.theta,
-                'freqs_dtype': freqs_dtype,
             }
 
             if i > 0:
@@ -293,7 +290,7 @@ class FluxPosEmbed(nn.Module):
                 current_patches = max_pos + 1
 
                 if self.method == 'yarn' and current_patches > self.base_patches:
-                    max_pe_len = torch.tensor(current_patches, dtype=freqs_dtype, device=pos.device)
+                    max_pe_len = torch.tensor(current_patches, dtype=torch.float32, device=pos.device)
                     cos, sin = get_1d_rotary_pos_embed(
                         **common_kwargs,
                         yarn=True,
@@ -545,7 +542,7 @@ class LastLayer(nn.Module):
 
 
 class IntegratedFluxTransformer2DModel(nn.Module):
-    def __init__(self, in_channels: int, vec_in_dim: int, context_in_dim: int, hidden_size: int, mlp_ratio: float, num_heads: int, depth: int, depth_single_blocks: int, axes_dim: list[int], theta: int, qkv_bias: bool, guidance_embed: bool):
+    def __init__(self, in_channels: int, vec_in_dim: int, context_in_dim: int, hidden_size: int, mlp_ratio: float, num_heads: int, depth: int, depth_single_blocks: int, axes_dim: list[int], theta: int, qkv_bias: bool, guidance_embed: bool, **kwargs):
         super().__init__()
 
         self.guidance_embed = guidance_embed
@@ -562,12 +559,11 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_heads
 
-        if shared.opts.dynamicPE_flux > 0:
-            self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=shared.opts.dynamicPE_flux)
-            self.use_dynamicPE = True
+        self.use_dynamicPE = shared.opts.dynamicPE_flux
+        if self.use_dynamicPE > 0:
+            self.pe_embedder = FluxPosEmbed(theta=theta, axes_dim=axes_dim, base_resolution=self.use_dynamicPE)
         else:
             self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
-            self.use_dynamicPE = False
 
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=True)
         self.time_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size)
@@ -596,7 +592,7 @@ class IntegratedFluxTransformer2DModel(nn.Module):
 
         self.final_layer = LastLayer(self.hidden_size, 1, self.out_channels)
 
-    def inner_forward(self, img, img_ids, txt, txt_ids, timestep, y, guidance=None):
+    def inner_forward(self, img, img_ids, txt, txt_ids, timestep, y, guidance=None, timestep_scaling=1.0):
         if img.ndim != 3 or txt.ndim != 3:
             raise ValueError("Input img and txt tensors must have 3 dimensions.")
 
@@ -628,7 +624,7 @@ class IntegratedFluxTransformer2DModel(nn.Module):
                 pes.append(out.unsqueeze(1))
             pe = torch.cat(pes, dim=0)
         else:
-            pe = self.pe_embedder(ids)
+            pe = self.pe_embedder(ids, timestep_scaling)
 
         del ids
 
@@ -662,12 +658,25 @@ class IntegratedFluxTransformer2DModel(nn.Module):
         h_len = ((h + (patch_size // 2)) // patch_size)
         w_len = ((w + (patch_size // 2)) // patch_size)
         img_ids = torch.zeros((h_len, w_len, 3), device=input_device, dtype=input_dtype)
-        img_ids[..., 1] = img_ids[..., 1] + torch.linspace(0, h_len - 1, steps=h_len, device=input_device, dtype=input_dtype)[:, None]
-        img_ids[..., 2] = img_ids[..., 2] + torch.linspace(0, w_len - 1, steps=w_len, device=input_device, dtype=input_dtype)[None, :]
+        img_ids[..., 1] += torch.linspace(0, h_len - 1, steps=h_len, device=input_device, dtype=input_dtype)[:, None]
+        img_ids[..., 2] += torch.linspace(0, w_len - 1, steps=w_len, device=input_device, dtype=input_dtype)[None, :]
+
         img_ids = repeat(img_ids, "h w c -> b (h w) c", b=bs)
         txt_ids = torch.zeros((bs, context.shape[1], 3), device=input_device, dtype=input_dtype)
         del input_device, input_dtype
-        out = self.inner_forward(img, img_ids, context, txt_ids, timestep, y, guidance)
+
+        time = timestep[0].item()
+        if shared.opts.scalePE_flux and not self.use_dynamicPE:
+            scale_s = (shared.opts.scalePE_flux // 16) / max(h_len, w_len)
+            scale_e = (2.0 + scale_s) / 3.0
+
+            timestep_scaling = 1.0 + (time ** 3.3) * (scale_s - 1.0)
+            if abs(1.0 - scale_e) > abs(1.0 - timestep_scaling):
+                timestep_scaling = scale_e            
+        else:
+            timestep_scaling = 1.0
+
+        out = self.inner_forward(img, img_ids, context, txt_ids, timestep, y, guidance, timestep_scaling)
         del img, img_ids, txt_ids, timestep, context
         out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_len, w=w_len, ph=2, pw=2)[:, :, :h, :w]
         del h_len, w_len, bs
