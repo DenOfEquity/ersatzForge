@@ -5,7 +5,7 @@ import numpy as np
 from scipy import stats
 
 from modules import shared
-from backend.modules.k_prediction import Prediction
+from backend.modules.k_prediction import Prediction, PredictionCosmosRFlow
 
 
 @dataclasses.dataclass
@@ -134,7 +134,7 @@ def beta_scheduler(n, sigma_min, sigma_max, inner_model, device):
 def turbo_scheduler(n, sigma_min, sigma_max, inner_model, device):
     unet = inner_model.inner_model.forge_objects.unet
     timesteps = torch.flip(torch.arange(1, n + 1) * float(1000.0 / n) - 1, (0,)).round().to(torch.int64).clip(0, 999)
-    sigmas = unet.model.predictor.sigma(timesteps)
+    sigmas = unet.model.predictor.sigma(timesteps.to(device=unet.model.predictor.sigmas.device))
 
     if isinstance(inner_model.predictor, Prediction):
         lo = sigmas[-1].clone()
@@ -343,7 +343,7 @@ def linear_quadratic_scheduler(n, sigma_min, sigma_max, inner_model, device):
         sigma_schedule = linear_sigma_schedule + quadratic_sigma_schedule
         sigma_schedule = [1.0 - x for x in sigma_schedule]
 
-    if isinstance(inner_model.predictor, Prediction):
+    if isinstance(inner_model.predictor, Prediction) or isinstance(inner_model.predictor, PredictionCosmosRFlow):
         if n == 1:
             sigs = [sigma_max]
         else:
@@ -372,7 +372,7 @@ def linear_actual_scheduler(n, sigma_min, sigma_max, inner_model, device):
         delta = (1.0 - nmin) / (n - 1)
         sigma_schedule = [nmin + delta * (n - 1 - i) for i in range(n)]
 
-    if isinstance(inner_model.predictor, Prediction):
+    if isinstance(inner_model.predictor, Prediction) or isinstance(inner_model.predictor, PredictionCosmosRFlow):
         if n == 1:
             sigs = [sigma_max]
         else:
