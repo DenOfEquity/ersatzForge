@@ -229,7 +229,9 @@ def patched_forward_mmditx_fbc(
                 skip_check = False
             else:
                 skip_check = True
-            if BlockCache.previous[index] is None or BlockCache.residual[index] is None:
+            if BlockCache.previous[index] is None or BlockCache.previous[index].shape != x.shape:
+                skip_check = False
+            if BlockCache.residual[index] is None:
                 skip_check = False
             if BlockCache.skip_limit > 0 and BlockCache.skipped[index] >= BlockCache.skip_limit:
                 skip_check = False
@@ -336,7 +338,9 @@ def patched_inner_forward_chroma_fbc(self, img, img_ids, txt, txt_ids, timesteps
                 skip_check = False
             else:
                 skip_check = True
-            if BlockCache.previous[index] is None or BlockCache.residual[index] is None:
+            if BlockCache.previous[index] is None or BlockCache.previous[index].shape != img.shape:
+                skip_check = False
+            if BlockCache.residual[index] is None:
                 skip_check = False
             if BlockCache.skip_limit > 0 and BlockCache.skipped[index] >= BlockCache.skip_limit:
                 skip_check = False
@@ -429,7 +433,9 @@ def patched_inner_forward_flux_fbc(self, img, img_ids, txt, txt_ids, timesteps, 
                 skip_check = False
             else:
                 skip_check = True
-            if BlockCache.previous[index] is None or BlockCache.residual[index] is None:
+            if BlockCache.previous[index] is None or BlockCache.previous[index].shape != img.shape:
+                skip_check = False
+            if BlockCache.residual[index] is None:
                 skip_check = False
             if BlockCache.skip_limit > 0 and BlockCache.skipped[index] >= BlockCache.skip_limit:
                 skip_check = False
@@ -524,7 +530,9 @@ def patched_forward_unet_fbc(self, x, timesteps=None, context=None, y=None, cont
                 skip_check = False
             else:
                 skip_check = True
-            if previous is None or residual is None:
+            if previous is None or previous.shape != h.shape:
+                skip_check = False
+            if residual is None:
                 skip_check = False
             if BlockCache.skip_limit > 0 and skipped >= BlockCache.skip_limit:
                 skip_check = False
@@ -668,7 +676,9 @@ def patched_forward_cosmos_fbc(self, x, timesteps, context, fps=None, padding_ma
                 skip_check = False
             else:
                 skip_check = True
-            if BlockCache.previous[index] is None or BlockCache.residual[index] is None:
+            if BlockCache.previous[index] is None or BlockCache.previous[index].shape != x_B_T_H_W_D.shape:
+                skip_check = False
+            if BlockCache.residual[index] is None:
                 skip_check = False
             if BlockCache.skip_limit > 0 and BlockCache.skipped[index] >= BlockCache.skip_limit:
                 skip_check = False
