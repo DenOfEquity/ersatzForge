@@ -11,7 +11,7 @@ from modules.ui_components import InputAccordion, ToolButton
 
 try:
     import customPresets as colourPresets
-except:
+except Exception:
     import colourPresets
 
 class ColourNoiseForge(scripts.Script):
@@ -35,8 +35,8 @@ class ColourNoiseForge(scripts.Script):
             gr.Markdown("Settings are *very* dependent on model. Targetted noise generally tolerates higher strength and is easier to work with.")
             with gr.Row():
                 delPreset = ToolButton(value="-", variant="secondary", tooltip="remove preset", elem_id="cn_b_remove")
-                preset = gr.Dropdown([i[0] for i in self.presetList], value="(None)", type="value", label="Colour presets", allow_custom_value=True)
-                addPreset = ToolButton(value="+", variant="secondary", tooltip="add preset", elem_id="cn_b_add")
+                preset = gr.Dropdown(sorted([i[0] for i in self.presetList]), value="(None)", type="value", label="Colour presets", allow_custom_value=True)
+                addPreset = ToolButton(value="+", variant="secondary", tooltip="add preset (no overwrite)", elem_id="cn_b_add")
                 savePreset = ToolButton(value="save", variant="secondary", tooltip="save presets", elem_id="cn_b_save")
 
                 ToolButton(value="️|", variant="tertiary", interactive=False)
@@ -72,7 +72,9 @@ class ColourNoiseForge(scripts.Script):
                         return result
                 return [gr.skip()] * 9
 
-            preset.change(fn=updateColours, inputs=[preset], outputs=[initialNoise, noiseStrength, stepApplyP1, stepApplyP2, centreNoise, lowDNoise, sharpNoise, targetNoise, everyStep], show_progress=False)
+            preset.change(fn=updateColours, inputs=[preset], outputs=[initialNoise, noiseStrength, stepApplyP1, stepApplyP2, centreNoise, lowDNoise, sharpNoise, targetNoise, everyStep], show_progress="hidden")
+
+            # initialNoise.input(fn=lambda: "(custom)", inputs=None, outputs=[preset], show_progress="hidden")
 
             def toggleCentre ():
                 ColourNoiseForge.centreNoise ^= True
@@ -91,7 +93,9 @@ class ColourNoiseForge(scripts.Script):
                 return gr.update(variant="primary" if ColourNoiseForge.everyStep else "secondary")
 
             def addColourPreset (name, c, s, s1, s2):
-                namelist = [i[0] for i in self.presetList]
+                if any(i[0] == name for i in self.presetList): # no direct overwrite - delete + add instead
+                    return gr.skip()
+
                 t = 0
                 if ColourNoiseForge.centreNoise:
                     t += 1
@@ -103,30 +107,35 @@ class ColourNoiseForge(scripts.Script):
                     t += 8
                 if ColourNoiseForge.everyStep:
                     t += 16
-                if name not in namelist:
-                    self.presetList.append((name, c, s, s1, s2, t))
-                    self.presetList = sorted(self.presetList)
+
+                self.presetList.append((name, c, s, s1, s2, t))
+                self.presetList = sorted(self.presetList)
+
                 return gr.update(choices=[i[0] for i in self.presetList])
+
             def delColourPreset (name):
-                for i in range(len(self.presetList)):
-                    if name != "(None)" and self.presetList[i][0] == name:
-                        del (self.presetList[i])
-                        break
-                return gr.update(choices=[i[0] for i in self.presetList])
-            def saveColourPreset ():
+                if name != "(None)":
+                    for i in range(len(self.presetList)):
+                        if self.presetList[i][0] == name:
+                            del (self.presetList[i])
+                            return gr.update(choices=[i[0] for i in self.presetList], value=name)
+
+                return gr.skip()
+
+            def saveColourPresets ():
                 file = os.path.abspath(colourPresets.__file__)
                 text = "presetList = [\n    " + ',\n    '.join(map(str, self.presetList)) + "\n]\n"
                 with open(file, 'w') as f:
                     f.write(text)
 
-            centreNoise.click(toggleCentre, inputs=None, outputs=centreNoise, show_progress=False)
-            lowDNoise.click(togglelowD, inputs=None, outputs=lowDNoise, show_progress=False)
-            sharpNoise.click(toggleSharp, inputs=None, outputs=sharpNoise, show_progress=False)
-            targetNoise.click(toggleTarget, inputs=None, outputs=targetNoise, show_progress=False)
-            everyStep.click(toggleEvery, inputs=None, outputs=everyStep, show_progress=False)
-            addPreset.click(addColourPreset, inputs=[preset, initialNoise, noiseStrength, stepApplyP1, stepApplyP2], outputs=preset, show_progress=False)
-            delPreset.click(delColourPreset, inputs=preset, outputs=preset, show_progress=False)
-            savePreset.click(saveColourPreset, inputs=None, outputs=None, show_progress=False)
+            centreNoise.click(toggleCentre, inputs=None, outputs=centreNoise, show_progress="hidden")
+            lowDNoise.click(togglelowD, inputs=None, outputs=lowDNoise, show_progress="hidden")
+            sharpNoise.click(toggleSharp, inputs=None, outputs=sharpNoise, show_progress="hidden")
+            targetNoise.click(toggleTarget, inputs=None, outputs=targetNoise, show_progress="hidden")
+            everyStep.click(toggleEvery, inputs=None, outputs=everyStep, show_progress="hidden")
+            addPreset.click(addColourPreset, inputs=[preset, initialNoise, noiseStrength, stepApplyP1, stepApplyP2], outputs=preset, show_progress="hidden")
+            delPreset.click(delColourPreset, inputs=preset, outputs=preset, show_progress="hidden")
+            savePreset.click(saveColourPresets, inputs=None, outputs=None, show_progress="hidden")
 
         self.infotext_fields = [
             (enabled,       lambda d: d.get("cn_enabled", False)),
