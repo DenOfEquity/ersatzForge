@@ -134,7 +134,13 @@ def beta_scheduler(n, sigma_min, sigma_max, inner_model, device):
 def turbo_scheduler(n, sigma_min, sigma_max, inner_model, device):
     unet = inner_model.inner_model.forge_objects.unet
     timesteps = torch.flip(torch.arange(1, n + 1) * float(1000.0 / n) - 1, (0,)).round().to(torch.int64).clip(0, 999)
-    sigmas = unet.model.predictor.sigma(timesteps.to(device=unet.model.predictor.sigmas.device))
+    
+    if isinstance(inner_model.predictor, PredictionCosmosRFlow):
+        timesteps = timesteps.to(torch.float32).to(device=unet.model.predictor.sigmas.device)
+        timesteps /= 1000.0
+        sigmas = torch.tensor([unet.model.predictor.sigma(ts) for ts in timesteps])
+    else:
+        sigmas = unet.model.predictor.sigma(timesteps.to(device=unet.model.predictor.sigmas.device))
 
     if isinstance(inner_model.predictor, Prediction):
         lo = sigmas[-1].clone()
