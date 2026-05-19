@@ -1112,7 +1112,12 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
             # params.txt should be saved late, due to scripts.process_batch, HiResFix
             if n == 0 and not shared.cmd_opts.no_prompt_history:
-                with open(os.path.join(paths.data_path, "params.txt"), "w", encoding="utf8") as file:
+                if hasattr(p, "resize_mode"):
+                    filename = "params-i2i.txt"
+                else:
+                    filename = "params-t2i.txt"
+
+                with open(os.path.join(paths.data_path, filename), "w", encoding="utf8") as file:
                     # also write append a permanent log? datetime: infotext
                     file.write(infotexts[0])
 
