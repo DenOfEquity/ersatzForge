@@ -6,7 +6,7 @@ from backend.patcher.clip import CLIP
 from backend.patcher.vae import VAE
 from backend.patcher.unet import UnetPatcher
 from backend.text_processing.anima_engine import AnimaTextProcessingEngine
-from backend.modules.k_prediction import PredictionCosmosRFlow
+from backend.modules.k_prediction import PredictionDiscreteFlow
 from backend import memory_management
 
 
@@ -27,7 +27,7 @@ class Anima(ForgeDiffusionEngine):
         )
 
         vae = VAE(model=huggingface_components["vae"])
-        k_predictor = PredictionCosmosRFlow(sigma_max=80.0)
+        k_predictor = PredictionDiscreteFlow(shift=3.0, multiplier=1.0)
         unet = UnetPatcher.from_model(
             model=huggingface_components["transformer"],
             diffusers_scheduler=None,
