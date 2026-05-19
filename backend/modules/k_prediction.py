@@ -361,8 +361,10 @@ class PredictionCosmosRFlow(PredictionContinuousEDM):
         return sigma / (sigma + 1)
 
     def sigma(self, timestep):
-        timestep = timestep.to(torch.float32)
-        timestep /= 1000.0
+        sigma_max = self.sigma_max
+        if timestep >= (sigma_max / (sigma_max + 1)):
+            return sigma_max
+
         return timestep / (1 - timestep)
 
     def calculate_input(self, sigma, noise):
