@@ -220,13 +220,14 @@ class ControlNetUiGroup(object):
                         with gr.Group(
                                 visible=False, elem_classes=["cnet-generated-image-group"]
                         ) as self.generated_image_group:
-                            self.generated_image = ForgeCanvas(
+                            self.generated_image = gr.Image(
                                 elem_id=f"{elem_id_tabname}_{tabname}_generated_image",
                                 elem_classes=["cnet-image"],
                                 height=300,
-                                no_scribbles=True,
-                                no_upload=True,
-                                numpy=True
+                                type="numpy",
+                                show_download_button=True,
+                                interactive=False,
+                                show_label=False,
                             )
 
                             with gr.Group(
@@ -282,7 +283,7 @@ class ControlNetUiGroup(object):
             self.merge_tab.select(fn=lambda: InputMode.MERGE, inputs=None, outputs=[self.input_mode], show_progress="hidden")
 
             if self.photopea:
-                self.photopea.attach_photopea_output(self.generated_image.background)
+                self.photopea.attach_photopea_output(self.generated_image)
 
             with gr.Accordion(
                 label="Open New Canvas", visible=False
@@ -492,7 +493,7 @@ class ControlNetUiGroup(object):
             self.batch_mask_dir,
             self.batch_input_gallery,
             self.batch_mask_gallery,
-            self.generated_image.background,
+            self.generated_image,
             self.mask_image.background,
             self.mask_image.foreground,
             self.hr_option,
@@ -661,7 +662,6 @@ class ControlNetUiGroup(object):
         def run_annotator(image, mask, module, pres, pthr_a, pthr_b, t2i_w, t2i_h, pp, rm):
             if image is None:
                 return (
-                    gr.update(visible=True),
                     None,
                     gr.skip(),
                     *self.openpose_editor.update(""),
@@ -747,7 +747,6 @@ class ControlNetUiGroup(object):
 
             result = external_code.visualize_inpaint_mask(result)
             return (
-                gr.update(visible=True),
                 result,
                 # preprocessor_preview
                 gr.update(value=True),
@@ -770,8 +769,7 @@ class ControlNetUiGroup(object):
                 self.resize_mode,
             ],
             outputs=[
-                self.generated_image.block,
-                self.generated_image.background,
+                self.generated_image,
                 self.preprocessor_preview,
                 *self.openpose_editor.outputs(),
             ],
@@ -796,7 +794,7 @@ class ControlNetUiGroup(object):
             fn=shift_preview,
             inputs=[self.preprocessor_preview],
             outputs=[
-                self.generated_image.background,
+                self.generated_image,
                 self.generated_image_group,
                 self.use_preview_as_input,
                 self.openpose_editor.download_link,
@@ -950,7 +948,7 @@ class ControlNetUiGroup(object):
                 event_subscriber(
                     fn=clear_preview,
                     inputs=self.use_preview_as_input,
-                    outputs=[self.use_preview_as_input, self.generated_image.background],
+                    outputs=[self.use_preview_as_input, self.generated_image],
                     show_progress="hidden"
                 )
 
