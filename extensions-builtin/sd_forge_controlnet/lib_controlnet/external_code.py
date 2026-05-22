@@ -172,9 +172,9 @@ class ControlNetUnit:
     image: Optional[GradioImageMaskPair] = None
     image_fg: Optional[GradioImageMaskPair] = None
     resize_mode: Union[ResizeMode, int, str] = ResizeMode.INNER_FIT
-    processor_res: int = -1
-    threshold_a: float = -1
-    threshold_b: float = -1
+    processor_res: int = 512
+    threshold_a: float = 64
+    threshold_b: float = 256
     guidance_start: float = 0.0
     guidance_end: float = 1.0
     pixel_perfect: bool = False
