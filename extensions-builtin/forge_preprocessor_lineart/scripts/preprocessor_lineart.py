@@ -283,11 +283,12 @@ class _residual_block(torch.nn.Module):
             init_subsample = 1
             if i == repetitions - 1 and not is_first_layer:
                 init_subsample = 2
+
             if i == 0:
-                l = basic_block(in_filters=in_filters, nb_filters=nb_filters, init_subsample=init_subsample)
+                layer = basic_block(in_filters=in_filters, nb_filters=nb_filters, init_subsample=init_subsample)
             else:
-                l = basic_block(in_filters=nb_filters, nb_filters=nb_filters, init_subsample=init_subsample)
-            layers.append(l)
+                layer = basic_block(in_filters=nb_filters, nb_filters=nb_filters, init_subsample=init_subsample)
+            layers.append(layer)
 
         self.model = torch.nn.Sequential(*layers)
 
@@ -300,12 +301,11 @@ class _upsampling_residual_block(torch.nn.Module):
         super(_upsampling_residual_block, self).__init__()
         layers = []
         for i in range(repetitions):
-            l = None
             if i == 0: 
-                l = _u_basic_block(in_filters=in_filters, nb_filters=nb_filters)#(input)
+                layer = _u_basic_block(in_filters=in_filters, nb_filters=nb_filters)#(input)
             else:
-                l = basic_block(in_filters=nb_filters, nb_filters=nb_filters)#(input)
-            layers.append(l)
+                layer = basic_block(in_filters=nb_filters, nb_filters=nb_filters)#(input)
+            layers.append(layer)
 
         self.model = torch.nn.Sequential(*layers)
 
@@ -370,8 +370,8 @@ class PreprocessorLineart(Preprocessor):
         self.tags = ['Lineart']
         self.model_filename_filters = ['lineart']
         # use standard resolution slider
-        self.slider_1 = PreprocessorParameter(minimum=0, maximum=256, step=1, value=100, label='Low Threshold', visible=True)
-        self.slider_2 = PreprocessorParameter(minimum=0, maximum=256, step=1, value=200, label='High Threshold', visible=True)
+        self.slider_1 = PreprocessorParameter(visible=False)
+        self.slider_2 = PreprocessorParameter(visible=False)
         self.sorting_priority = 100
 
         self.model = None
@@ -450,13 +450,13 @@ class PreprocessorLineart(Preprocessor):
                     self.load_model('sk_model2.pth')
                 self.model.to(self.device)
 
+                image = torch.from_numpy(image).to(torch.float32).to(self.device)
+                image = image / 255.0
+                image = rearrange(image, 'h w c -> 1 c h w')
                 with torch.no_grad():
-                    image = torch.from_numpy(image).to(torch.float32).to(self.device)
-                    image = image / 255.0
-                    image = rearrange(image, 'h w c -> 1 c h w')
                     line = self.model(image)[0][0]
-                    line = line.cpu().numpy()
-                    result = 255 - (line * 255.0).clip(0, 255).astype(numpy.uint8)
+                line = line.cpu().numpy()
+                result = 255 - (line * 255.0).clip(0, 255).astype(numpy.uint8)
 
                 self.model.to('cpu')
 
@@ -465,13 +465,13 @@ class PreprocessorLineart(Preprocessor):
                     self.load_model('sk_model.pth')
                 self.model.to(self.device)
 
+                image = torch.from_numpy(image).to(torch.float32).to(self.device)
+                image = image / 255.0
+                image = rearrange(image, 'h w c -> 1 c h w')
                 with torch.no_grad():
-                    image = torch.from_numpy(image).to(torch.float32).to(self.device)
-                    image = image / 255.0
-                    image = rearrange(image, 'h w c -> 1 c h w')
                     line = self.model(image)[0][0]
-                    line = line.cpu().numpy()
-                    result = 255 - (line * 255.0).clip(0, 255).astype(numpy.uint8)
+                line = line.cpu().numpy()
+                result = 255 - (line * 255.0).clip(0, 255).astype(numpy.uint8)
 
                 self.model.to('cpu')
 
@@ -484,14 +484,14 @@ class PreprocessorLineart(Preprocessor):
                 Hn = 256 * int(numpy.ceil(float(H) / 256.0))
                 Wn = 256 * int(numpy.ceil(float(W) / 256.0))
                 image = cv2.resize(image, (Wn, Hn), interpolation=cv2.INTER_CUBIC)
+                image = torch.from_numpy(image).to(torch.float32).to(self.device)
+                image = image / 127.5 - 1.0
+                image = rearrange(image, 'h w c -> 1 c h w')
                 with torch.no_grad():
-                    image = torch.from_numpy(image).to(torch.float32).to(self.device)
-                    image = image / 127.5 - 1.0
-                    image = rearrange(image, 'h w c -> 1 c h w')
-                    line = self.model(image)[0, 0] * 127.5 + 127.5
-                    line = line.cpu().numpy()
-                    line = cv2.resize(line, (W, H), interpolation=cv2.INTER_CUBIC)
-                    result = 255 - line.clip(0, 255).astype(numpy.uint8)
+                    line = self.model(image)[0, 0]
+                line = (line * 127.5 + 127.5).cpu().numpy()
+                line = cv2.resize(line, (W, H), interpolation=cv2.INTER_CUBIC)
+                result = 255 - line.clip(0, 255).astype(numpy.uint8)
 
                 self.model.cpu()
 
@@ -502,13 +502,54 @@ class PreprocessorLineart(Preprocessor):
 
                 image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
                 image = numpy.ascontiguousarray(image)
+                image = torch.from_numpy(image).to(torch.float32).to(self.device)
+                image = rearrange(image, 'h w -> 1 1 h w')
                 with torch.no_grad():
-                    image = torch.from_numpy(image).to(torch.float32).to(self.device)
-                    image = rearrange(image, 'h w -> 1 1 h w')
                     line = self.model(image)[0, 0]
-                    line = line.cpu().numpy()
-                    result = 255 - line.clip(0, 255).astype(numpy.uint8)
+                line = line.cpu().numpy()
+                result = 255 - line.clip(0, 255).astype(numpy.uint8)
 
+                self.model.cpu()
+
+            case 'lineart_anime_inverted':
+                if self.model is None:
+                    self.load_manga_model()
+                self.model.to(self.device)
+
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+                image = numpy.ascontiguousarray(image)
+                image = torch.from_numpy(image).to(torch.float32).to(self.device)
+                image = rearrange(image, 'h w -> 1 1 h w')
+                with torch.no_grad():
+                    line = self.model(image)[0, 0]
+                line = line.cpu().numpy()
+                result = line.clip(0, 255).astype(numpy.uint8)
+
+                self.model.cpu()
+
+            case 'lineart_xDoG':
+                sigma = 1.0
+                k = 1.6
+
+                image = image.astype(numpy.float32)
+                g0 = cv2.GaussianBlur(image, (3,3), sigma,   borderType=cv2.BORDER_REPLICATE)
+                g1 = cv2.GaussianBlur(image, (5,5), sigma*k, borderType=cv2.BORDER_REPLICATE)
+
+                dog = (127 + numpy.min(g1-g0, axis=2)).clip(0, 255).astype(numpy.uint8)
+                result = numpy.zeros_like(image, dtype=numpy.uint8)
+                result[dog > 128] = 255
+
+            case 'lineart_xDoG_inverted':
+                sigma = 1.0
+                k = 1.6
+
+                image = image.astype(numpy.float32)
+                g0 = cv2.GaussianBlur(image, (3,3), sigma,   borderType=cv2.BORDER_REPLICATE)
+                g1 = cv2.GaussianBlur(image, (5,5), sigma*k, borderType=cv2.BORDER_REPLICATE)
+
+                dog = (127 + numpy.min(g1-g0, axis=2)).clip(0, 255).astype(numpy.uint8)
+                result = numpy.zeros_like(image, dtype=numpy.uint8)
+                result[dog < 128] = 255
 
             case _:
                 return input_image
@@ -522,3 +563,6 @@ add_supported_preprocessor(PreprocessorLineart('lineart_realistic'))
 add_supported_preprocessor(PreprocessorLineart('lineart_coarse'))
 add_supported_preprocessor(PreprocessorLineart('lineart_anime'))
 add_supported_preprocessor(PreprocessorLineart('lineart_anime_denoised'))
+add_supported_preprocessor(PreprocessorLineart('lineart_anime_inverted'))
+add_supported_preprocessor(PreprocessorLineart('lineart_xDoG'))
+add_supported_preprocessor(PreprocessorLineart('lineart_xDoG_inverted'))
