@@ -148,12 +148,6 @@ class ControlNetUiGroup(object):
         self.merge_tab = None
         self.batch_input_gallery = None
         self.batch_mask_gallery = None
-        self.create_canvas = None
-        self.canvas_width = None
-        self.canvas_height = None
-        self.canvas_create_button = None
-        self.canvas_cancel_button = None
-        self.open_new_canvas_button = None
         self.send_dimen_button = None
         self.pixel_perfect = None
         self.preprocessor_preview = None
@@ -285,53 +279,6 @@ class ControlNetUiGroup(object):
             if self.photopea:
                 self.photopea.attach_photopea_output(self.generated_image)
 
-            with gr.Accordion(
-                label="Open New Canvas", visible=False
-            ) as self.create_canvas:
-                self.canvas_width = gr.Slider(
-                    label="New Canvas Width",
-                    minimum=256,
-                    maximum=1024,
-                    value=512,
-                    step=64,
-                    elem_id=f"{elem_id_tabname}_{tabname}_controlnet_canvas_width",
-                )
-                self.canvas_height = gr.Slider(
-                    label="New Canvas Height",
-                    minimum=256,
-                    maximum=1024,
-                    value=512,
-                    step=64,
-                    elem_id=f"{elem_id_tabname}_{tabname}_controlnet_canvas_height",
-                )
-                with gr.Row():
-                    self.canvas_create_button = gr.Button(
-                        value="Create New Canvas",
-                        elem_id=f"{elem_id_tabname}_{tabname}_controlnet_canvas_create_button",
-                    )
-                    self.canvas_cancel_button = gr.Button(
-                        value="Cancel",
-                        elem_id=f"{elem_id_tabname}_{tabname}_controlnet_canvas_cancel_button",
-                    )
-
-            with gr.Row(elem_classes="controlnet_image_controls"):
-                gr.HTML(
-                    value="<p>Set the preprocessor to [invert] If your image has white background and black lines.</p>",
-                    elem_classes="controlnet_invert_warning",
-                )
-                self.open_new_canvas_button = ToolButton(
-                    value=ControlNetUiGroup.open_symbol,
-                    elem_id=f"{elem_id_tabname}_{tabname}_controlnet_open_new_canvas_button",
-                    elem_classes=["cnet-toolbutton"],
-                    tooltip=ControlNetUiGroup.tooltips[ControlNetUiGroup.open_symbol],
-                )
-                self.send_dimen_button = ToolButton(
-                    value=ControlNetUiGroup.tossup_symbol,
-                    elem_id=f"{elem_id_tabname}_{tabname}_controlnet_send_dimen_button",
-                    elem_classes=["cnet-toolbutton"],
-                    tooltip=ControlNetUiGroup.tooltips[ControlNetUiGroup.tossup_symbol],
-                )
-
         with FormRow(elem_classes=["controlnet_main_options"]):
             self.enabled = gr.State(value=self.default_unit.enabled)
 
@@ -353,6 +300,12 @@ class ControlNetUiGroup(object):
                 elem_classes=["cnet-mask-upload"],
                 elem_id=f"{elem_id_tabname}_{tabname}_controlnet_mask_upload_checkbox",
                 visible=not self.is_img2img,
+            )
+            self.send_dimen_button = ToolButton(
+                value=ControlNetUiGroup.tossup_symbol,
+                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_send_dimen_button",
+                elem_classes=["cnet-toolbutton"],
+                tooltip=ControlNetUiGroup.tooltips[ControlNetUiGroup.tossup_symbol],
             )
             self.use_preview_as_input = gr.State(value=False)
 
@@ -803,29 +756,6 @@ class ControlNetUiGroup(object):
             show_progress="hidden",
         )
 
-    def register_create_canvas(self):
-        self.open_new_canvas_button.click(
-            lambda: gr.update(visible=True),
-            inputs=None,
-            outputs=self.create_canvas,
-            show_progress="hidden",
-        )
-        self.canvas_cancel_button.click(
-            lambda: gr.update(visible=False),
-            inputs=None,
-            outputs=self.create_canvas,
-            show_progress="hidden",
-        )
-
-        def fn_canvas(h, w):
-            return np.zeros(shape=(h, w, 3), dtype=np.uint8), gr.update(visible=False)
-
-        self.canvas_create_button.click(
-            fn=fn_canvas,
-            inputs=[self.canvas_height, self.canvas_width],
-            outputs=[self.image.background, self.create_canvas],
-            show_progress="hidden",
-        )
 
     def register_img2img_same_input(self):
         def fn_same_checked(x):
@@ -958,7 +888,6 @@ class ControlNetUiGroup(object):
         self.register_refresh_all_models()
         self.register_build_sliders()
         self.register_shift_preview()
-        self.register_create_canvas()
         self.register_clear_preview()
         self.openpose_editor.register_callbacks(
             self.generated_image,
