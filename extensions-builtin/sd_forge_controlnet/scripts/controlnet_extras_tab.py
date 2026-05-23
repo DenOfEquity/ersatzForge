@@ -3,7 +3,9 @@
 import copy
 import numpy
 import gradio as gr
-from PIL import Image
+from PIL import Image, ImageOps
+import hashlib
+
 from modules import scripts, scripts_postprocessing, shared
 from modules.ui_components import InputAccordion
 from modules_forge.utils import HWC3
@@ -54,6 +56,7 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
                     value=True,
                     elem_id="extras_controlnet_pixel_perfect_checkbox",
                 )
+                self.invert_output = gr.Checkbox(value=False, label="Invert output")
             with gr.Row(visible=False) as self.advanced:
                 self.processor_res = gr.Slider(
                     label="Preprocessor resolution",
@@ -91,6 +94,7 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
             'processor_res' : self.processor_res,
             'threshold_a' : self.threshold_a,
             'threshold_b' : self.threshold_b,
+            'invert_output' : self.invert_output,
         }
         return args
 
@@ -146,24 +150,35 @@ class CNInExtrasTab(scripts_postprocessing.ScriptPostprocessing):
         else:
             processor_res = args['processor_res']
 
-        cache_key = hash(image.tobytes()), args['module'], str(processor_res), str(args['threshold_a']), str(args['threshold_b'])
-        if cache_key == self.cn_pp_hash:
+        hash_sha256 = hashlib.sha256()
+        simpleHash = str(image[:, :, :3]) + args['module'] + str(processor_res) + str(args['threshold_a']) + str(args['threshold_b'])
+        hash_sha256.update(simpleHash.encode('utf-8'))
+        preprocessorHash = hash_sha256.hexdigest()
+
+        if preprocessorHash == self.cn_pp_hash:
             pp.image = self.cn_pp_cache
         else:
             module = global_state.get_preprocessor(args['module'])
 
-            detected_map = module(
-                input_image=image,
-                resolution=processor_res,
-                slider_1=args['threshold_a'],
-                slider_2=args['threshold_b'],
-            )
+            cacheAvailable = hasattr(module, "cache") and hasattr(module, "cacheHash")
+            if cacheAvailable and module.cache is not None and module.cacheHash == preprocessorHash:
+                detected_map = module.cache
+            else:
+                detected_map = module(
+                    input_image=image,
+                    resolution=processor_res,
+                    slider_1=args['threshold_a'],
+                    slider_2=args['threshold_b'],
+                )
 
             pp.image = Image.fromarray(numpy.ascontiguousarray(detected_map.clip(0, 255).astype(numpy.uint8)).copy())
 
             if not (shared.state.interrupted or shared.state.skipped):
                 self.cn_pp_cache = pp.image
-                self.cn_pp_hash = cache_key
+                self.cn_pp_hash = preprocessorHash
+
+        if args['invert_output']:
+            pp.image = ImageOps.invert(pp.image)
 
         info = copy.copy(args)
         del info['enable']
