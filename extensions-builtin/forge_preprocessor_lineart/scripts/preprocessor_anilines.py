@@ -6,7 +6,6 @@ from modules.modelloader import load_file_from_url
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import os
 import cv2
 import numpy
@@ -103,7 +102,7 @@ class Up(nn.Module):
         diffY = x2.size()[2] - x1.size()[2]
         diffX = x2.size()[3] - x1.size()[3]
 
-        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+        x1 = nn.functional.pad(x1, [diffX // 2, diffX - diffX // 2,
                         diffY // 2, diffY - diffY // 2])
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
@@ -159,7 +158,6 @@ class PreprocessorAniLines(Preprocessor):
         return model
 
     def __call__(self, input_image, resolution, slider_1=None, slider_2=None, slider_3=None, **kwargs):
-
         match self.name:
             case 'AniLines basic':
                 if self.model is None:
@@ -174,7 +172,6 @@ class PreprocessorAniLines(Preprocessor):
             return input_image
         else:
             image, remove_pad = resize_image_with_pad(input_image, resolution)
-            self.model.to(self.device)
 
             if self.name == 'AniLines basic':
                 img = Image.fromarray(image)
@@ -194,18 +191,18 @@ class PreprocessorAniLines(Preprocessor):
             
                 img = torch.cat([img, sobel], dim=1)
 
-            B, C, H, W = img.shape
+            H, W = img.shape[2:]
             pad_h = 8 - (H % 8)
             pad_w = 8 - (W % 8)
-            img = F.pad(img, (0, pad_w, 0, pad_h), mode='reflect')
+            img = nn.functional.pad(img, (0, pad_w, 0, pad_h), mode='reflect')
 
+            self.model.to(self.device)
             with torch.no_grad():
                 pred = self.model(img)
-            pred = ((pred[:, :, :H, :W].clamp(min=0.0, max=1.0) * 255.0) + 0.5)
-            
-            result = pred[0, 0].cpu().numpy().astype(numpy.uint8)
-            
             self.model.to('cpu')
+
+            pred = ((pred[:, :, :H, :W].clamp(min=0.0, max=1.0) * 255.0) + 0.5)
+            result = pred[0, 0].cpu().numpy().astype(numpy.uint8)
 
             return HWC3(remove_pad(result))
 

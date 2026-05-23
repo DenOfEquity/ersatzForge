@@ -428,16 +428,10 @@ class PreprocessorLineart(Preprocessor):
         image, remove_pad = resize_image_with_pad(input_image, resolution)
 
         match self.name:
-            case 'lineart_standard (from white bg & black line)':
-                x = image.astype(numpy.float32)
-                g = cv2.GaussianBlur(x, (0, 0), 6.0)
-                intensity = numpy.min(g - x, axis=2).clip(0, 255)
-                intensity /= max(16, numpy.median(intensity[intensity > 8]))
-                intensity *= 127
-                result = intensity.clip(0, 255).astype(numpy.uint8)
+            case 'lineart_standard (from white bg & black line)' | 'lineart_inverted (from black bg & white line)':
+                if 'inverted' in self.name:
+                    image = 255 - image
 
-            case 'lineart_inverted (from black bg & white line)':
-                image = 255 - image
                 x = image.astype(numpy.float32)
                 g = cv2.GaussianBlur(x, (0, 0), 6.0)
                 intensity = numpy.min(g - x, axis=2).clip(0, 255)
@@ -448,37 +442,38 @@ class PreprocessorLineart(Preprocessor):
             case 'lineart_coarse':
                 if self.model is None:
                     self.load_model('sk_model2.pth')
-                self.model.to(self.device)
 
                 image = torch.from_numpy(image).to(torch.float32).to(self.device)
                 image = image / 255.0
                 image = rearrange(image, 'h w c -> 1 c h w')
+
+                self.model.to(self.device)
                 with torch.no_grad():
                     line = self.model(image)[0][0]
+                self.model.to('cpu')
+
                 line = line.cpu().numpy()
                 result = 255 - (line * 255.0).clip(0, 255).astype(numpy.uint8)
-
-                self.model.to('cpu')
 
             case 'lineart_realistic':
                 if self.model is None:
                     self.load_model('sk_model.pth')
-                self.model.to(self.device)
 
                 image = torch.from_numpy(image).to(torch.float32).to(self.device)
                 image = image / 255.0
                 image = rearrange(image, 'h w c -> 1 c h w')
+
+                self.model.to(self.device)
                 with torch.no_grad():
                     line = self.model(image)[0][0]
+                self.model.to('cpu')
+
                 line = line.cpu().numpy()
                 result = 255 - (line * 255.0).clip(0, 255).astype(numpy.uint8)
-
-                self.model.to('cpu')
 
             case 'lineart_anime':
                 if self.model is None:
                     self.load_anime_model()
-                self.model.to(self.device)
 
                 H, W, C = image.shape
                 Hn = 256 * int(numpy.ceil(float(H) / 256.0))
@@ -487,47 +482,37 @@ class PreprocessorLineart(Preprocessor):
                 image = torch.from_numpy(image).to(torch.float32).to(self.device)
                 image = image / 127.5 - 1.0
                 image = rearrange(image, 'h w c -> 1 c h w')
+
+                self.model.to(self.device)
                 with torch.no_grad():
                     line = self.model(image)[0, 0]
+                self.model.cpu()
+
                 line = (line * 127.5 + 127.5).cpu().numpy()
                 line = cv2.resize(line, (W, H), interpolation=cv2.INTER_CUBIC)
                 result = 255 - line.clip(0, 255).astype(numpy.uint8)
 
-                self.model.cpu()
-
-            case 'lineart_anime_denoised':
+            case 'lineart_anime_denoised' | 'lineart_anime_inverted':
                 if self.model is None:
                     self.load_manga_model()
-                self.model.to(self.device)
 
                 image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
                 image = numpy.ascontiguousarray(image)
                 image = torch.from_numpy(image).to(torch.float32).to(self.device)
                 image = rearrange(image, 'h w -> 1 1 h w')
-                with torch.no_grad():
-                    line = self.model(image)[0, 0]
-                line = line.cpu().numpy()
-                result = 255 - line.clip(0, 255).astype(numpy.uint8)
 
-                self.model.cpu()
-
-            case 'lineart_anime_inverted':
-                if self.model is None:
-                    self.load_manga_model()
                 self.model.to(self.device)
-
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-                image = numpy.ascontiguousarray(image)
-                image = torch.from_numpy(image).to(torch.float32).to(self.device)
-                image = rearrange(image, 'h w -> 1 1 h w')
                 with torch.no_grad():
                     line = self.model(image)[0, 0]
-                line = line.cpu().numpy()
-                result = line.clip(0, 255).astype(numpy.uint8)
-
                 self.model.cpu()
 
-            case 'lineart_xDoG':
+                line = line.cpu().numpy()
+                if 'inverted' in self.name:
+                    result = line.clip(0, 255).astype(numpy.uint8)
+                else:
+                    result = 255 - line.clip(0, 255).astype(numpy.uint8)
+
+            case 'lineart_xDoG' | 'lineart_xDoG_inverted':
                 sigma = 1.0
                 k = 1.6
 
@@ -537,19 +522,10 @@ class PreprocessorLineart(Preprocessor):
 
                 dog = (127 + numpy.min(g1-g0, axis=2)).clip(0, 255).astype(numpy.uint8)
                 result = numpy.zeros_like(image, dtype=numpy.uint8)
-                result[dog > 128] = 255
-
-            case 'lineart_xDoG_inverted':
-                sigma = 1.0
-                k = 1.6
-
-                image = image.astype(numpy.float32)
-                g0 = cv2.GaussianBlur(image, (3,3), sigma,   borderType=cv2.BORDER_REPLICATE)
-                g1 = cv2.GaussianBlur(image, (5,5), sigma*k, borderType=cv2.BORDER_REPLICATE)
-
-                dog = (127 + numpy.min(g1-g0, axis=2)).clip(0, 255).astype(numpy.uint8)
-                result = numpy.zeros_like(image, dtype=numpy.uint8)
-                result[dog < 128] = 255
+                if 'inverted' in self.name:
+                    result[dog < 128] = 255
+                else:
+                    result[dog >= 128] = 255
 
             case _:
                 return input_image
