@@ -387,7 +387,7 @@ class PreprocessorLineart(Preprocessor):
         if not os.path.exists(model_path):
             load_file_from_url(remote_model_path, model_dir=model_dir)
         model = Generator(3, 1, 3)
-        model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+        model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'), weights_only=True))
         model.eval()
         self.model = model
 
@@ -399,7 +399,7 @@ class PreprocessorLineart(Preprocessor):
             load_file_from_url(remote_model_path, model_dir=model_dir)
 
         net = UnetGenerator(3, 1, 8, 64, use_dropout=False)
-        ckpt = torch.load(model_path)
+        ckpt = torch.load(model_path, map_location=torch.device('cpu'), weights_only=True)
         for key in list(ckpt.keys()):
             if key.startswith('module.'):
                 ckpt[key[7:]] = ckpt.pop(key)
@@ -415,7 +415,7 @@ class PreprocessorLineart(Preprocessor):
             load_file_from_url(remote_model_path, model_dir=model_dir)
 
         net = res_skip()
-        ckpt = torch.load(model_path)
+        ckpt = torch.load(model_path, map_location=torch.device('cpu'), weights_only=True)
         for key in list(ckpt.keys()):
             if key.startswith('module.'):
                 ckpt[key[7:]] = ckpt.pop(key)
