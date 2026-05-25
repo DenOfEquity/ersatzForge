@@ -461,7 +461,6 @@ class StableDiffusionProcessing:
 
         if self.cfg_scale == 1:
             self.uc = None
-            # print('Skipping unconditional conditioning when CFG = 1. Negative Prompts are ignored.')
         else:
             self.uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, negative_prompts, total_steps, self.extra_network_data, is_negative=True)
 
@@ -731,8 +730,6 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         "Conditional mask weight": getattr(p, "inpainting_mask_weight", opts.inpainting_mask_weight) if p.is_using_inpainting_conditioning else None,
         "Clip skip": None if clip_skip <= 1 else clip_skip,
         "ENSD": opts.eta_noise_seed_delta if uses_ensd else None,
-        "Token merging ratio": None if token_merging_ratio == 0 else token_merging_ratio,
-        "Token merging ratio hr": None if not enable_hr or token_merging_ratio_hr == 0 else token_merging_ratio_hr,
         "Init image hash": getattr(p, 'init_img_hash', None),
         "Tiling": p.tiling if p.tiling != "None" and (shared.sd_model.is_sd1 or shared.sd_model.is_sd2 or shared.sd_model.is_sdxl) else None,
         **p.extra_generation_params,
@@ -755,17 +752,23 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
     if opts.emphasis != "Original":
         generation_params.update({"Emphasis": opts.emphasis, })
 
-    if sd_models.model_data.sd_model.is_flux:
+    if p.sd_model.is_sd1 or p.sd_model.is_sd2 or p.sd_model.is_sdxl:
+        if token_merging_ratio > 0:
+            generation_params.update({ "Token merging ratio": token_merging_ratio, })
+        if enable_hr and token_merging_ratio_hr > 0:
+            generation_params.update({ "Token merging ratio hr": token_merging_ratio_hr, })
+
+    if p.sd_model.is_flux:
         if opts.dynamicPE_flux > 0:
             generation_params.update({ "dynamicPE flux": opts.dynamicPE_flux, })
         elif opts.scalePE_flux > 0:
             generation_params.update({ "scalePE flux": opts.scalePE_flux, })
-    elif sd_models.model_data.sd_model.is_lumina2:
+    elif p.sd_model.is_lumina2:
         if opts.dynamicPE_lumina2 > 0:
             generation_params.update({ "dynamicPE lumina2": opts.dynamicPE_lumina2, })
         elif opts.scalePE_lumina2 > 0:
             generation_params.update({ "scalePE lumina2": opts.scalePE_lumina2, })
-    elif sd_models.model_data.sd_model.is_ernie:
+    elif p.sd_model.is_ernie:
         if opts.scalePE_ernie > 0:
             generation_params.update({ "scalePE ernie": opts.scalePE_ernie, })
 
@@ -1529,7 +1532,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             self.calculate_hr_conds()
 
         self.sd_model.forge_objects = self.sd_model.forge_objects_after_applying_lora.shallow_copy()
-        sd_models.apply_token_merging(self.sd_model, self.get_token_merging_ratio(for_hr=True))
+        sd_models.apply_token_merging(self.sd_model, self.get_token_merging_ratio(for_hr=True), hr=True)
 
         if self.scripts is not None:
             self.scripts.before_hr(self)
@@ -1602,7 +1605,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         if self.hr_cfg == 1:
             self.hr_uc = None
-            # print('Skipping unconditional conditioning (HR pass) when CFG = 1. Negative Prompts are ignored.')
         else:
             self.hr_uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, hr_negative_prompts, self.firstpass_steps, self.hr_extra_network_data, total_steps, is_negative=True)
 

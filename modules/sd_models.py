@@ -10,6 +10,7 @@ import gc
 from modules import paths, shared, modelloader, devices, script_callbacks, errors, hashes, cache
 from modules.shared import opts, cmd_opts
 from modules.timer import Timer
+import modules_forge.colour_code as cc
 
 from backend.loader import forge_loader
 from backend import memory_management
@@ -179,7 +180,6 @@ def get_closet_checkpoint_match(search_string):
 
 
 def select_checkpoint():
-    """Raises `FileNotFoundError` if no checkpoints are found."""
     model_checkpoint = shared.opts.sd_model_checkpoint
 
     checkpoint_info = checkpoint_aliases.get(model_checkpoint, None)
@@ -187,14 +187,13 @@ def select_checkpoint():
         return checkpoint_info
 
     if len(checkpoints_list) == 0:
-        print('You do not have any model!')
+        print(f"{cc.ERROR}You do not have a model!{cc.RESET}")
         return None
 
-    checkpoint_info = next(iter(checkpoints_list.values()))
     if model_checkpoint is not None:
-        print(f"Checkpoint {model_checkpoint} not found; loading fallback {checkpoint_info.title}", file=sys.stderr)
+        print(f"{cc.ERROR}Checkpoint not found:{cc.RESET} {model_checkpoint}")
 
-    return checkpoint_info
+    return None
 
 
 def model_hash(filename):
@@ -347,11 +346,14 @@ def unload_model_weights(sd_model=None, info=None):
     return
 
 
-def apply_token_merging(sd_model, token_merging_ratio):
+def apply_token_merging(sd_model, token_merging_ratio, hr=False):
+    if not (sd_model.is_sd1 or sd_model.is_sd2 or sd_model.is_sdxl):
+        return
     if token_merging_ratio <= 0:
         return
 
-    print(f'token_merging_ratio = {token_merging_ratio}')
+    hr_text = " HighRes" if hr else ""
+    print(f"{cc.SETTING2}Token merging ratio{hr_text}:{cc.RESET} {token_merging_ratio}")
 
     from backend.misc.tomesd import TomePatcher
 
@@ -363,19 +365,12 @@ def apply_token_merging(sd_model, token_merging_ratio):
     return
 
 
-import modules_forge.colour_code as cc
 @torch.inference_mode()
 def forge_model_reload():
     current_hash = hash(str(model_data.forge_loading_parameters))
 
     if model_data.forge_hash == current_hash and model_data.sd_model is not None:
         return model_data.sd_model, False
-
-    print(f"{cc.LOAD}Loading model:{cc.RESET}  " + str(model_data.forge_loading_parameters["checkpoint_info"].filename))
-    for module in model_data.forge_loading_parameters["additional_modules"]:
-        print(f"{cc.LOAD}Loading module:{cc.RESET} " + str(module))
-    if model_data.forge_loading_parameters["unet_storage_dtype"] is not None:
-        print (f"{cc.SETTING}Forced storage dtype for model:{cc.RESET} " + str(model_data.forge_loading_parameters["unet_storage_dtype"]))
 
     timer = Timer()
 
@@ -398,7 +393,8 @@ def forge_model_reload():
     state_dict = checkpoint_info.filename
     additional_state_dicts = model_data.forge_loading_parameters.get("additional_modules", [])
 
-    timer.record("cache state dict")
+    if model_data.forge_loading_parameters["unet_storage_dtype"] is not None:
+        print (f"{cc.SETTING}Forced storage dtype for model:{cc.RESET} " + str(model_data.forge_loading_parameters["unet_storage_dtype"]))
 
     dynamic_args["forge_unet_storage_dtype"] = model_data.forge_loading_parameters.get("unet_storage_dtype", None)
     dynamic_args["embedding_dir"] = cmd_opts.embeddings_dir
@@ -417,7 +413,8 @@ def forge_model_reload():
 
     timer.record("scripts callbacks")
 
-    print(f"{cc.INFO2}Model loaded in {timer.summary()}.{cc.RESET}")
+    if model_data.sd_model is not None:
+        print(f"{cc.INFO2}Model loaded in {timer.summary()}.{cc.RESET}")
 
     model_data.forge_hash = current_hash
 
