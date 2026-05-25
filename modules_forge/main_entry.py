@@ -7,6 +7,7 @@ from modules import shared, ui_common, sd_models, processing, infotext_utils, pa
 from backend import memory_management, stream
 from backend.args import dynamic_args
 
+
 total_vram = int(memory_management.total_vram)
 
 ui_forge_preset: gr.Dropdown = None
@@ -211,9 +212,6 @@ def refresh_model_loading_parameters():
         additional_modules=shared.opts.forge_additional_modules,
         unet_storage_dtype=unet_storage_dtype
     )
-
-    print(f'Model selected: {sd_models.model_data.forge_loading_parameters}')
-    print(f'Using online LoRAs in FP16: {lora_fp16}')
 
     return
 
