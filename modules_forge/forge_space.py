@@ -116,8 +116,6 @@ class ForgeSpace:
         results = []
 
         self.installed = os.path.exists(self.hf_path)
-        requirements_filename = os.path.abspath(os.path.realpath(os.path.join(self.root_path, 'requirements.txt')))
-        has_requirement = os.path.exists(requirements_filename)
 
         if isinstance(self.gradio_metas, tuple):
             results.append(build_html(title=self.title, installed=self.installed, url=self.gradio_metas[1]))
@@ -125,9 +123,7 @@ class ForgeSpace:
             results.append(build_html(title=self.title, installed=self.installed, error=self.error))
 
         if self.installed:
-            if has_requirement:
-                results.append(gr.update(value="Reinstall", variant="primary"))
-            elif self.block_uninstall:
+            if self.block_uninstall:
                 results.append(gr.update(value="", variant="primary", interactive=False))
             else:
                 results.append(gr.update(value="Uninstall", variant="primary", interactive=True))
@@ -160,12 +156,6 @@ class ForgeSpace:
                     ignore_patterns=self.ignore_patterns
                 )
                 print(f'Downloaded: {downloaded}')
-
-            requirements_filename = os.path.abspath(os.path.realpath(os.path.join(self.root_path, 'requirements.txt')))
-
-            if os.path.exists(requirements_filename):
-                from modules.launch_utils import run_pip
-                run_pip(f'install -r "{requirements_filename}"', desc=f"space requirements for [{self.title}]")
 
             print(f'Install finished: {self.title}')
 
@@ -231,7 +221,7 @@ class ForgeSpace:
                 inbrowser=True,
                 prevent_thread_lock=True,
                 server_name=server_name,
-                server_port=port
+                server_port=port,
             )
 
             sys.modules.update(modules_backup)
