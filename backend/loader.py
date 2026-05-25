@@ -913,12 +913,14 @@ def preprocess_state_dict(sd):
 
 
 def split_state_dict(sd, additional_state_dicts: list = None):
+    print(f"{cc.LOAD}Loading model:{cc.RESET} {sd} ")
     sd = load_torch_file(sd)
     sd = preprocess_state_dict(sd)
     guess = huggingface_guess.guess(sd)
 
     if isinstance(additional_state_dicts, list):
         for asd in additional_state_dicts:
+            print(f"{cc.LOAD}Loading module:{cc.RESET} {asd}")
             asd = load_torch_file(asd)
             sd = replace_state_dict(sd, asd, guess)
             del asd
