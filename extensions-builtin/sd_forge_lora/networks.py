@@ -19,12 +19,14 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
     unet_keys = model_lora_keys_unet(model.model) if model is not None else {}
     clip_keys = model_lora_keys_clip(clip.cond_stage_model) if clip is not None else {}
 
-    if model.model.diffusion_model.__class__.__name__ == "Anima":
-        # LLMAdapter was moved from transformer to text_encoder
+    if model.model.diffusion_model.__class__.__name__ == "MiniTrainDIT":
+        # Anima LLMAdapter was moved from transformer to text_encoder
         keys = list(lora.keys())
         for k in keys:
             if k.startswith("diffusion_model.llm_adapter"):
-                lora[k.replace("diffusion_model", "text_encoders.qwen3_06b")] = lora.pop(k)
+                lora[k.replace("diffusion_model.", "qwen3.", 1)] = lora.pop(k)
+            elif k.startswith("lora_unet_llm_adapter"):
+                lora[k.replace("lora_unet_llm_adapter", "lora_te_llm_adapter", 1)] = lora.pop(k)
 
     lora_unmatch = lora
     lora_unet, lora_unmatch = load_lora(lora_unmatch, unet_keys)
@@ -32,7 +34,6 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
 
     if len(lora_unmatch) > 12:
         print(f"{cc.WARNING}[LORA] apparent version mismatch{cc.RESET} ({cc.MINOR}{len(lora_unmatch)} keys{cc.RESET}) for {model_flag}: {filename}")
-
     del lora, lora_unmatch
 
     new_model = model.clone() if model is not None else None
