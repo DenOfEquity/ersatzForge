@@ -27,11 +27,6 @@ def encode_data_url(json_string: str) -> str:
 
 
 class OpenposeEditor(object):
-    # Filename used when user click the download link.
-    download_file = "pose.json"
-    # URL the openpose editor is mounted on.
-    editor_url = "/openpose_editor_index"
-
     def __init__(self) -> None:
         self.render_button = None
         self.pose_input = None
@@ -55,10 +50,10 @@ class OpenposeEditor(object):
             '<iframe src="about:blank"></iframe>',
             open_button_text="Edit",
             open_button_classes=["cnet-edit-pose"],
-            open_button_extra_attrs=f'title="Send pose to {OpenposeEditor.editor_url} for edit."',
+            open_button_extra_attrs='title="Send pose to OpenPose Editor"',
         ).create_modal(visible=False)
         self.download_link = gr.HTML(
-            value=f"""<a href='' download='{OpenposeEditor.download_file}'>JSON</a>""",
+            value="<a href='' download='pose.json'>Download OpenPose JSON</a>",
             visible=False,
             elem_classes=["cnet-download-pose"],
         )
@@ -67,7 +62,7 @@ class OpenposeEditor(object):
         """Renders the button in input image control button group."""
         self.upload_link = gr.HTML(
             value="""
-            <label>Upload JSON</label>
+            <label>Upload OpenPose JSON</label>
             <input type="file" accept=".json"/>
             """,
             visible=False,
@@ -116,9 +111,9 @@ class OpenposeEditor(object):
         )
 
         def update_upload_link(model: str) -> Dict:
-            return gr.update(visible="openpose" in model.lower())
+            return gr.update(visible=(any(key in model.lower() for key in ("openpose", "union", "unicontrol"))))
 
-        model.change(fn=update_upload_link, inputs=[model], outputs=[self.upload_link])
+        model.change(fn=update_upload_link, inputs=[model], outputs=[self.upload_link], queue=False)
 
     def outputs(self) -> List[Any]:
         return [
@@ -137,18 +132,12 @@ class OpenposeEditor(object):
         Returns:
             An gr.update event.
         """
-        hint = "Download the pose as .json file"
-        html = f"""<a href='{encode_data_url(json_string)}' 
-                      download='{OpenposeEditor.download_file}' title="{hint}">
-                    JSON</a>"""
+        html = f'<a href="{encode_data_url(json_string)}" download="pose.json" title="Download the pose as .json file">JSON</a>'
 
         visible = json_string != ""
         return [
             # Download link update.
             gr.update(value=html, visible=visible),
             # Modal update.
-            gr.update(
-                visible=visible
-                and not shared.opts.data.get("controlnet_disable_openpose_edit", False)
-            ),
+            gr.update(visible=visible and not shared.opts.data.get("controlnet_disable_openpose_edit", False) ),
         ]
