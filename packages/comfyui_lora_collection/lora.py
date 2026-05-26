@@ -272,19 +272,34 @@ def load_lora(lora, to_load):
 def model_lora_keys_clip(model, key_map={}):
     sdk = model.state_dict().keys()
 
+    lW = len(".weight")
+
     # Anima
     if "qwen3.llm_adapter.embed.weight" in sdk:     # LLM adapter unique to Anima, shouldn't match any other Qwen3 model
-        text_model_lora_key = "lora_te_layers_{}_{}"
-        for b in range(28):
-            for c in LORA_CLIP_MAP:
-                k = "qwen3.model.layers.{}.{}.weight".format(b, c)
-                if k in sdk:
-                    lora_key = text_model_lora_key.format(b, LORA_CLIP_MAP[c])
-                    key_map[lora_key] = k
+        for k in sdk:
+            if k.startswith("qwen3.") and k.endswith(".weight"):
+                _key = k[: -lW]
+                key_map[_key] = k
+
+            if k.startswith("qwen3.model.layers"):
+                _key = k[len("qwen3.model.layers.") : -lW]
+                key_map["lora_te_layers_{}".format(_key.replace(".", "_"))] = k
+            elif k.startswith("qwen3.llm_adapter"):
+                _key = k[len("qwen3.llm_adapter.layers.") : -lW]
+                key_map["lora_te_llm_adapter_blocks_{}".format(_key.replace(".", "_"))] = k
+                
         return sdk, key_map
+
+    # generic lora format without any weird key names
+    for k in sdk:
+        if k.endswith(".weight"):
+            _key = k[: -lW]
+            key_map[_key] = k
+
 
     text_model_lora_key = "lora_te_text_model_encoder_layers_{}_{}"
     clip_l_present = False
+    clip_g_present = False
     for b in range(32): #TODO: clean up
         for c in LORA_CLIP_MAP:
             k = "clip_h.transformer.text_model.encoder.layers.{}.{}.weight".format(b, c)
@@ -298,16 +313,17 @@ def model_lora_keys_clip(model, key_map={}):
 
             k = "clip_l.transformer.text_model.encoder.layers.{}.{}.weight".format(b, c)
             if k in sdk:
+                clip_l_present = True
                 lora_key = text_model_lora_key.format(b, LORA_CLIP_MAP[c])
                 key_map[lora_key] = k
                 lora_key = "lora_te1_text_model_encoder_layers_{}_{}".format(b, LORA_CLIP_MAP[c]) #SDXL base
                 key_map[lora_key] = k
-                clip_l_present = True
                 lora_key = "text_encoder.text_model.encoder.layers.{}.{}".format(b, c) #diffusers lora
                 key_map[lora_key] = k
 
             k = "clip_g.transformer.text_model.encoder.layers.{}.{}.weight".format(b, c)
             if k in sdk:
+                clip_g_present = True
                 if clip_l_present:
                     lora_key = "lora_te2_text_model_encoder_layers_{}_{}".format(b, LORA_CLIP_MAP[c]) #SDXL base
                     key_map[lora_key] = k
@@ -323,19 +339,16 @@ def model_lora_keys_clip(model, key_map={}):
 
     for k in sdk:
         if k.endswith(".weight"):
-            if k.startswith("t5xxl.transformer."):#OneTrainer SD3 lora
-                l_key = k[len("t5xxl.transformer."):-len(".weight")]
-                lora_key = "lora_te3_{}".format(l_key.replace(".", "_"))
-                key_map[lora_key] = k
+            if k.startswith("t5xxl.transformer."): # OneTrainer lora
+                l_key = k[len("t5xxl.transformer."):-lW]
+                if clip_l_present and clip_g_present:       # SD3
+                    lora_key = "lora_te3_{}".format(l_key.replace(".", "_"))
+                    key_map[lora_key] = k
+                elif clip_l_present:                        # Flux
+                    lora_key = "lora_te2_{}".format(l_key.replace(".", "_"))
+                    key_map[lora_key] = k
     
                 #####
-                lora_key = "lora_te2_{}".format(l_key.replace(".", "_"))#OneTrainer Flux lora, by Forge
-                key_map[lora_key] = k
-                #####
-    #         elif k.startswith("hydit_clip.transformer.bert."): #HunyuanDiT Lora
-    #             l_key = k[len("hydit_clip.transformer.bert."):-len(".weight")]
-    #             lora_key = "lora_te1_{}".format(l_key.replace(".", "_"))
-    #             key_map[lora_key] = k
     
     
     k = "clip_g.transformer.text_projection.weight"
