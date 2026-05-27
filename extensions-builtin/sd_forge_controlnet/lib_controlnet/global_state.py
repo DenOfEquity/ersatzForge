@@ -110,7 +110,7 @@ def get_filtered_controlnet_names(tag):
         model_filename_filters.append("union")
     if tag in ["All", "Canny", "Depth", "Inpaint", "Lineart", "NormalMap", "OpenPose", "Scribble", "SoftEdge"]:
         model_filename_filters.append("unicontrol")
-    if tag in ["All", "Lineart", "Scribble", "Tile"]:
+    if tag in ["All", "Lineart", "Recolor", "Scribble", "Tile"]:
         model_filename_filters.append("any-test")
     
     for p in filtered_preprocessors.values():
