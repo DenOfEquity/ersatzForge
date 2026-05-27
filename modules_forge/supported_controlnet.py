@@ -8,7 +8,7 @@ from backend.operations import using_forge_operations
 from backend.nn.cnets import cldm
 from backend.patcher.controlnet import ControlLora, ControlNet, load_t2i_adapter, apply_controlnet_advanced
 from modules_forge.shared import add_supported_control_model
-
+from modules_forge import colour_code as cc
 
 class ControlModelPatcher:
     @staticmethod
@@ -186,13 +186,27 @@ add_supported_control_model(ControlNetPatcher)
 class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
     @staticmethod
     def try_build_from_state_dict(controlnet_data, ckpt_path, metadata=None):
-        is_anima_ref = (
-            "diffusion_model.blocks.0.adaln_modulation_cross_attn.1.lora_A.weight" in controlnet_data and
-            "zero_convs.0.0.weight" not in controlnet_data and
-            "input_hint_block.0.weight" not in controlnet_data
-        )
-        if not is_anima_ref:
+        if "zero_convs.0.0.weight" in controlnet_data or "input_hint_block.0.weight" in controlnet_data:
             return None
+
+        if not ("lora_unet_blocks_0_cross_attn_k_proj.alpha" in controlnet_data or 
+                "diffusion_model.blocks.0.adaln_modulation_cross_attn.1.lora_A.weight" in controlnet_data):
+                    return None
+
+        if "lora_unet_blocks_0_cross_attn_k_proj.alpha" in controlnet_data:
+            # convert key names to match model
+            converted = {}
+            for k, v in controlnet_data.items():
+                _k = k[len("lora_unet_"):].replace("_", ".")
+                _k = _k.replace("self.attn", "self_attn")
+                _k = _k.replace("cross.attn", "cross_attn")
+                _k = _k.replace("q.proj", "q_proj")
+                _k = _k.replace("k.proj", "k_proj")
+                _k = _k.replace("v.proj", "v_proj")
+                _k = _k.replace("output.proj", "output_proj")
+
+                converted["diffusion_model." + _k] = v
+            controlnet_data = converted
 
         prefixes = set()
         for k in controlnet_data.keys():
@@ -204,7 +218,11 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
         to_load = {p: f"{p}.weight" for p in prefixes}
        
         from packages.comfyui_lora_collection.lora import load_lora
-        model_lora, _ = load_lora(controlnet_data, to_load)
+        model_lora, lora_unmatch = load_lora(controlnet_data, to_load)
+
+        if len(lora_unmatch) > 0:
+            print(f"{cc.WARNING}[AnimaReferenceControlLoraPatcher]{cc.RESET} ({cc.MINOR}{len(lora_unmatch)} unmatched keys{cc.RESET}) {filename}")
+        del lora_unmatch
         
         patcher = AnimaReferenceControlLoraPatcher()
         patcher.model_lora = model_lora
@@ -216,7 +234,7 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
         from modules import devices
         from modules.sd_samplers_common import images_tensor_to_samples
         unet = process.sd_model.forge_objects.unet.clone()
-        
+
         unet.add_patches(filename="anima_control", patches=self.model_lora, strength_patch=self.strength, strength_model=1.0)
         
         # Parse timestep range using unet predictor
@@ -241,5 +259,6 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
     
         unet.add_conditioning_modifier(ref_latents_modifier)
         process.sd_model.forge_objects.unet = unet
+
 
 add_supported_control_model(AnimaReferenceControlLoraPatcher)
