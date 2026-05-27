@@ -332,8 +332,7 @@ def bong_tangent_scheduler(n, sigma_min, sigma_max, inner_model, device):
 
 
 def linear_quadratic_scheduler(n, sigma_min, sigma_max, inner_model, device):
-    threshold_noise = 0.025 # option?
-
+    threshold_noise = 0.025
     if n == 1:
         sigma_schedule = [1.0]
     else:
@@ -422,6 +421,21 @@ schedulers = [
 ]
 
 schedulers_map = {**{x.name: x for x in schedulers}, **{x.label: x for x in schedulers}}
+
+schedulers_map_aliases = {}
+
+def set_schedulers_aliases():
+    global schedulers
+    
+    schedulers_map_aliases.clear()
+    for x in schedulers:
+        schedulers_map_aliases.update({x.name: x.label})
+        schedulers_map_aliases.update({x.label: x.label})
+        if x.aliases is not None:
+            for alias in x.aliases:
+                schedulers_map_aliases.update({alias.lower(): x.label})
+
+set_schedulers_aliases()
 
 def visible_scheduler_names():
     global schedulers

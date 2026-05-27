@@ -1,11 +1,9 @@
 # from __future__ import annotations
 
-# import functools
-# import logging
 from modules import sd_samplers_kdiffusion, sd_samplers_timesteps, sd_samplers_lcm, shared, sd_samplers_common, sd_schedulers
 
 # imports for functions that previously were here and are used by other modules
-from modules.sd_samplers_common import samples_to_image_grid, sample_to_image  # noqa: F401
+# from modules.sd_samplers_common import samples_to_image_grid, sample_to_image  # noqa: F401
 from modules_forge import alter_samplers
 
 all_samplers = [
@@ -89,7 +87,6 @@ def fix_p_invalid_sampler_and_scheduler(p):
     if p.scheduler not in scheduler_names:
         print (f"[Autocorrection] Unknown scheduler {p.scheduler}, defaulted to {sd_schedulers.schedulers[0].label}.")
         p.scheduler = sd_schedulers.schedulers[0].label
-
 
 
 set_samplers()

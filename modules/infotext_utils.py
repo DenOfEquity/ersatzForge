@@ -8,7 +8,7 @@ import sys
 
 import gradio as gr
 from modules.paths import data_path
-from modules import shared, ui_tempdir, script_callbacks, processing, infotext_versions, images, prompt_parser, errors, sd_models
+from modules import shared, ui_tempdir, script_callbacks, processing, infotext_versions, images, prompt_parser, errors, sd_models, sd_samplers, sd_schedulers
 from PIL import Image
 
 from modules_forge import main_entry
@@ -374,6 +374,14 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
 
     restore_old_hires_fix_params(res)
 
+    # autocorrect Sampler aliases
+    if "Sampler" in res:
+        res["Sampler"] = sd_samplers.samplers_map.get(res["Sampler"].lower(), "Euler a")
+
+    # autocorrect Scheduler aliases
+    if "Schedule type" in res:
+        res["Schedule type"] = sd_schedulers.schedulers_map_aliases.get(res["Schedule type"].lower(), "Simple")
+
     # old form sampler/scheduler combined name
     # autocorrection will catch later anyway, and accounts for old form with custom sampler/scheduler combos
     if "Sampler" in res and "Schedule type" not in res:
@@ -384,7 +392,7 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
             res["Sampler"] = res["Sampler"][0:-12]
             res["Schedule type"] = "Exponential"
         else:
-            res["Schedule type"] = "Automatic"
+            res["Schedule type"] = "Simple"
 
     # Missing RNG means the default was set, which is GPU RNG
     if "RNG" not in res:
