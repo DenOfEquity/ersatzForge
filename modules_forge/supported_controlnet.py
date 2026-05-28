@@ -204,13 +204,15 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
                 _k = _k.replace("k.proj", "k_proj")
                 _k = _k.replace("v.proj", "v_proj")
                 _k = _k.replace("output.proj", "output_proj")
+                _k = _k.replace("lokr.w1", "lokr_w1")
+                _k = _k.replace("lokr.w2", "lokr_w2")
 
                 converted["diffusion_model." + _k] = v
             controlnet_data = converted
 
         prefixes = set()
         for k in controlnet_data.keys():
-            for suffix in [".lora_A.weight", ".lora_B.weight", ".lora_up.weight", ".lora_down.weight", ".alpha", ".dora_scale"]:
+            for suffix in [".lora_A.weight", ".lora_B.weight", ".lora_up.weight", ".lora_down.weight", ".alpha", ".dora_scale", ".lokr_w1", ".lokr_w2"]:
                 if k.endswith(suffix):
                     prefixes.add(k[:-len(suffix)])
                     break
@@ -221,7 +223,7 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
         model_lora, lora_unmatch = load_lora(controlnet_data, to_load)
 
         if len(lora_unmatch) > 0:
-            print(f"{cc.WARNING}[AnimaReferenceControlLoraPatcher]{cc.RESET} ({cc.MINOR}{len(lora_unmatch)} unmatched keys{cc.RESET}) {filename}")
+            print(f"{cc.WARNING}[AnimaReferenceControlLoraPatcher]{cc.RESET} ({cc.MINOR}{len(lora_unmatch)} unmatched keys{cc.RESET}) {ckpt_path}")
         del lora_unmatch
         
         patcher = AnimaReferenceControlLoraPatcher()
