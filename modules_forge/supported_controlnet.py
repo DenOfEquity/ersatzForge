@@ -182,7 +182,7 @@ class ControlNetPatcher(ControlModelPatcher):
 
 add_supported_control_model(ControlNetPatcher)
 
-# anima controlnet (Reference latents) by 'inpaint' on civitai
+# anima controlnet (Reference latents), original by 'inpaint' on civitai
 class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
     @staticmethod
     def try_build_from_state_dict(controlnet_data, ckpt_path, metadata=None):
@@ -197,17 +197,13 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
             # convert key names to match model
             converted = {}
             for k, v in controlnet_data.items():
-                _k = k[len("lora_unet_"):].replace("_", ".")
-                _k = _k.replace("self.attn", "self_attn")
-                _k = _k.replace("cross.attn", "cross_attn")
-                _k = _k.replace("q.proj", "q_proj")
-                _k = _k.replace("k.proj", "k_proj")
-                _k = _k.replace("v.proj", "v_proj")
-                _k = _k.replace("output.proj", "output_proj")
-                _k = _k.replace("lokr.w1", "lokr_w1")
-                _k = _k.replace("lokr.w2", "lokr_w2")
+                _k = k.replace("lora_unet_blocks_", "diffusion_model.blocks.", 1)
+                _k = _k.replace("_self_attn_", ".self_attn.", 1)
+                _k = _k.replace("_cross_attn_", ".cross_attn.", 1)
+                _k = _k.replace("_mlp_", ".mlp.", 1)
+                _k = _k.replace("proj_", "proj.", 1)
+                converted[_k] = v
 
-                converted["diffusion_model." + _k] = v
             controlnet_data = converted
 
         prefixes = set()
