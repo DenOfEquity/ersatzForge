@@ -225,6 +225,8 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
         patcher = AnimaReferenceControlLoraPatcher()
         patcher.model_lora = model_lora
 
+        patcher.lora_filename = ckpt_path
+
         return patcher
     
     def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
@@ -233,13 +235,13 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
         from modules.sd_samplers_common import images_tensor_to_samples
         unet = process.sd_model.forge_objects.unet.clone()
 
-        unet.add_patches(filename="anima_control", patches=self.model_lora, strength_patch=self.strength, strength_model=1.0)
+        unet.add_patches(filename=self.lora_filename, patches=self.model_lora, strength_patch=self.strength, strength_model=1.0)
         
         # Parse timestep range using unet predictor
         percent_to_timestep_function = unet.model.predictor.percent_to_sigma
         start_sigma = percent_to_timestep_function(self.start_percent)
         end_sigma = percent_to_timestep_function(self.end_percent)
-        
+
         image = cond.to(devices.device, dtype=devices.dtype_vae)
         ref_latent = images_tensor_to_samples(image, model=process.sd_model)
         
