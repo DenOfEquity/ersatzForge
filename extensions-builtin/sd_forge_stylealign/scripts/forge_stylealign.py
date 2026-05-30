@@ -22,7 +22,7 @@ class StyleAlignForForge(scripts.Script):
     def ui(self, *args, **kwargs):
         with gr.Accordion(open=False, label=self.title()):
             shared_attention = gr.Checkbox(label='Share attention in batch', value=False)
-            strength = gr.Slider(label='Strength', minimum=0.0, maximum=1.0, value=1.0)
+            strength = gr.Slider(label='Strength', minimum=0.0, maximum=1.0, value=1.0, step=0.01)
 
         return [shared_attention, strength]
 
@@ -32,7 +32,9 @@ class StyleAlignForForge(scripts.Script):
 
         shared_attention, strength = script_args
 
-        if not shared_attention:
+        if not shared_attention or strength == 0.0:
+            return
+        if p.batch_size == 1:
             return
 
         unet = p.sd_model.forge_objects.unet.clone()
@@ -61,26 +63,22 @@ class StyleAlignForForge(scripts.Script):
                     indices = uncond_indices
 
                 if len(indices) > 0:
-
                     bq, bk, bv = q[indices], k[indices], v[indices]
 
                     if strength < 0.01:
                         # At strength = 0, use original.
                         original_attention = sdp(bq, bk, bv, transformer_options)
                         results.append(original_attention)
-
                     elif strength > 0.99:
                         # At strength 1, use aligned.
                         aligned_attention_result = aligned_attention(bq, bk, bv, transformer_options)
                         results.append(aligned_attention_result)
-
                     else:
                         # In between, blend original and aligned attention based on strength.
                         original_attention = sdp(bq, bk, bv, transformer_options)
                         aligned_attention_result = aligned_attention(bq, bk, bv, transformer_options)
                         blended_attention = (1.0 - strength) * original_attention + strength * aligned_attention_result
                         results.append(blended_attention)
-
 
             results = torch.cat(results, dim=0)
             return results
@@ -89,11 +87,14 @@ class StyleAlignForForge(scripts.Script):
 
         p.sd_model.forge_objects.unet = unet
 
-        # Below codes will add some logs to the texts below the image outputs on UI.
-        # The extra_generation_params does not influence results.
-        p.extra_generation_params.update(dict(
-            stylealign_enabled=shared_attention,
-            stylealign_strength=strength,
-        ))
-
         return
+
+
+    def process(self, p, *script_args, **kwargs):
+        shared_attention, strength = script_args
+
+        if shared_attention and strength > 0.0:
+            p.extra_generation_params.update(dict(
+                stylealign_enabled=shared_attention,
+                stylealign_strength=strength,
+            ))
