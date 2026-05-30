@@ -402,7 +402,6 @@ def forge_model_reload():
     model_data.sd_model = forge_loader(state_dict, additional_state_dicts=additional_state_dicts)
     timer.record("forge model load")
 
-    model_data.sd_model.extra_generation_params = {}
     model_data.sd_model.comments = []
     model_data.sd_model.sd_checkpoint_info = checkpoint_info
     # model_data.sd_model.filename = checkpoint_info.filename # not used anywhere?
