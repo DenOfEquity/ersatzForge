@@ -69,18 +69,16 @@ def uncrop(image, dest_size, paste_loc):
 
 def apply_overlay(image, paste_loc, overlay):
     if overlay is None:
-        return image, image.copy()
+        return image
 
     if paste_loc is not None:
         image = uncrop(image, (overlay.width, overlay.height), paste_loc)
-
-    original_denoised_image = image.copy()
 
     image = image.convert('RGBA')
     image.alpha_composite(overlay)
     image = image.convert('RGB')
 
-    return image, original_denoised_image
+    return image
 
 def create_binary_mask(image, round=True):
     if image.mode == 'RGBA' and image.getextrema()[-1] != (255, 255):
@@ -195,9 +193,6 @@ class StableDiffusionProcessing:
 
     is_api: bool = field(default=False, init=False)
 
-    # latents_after_sampling = []     # what is this?
-    # pixels_after_sampling = []     # what is this?
-
     def clear_prompt_cache(self):
         self.cond_cache = []
 
@@ -224,11 +219,7 @@ class StableDiffusionProcessing:
             self.seed_resize_from_h = 0
             self.seed_resize_from_w = 0
 
-        # self.cond_cache = StableDiffusionProcessing.cond_cache
-
         self.extra_result_images = []
-        # self.latents_after_sampling = []
-        # self.pixels_after_sampling = []
         self.modified_noise = None
 
     def fill_fields_from_opts(self):
@@ -904,7 +895,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
     apply_circular_forge(p.sd_model, p.tiling)
     p.sd_model.comments = []
-    p.sd_model.extra_generation_params = {}
 
     p.fill_fields_from_opts()
     p.setup_prompts()
@@ -983,8 +973,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             else:
                 p.setup_conds()
 
-            p.extra_generation_params.update(p.sd_model.extra_generation_params)
-
             for comment in p.sd_model.comments:
                 p.comment(comment)
 
@@ -997,22 +985,21 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 sigmas_backup = p.sd_model.forge_objects.unet.model.predictor.sigmas
                 p.sd_model.forge_objects.unet.model.predictor.set_sigmas(rescale_zero_terminal_snr_sigmas(p.sd_model.forge_objects.unet.model.predictor.sigmas))
 
-            def infotext(index=0, use_main_prompt=False):
-                return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, use_main_prompt=use_main_prompt, index=index, all_negative_prompts=p.all_negative_prompts)
-
-            # build all infotexts now, in case user changes Settings during inference
-            for it in range(len(p.seeds)):
-                infotexts.append(infotext(it + n * p.batch_size)) 
-
             samples_ddim = p.sample(conditioning=p.c, unconditional_conditioning=p.uc, seeds=p.seeds, subseeds=p.subseeds, subseed_strength=p.subseed_strength, prompts=p.prompts)
-
-            # for x_sample in samples_ddim:
-                # p.latents_after_sampling.append(x_sample)
 
             if sigmas_backup is not None:
                 p.sd_model.forge_objects.unet.model.predictor.set_sigmas(sigmas_backup)
 
-            if p.scripts is not None:
+            # build all infotexts after sampling: Settings changed during sampling can be incorrect in infotext
+            # but many extensions suboptimally set extra_generation_params in process_before_every_sampling
+            # also Scheduler settings
+            def infotext(index=0, use_main_prompt=False):
+                return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, use_main_prompt=use_main_prompt, index=index, all_negative_prompts=p.all_negative_prompts)
+
+            for it in range(len(p.seeds)):
+                infotexts.append(infotext(it + n * p.batch_size)) 
+
+            if p.scripts is not None and not (state.interrupted or state.stopping_generation):
                 ps = scripts.PostSampleArgs(samples_ddim)
                 p.scripts.post_sample(p, ps)
                 samples_ddim = ps.samples
@@ -1034,15 +1021,17 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             state.nextjob()
 
             if p.scripts is not None:
-                p.scripts.postprocess_batch(p, x_samples_ddim, batch_number=n)
+                # avoid postprocessing if generation interrupted
+                if not (state.interrupted or state.stopping_generation):
+                    p.scripts.postprocess_batch(p, x_samples_ddim, batch_number=n)
 
                 p.prompts = p.all_prompts[n * p.batch_size:(n + 1) * p.batch_size]
                 p.negative_prompts = p.all_negative_prompts[n * p.batch_size:(n + 1) * p.batch_size]
 
-                batch_params = scripts.PostprocessBatchListArgs(list(x_samples_ddim))
-                p.scripts.postprocess_batch_list(p, batch_params, batch_number=n)
-                x_samples_ddim = batch_params.images
-
+                if not (state.interrupted or state.stopping_generation):
+                    batch_params = scripts.PostprocessBatchListArgs(list(x_samples_ddim))
+                    p.scripts.postprocess_batch_list(p, batch_params, batch_number=n)
+                    x_samples_ddim = batch_params.images
 
             save_samples = p.save_samples()
 
@@ -1052,55 +1041,52 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 x_sample = 255. * np.moveaxis(x_sample.cpu().numpy(), 0, 2)
                 x_sample = x_sample.astype(np.uint8)
 
-                if save_samples and opts.save_images_before_postprocess:
-                    images.save_image(Image.fromarray(x_sample), p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=infotexts[i], p=p, suffix="-before-postprocess")
+                # avoid postprocessing if generation interrupted
+                if not (state.interrupted or state.stopping_generation):
+                    if save_samples and opts.save_images_before_postprocess:
+                        images.save_image(Image.fromarray(x_sample), p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=infotexts[i], p=p, suffix="-before-postprocess")
 
-                if opts.face_restoration_model != "None" and opts.face_restoration_before_scripts:
-                    devices.torch_gc()
-                    x_sample = modules.face_restoration.restore_faces(x_sample)
-                    devices.torch_gc()
+                    if opts.face_restoration_model != "None" and opts.face_restoration_before_scripts and not (state.interrupted or state.stopping_generation):
+                        devices.torch_gc()
+                        x_sample = modules.face_restoration.restore_faces(x_sample)
+                        devices.torch_gc()
 
-                image = Image.fromarray(x_sample)
+                    image = Image.fromarray(x_sample)
 
-                if p.scripts is not None:
-                    pp = scripts.PostprocessImageArgs(image, i + p.iteration * p.batch_size)
-                    p.scripts.postprocess_image(p, pp)
-                    image = pp.image
+                    if p.scripts is not None:
+                        pp = scripts.PostprocessImageArgs(image, i + p.iteration * p.batch_size)
+                        p.scripts.postprocess_image(p, pp)
+                        image = pp.image
 
-                if opts.face_restoration_model != "None" and not opts.face_restoration_before_scripts:
-                    devices.torch_gc()
-                    image = Image.fromarray(modules.face_restoration.restore_faces(np.array(image)))
-                    devices.torch_gc()
+                    if opts.face_restoration_model != "None" and not opts.face_restoration_before_scripts:
+                        devices.torch_gc()
+                        image = Image.fromarray(modules.face_restoration.restore_faces(np.array(image)))
+                        devices.torch_gc()
 
-                mask_for_overlay = getattr(p, "mask_for_overlay", None)
+                    if not opts.overlay_inpaint:
+                        overlay_image = None
+                    elif getattr(p, "overlay_images", None) is not None and i < len(p.overlay_images):
+                        overlay_image = p.overlay_images[i]
+                    else:
+                        overlay_image = None
 
-                if not opts.overlay_inpaint:
-                    overlay_image = None
-                elif getattr(p, "overlay_images", None) is not None and i < len(p.overlay_images):
-                    overlay_image = p.overlay_images[i]
+                    if p.scripts is not None:
+                        mask_for_overlay = getattr(p, "mask_for_overlay", None)
+                        ppmo = scripts.PostProcessMaskOverlayArgs(i, mask_for_overlay, overlay_image)
+                        p.scripts.postprocess_maskoverlay(p, ppmo)
+                        mask_for_overlay, overlay_image = ppmo.mask_for_overlay, ppmo.overlay_image
+
+                    if p.color_corrections is not None and i < len(p.color_corrections):
+                        image = apply_color_correction(p.color_corrections[i], image)
+
+                    image = apply_overlay(image, p.paste_to, overlay_image)
+
+                    if p.scripts is not None:
+                        pp = scripts.PostprocessImageArgs(image, i + p.iteration * p.batch_size)
+                        p.scripts.postprocess_image_after_composite(p, pp)
+                        image = pp.image
                 else:
-                    overlay_image = None
-
-                if p.scripts is not None:
-                    ppmo = scripts.PostProcessMaskOverlayArgs(i, mask_for_overlay, overlay_image)
-                    p.scripts.postprocess_maskoverlay(p, ppmo)
-                    mask_for_overlay, overlay_image = ppmo.mask_for_overlay, ppmo.overlay_image
-
-                if p.color_corrections is not None and i < len(p.color_corrections):
-                    image = apply_color_correction(p.color_corrections[i], image)
-
-                # If the intention is to show the output from the model
-                # that is being composited over the original image,
-                # we need to keep the original image around
-                # and use it in the composite step.
-                image, original_denoised_image = apply_overlay(image, p.paste_to, overlay_image)
-
-                # p.pixels_after_sampling.append(image)
-
-                if p.scripts is not None:
-                    pp = scripts.PostprocessImageArgs(image, i + p.iteration * p.batch_size)
-                    p.scripts.postprocess_image_after_composite(p, pp)
-                    image = pp.image
+                    image = Image.fromarray(x_sample)
 
                 if save_samples:
                     images.save_image(image, p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=infotexts[i], p=p)
@@ -1160,7 +1146,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
         extra_images_list=p.extra_result_images,
     )
 
-    if p.scripts is not None:
+    if p.scripts is not None and not (state.interrupted or state.stopping_generation):
         p.scripts.postprocess(p, res)
 
     return res
@@ -1180,7 +1166,6 @@ def process_extra_images(processed:Processed):
 
 def old_hires_fix_first_pass_dimensions(width, height):
     """old algorithm for auto-calculating first pass size"""
-
     desired_pixel_count = 512 * 512
     actual_pixel_count = width * height
     scale = math.sqrt(desired_pixel_count / actual_pixel_count)
