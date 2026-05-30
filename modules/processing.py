@@ -564,7 +564,7 @@ class Processed:
         return json.dumps(obj, default=lambda o: None)
 
     def infotext(self, p: StableDiffusionProcessing, index):
-        return create_infotext(p, self.all_prompts, self.all_seeds, self.all_subseeds, comments=[], position_in_batch=index % self.batch_size, iteration=index // self.batch_size)
+        return create_infotext(p, self.all_prompts, self.all_seeds, self.all_subseeds, position_in_batch=index % self.batch_size, iteration=index // self.batch_size)
 
 
 def create_random_tensors(shape, seeds, subseeds=None, subseed_strength=0.0, seed_resize_from_h=0, seed_resize_from_w=0, p=None):
@@ -606,7 +606,7 @@ def fix_seed(p):
     p.subseed = get_fixed_seed(p.subseed)
 
 
-def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iteration=0, position_in_batch=0, use_main_prompt=False, index=None, all_negative_prompts=None):
+def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, position_in_batch=0, use_main_prompt=False, index=None, all_negative_prompts=None):
     """
     this function is used to generate the infotext that is stored in the generated images, it contains the parameters that are required to generate the image
     Args:
@@ -614,7 +614,6 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
         all_prompts: list[str]
         all_seeds: list[int]
         all_subseeds: list[int]
-        comments: list[str]
         iteration: int
         position_in_batch: int
         use_main_prompt: bool
@@ -894,7 +893,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
     p.sd_vae_hash = None #removeable? maybe needed for back-compat
 
     apply_circular_forge(p.sd_model, p.tiling)
-    p.sd_model.comments = []
 
     p.fill_fields_from_opts()
     p.setup_prompts()
@@ -972,9 +970,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 pass # conds will be done later - doing it now uses the firstpass model which could be incorrect
             else:
                 p.setup_conds()
-
-            for comment in p.sd_model.comments:
-                p.comment(comment)
 
             if p.n_iter > 1:
                 shared.state.job = f"Batch {n+1} out of {p.n_iter}"
@@ -1437,7 +1432,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             if not isinstance(image, Image.Image):
                 image = sd_samplers_common.sample_to_image(image, index, approximation=0)
 
-            info = create_infotext(self, self.all_prompts, self.all_seeds, self.all_subseeds, [], iteration=self.iteration, position_in_batch=index)
+            info = create_infotext(self, self.all_prompts, self.all_seeds, self.all_subseeds, iteration=self.iteration, position_in_batch=index)
             images.save_image(image, self.outpath_samples, "", seeds[index], prompts[index], opts.samples_format, info=info, p=self, suffix="-before-highres-fix")
 
         img2img_sampler_name = self.hr_sampler_name or self.sampler_name
@@ -1738,7 +1733,7 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
                     self.mask_for_overlay = None
                     self.inpaint_full_res = False
                     message = 'Unable to perform "Inpaint Only mask" because mask is blank, switch to img2img mode.'
-                    self.sd_model.comments.append(message)
+                    self.comment(message)
                     print(message)
             else:
                 image_mask = images.resize_image(self.resize_mode, image_mask, self.width, self.height)
