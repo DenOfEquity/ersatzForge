@@ -429,8 +429,8 @@ def set_schedulers_aliases():
     
     schedulers_map_aliases.clear()
     for x in schedulers:
-        schedulers_map_aliases.update({x.name: x.label})
-        schedulers_map_aliases.update({x.label: x.label})
+        schedulers_map_aliases.update({x.name.lower(): x.label})
+        schedulers_map_aliases.update({x.label.lower(): x.label})
         if x.aliases is not None:
             for alias in x.aliases:
                 schedulers_map_aliases.update({alias.lower(): x.label})
