@@ -586,6 +586,7 @@ def decode_latent_batch(model, batch, target_device=None):
     return samples
 
 
+# option to use Textbox for Seed is removed, but keep string handling here as extensions may use this function.
 def get_fixed_seed(seed):
     if seed == '' or seed is None:
         seed = -1
@@ -596,9 +597,9 @@ def get_fixed_seed(seed):
             seed = -1
 
     if seed == -1:
-        return int(random.randrange(4294967294))
+        return random.randint(0, 4294967295)
 
-    return seed
+    return seed % 4294967295
 
 
 def fix_seed(p):
@@ -1095,7 +1096,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             devices.torch_gc()
 
             # params.txt should be saved late, due to scripts.process_batch, HiResFix
-            if n == 0 and not shared.cmd_opts.no_prompt_history:
+            if n == 0 and not (shared.cmd_opts.no_prompt_history or state.interrupted or state.stopping_generation):
                 if hasattr(p, "resize_mode"):
                     filename = "params-i2i.txt"
                 else:

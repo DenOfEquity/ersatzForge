@@ -25,7 +25,7 @@ class ScriptSeed(scripts.ScriptBuiltinUI):
 
     def ui(self, is_img2img):
         with gr.Row(elem_id=self.elem_id("seed_row")):
-            self.seed = gr.Number(label='Seed', value=-1, elem_id=self.elem_id("seed"), min_width=100, precision=0)
+            self.seed = gr.Number(label='Seed', value=-1, minimum=-1, maximum=4294967295, elem_id=self.elem_id("seed"), min_width=100, precision=0)
 
             random_seed = ToolButton(ui.random_symbol, elem_id=self.elem_id("random_seed"), tooltip="Set seed to -1, which will cause a new random number to be used every time")
             reuse_seed = ToolButton(ui.reuse_symbol, elem_id=self.elem_id("reuse_seed"), tooltip="Reuse seed from last generation, mostly useful if it was randomized")
@@ -95,8 +95,7 @@ def connect_reuse_seed(seed: gr.Number, reuse_seed: gr.Button, generation_info: 
     reuse_seed.click(
         fn=copy_seed,
         js="(x, y) => [x, selected_gallery_index()]",
-        show_progress="hidden",
         inputs=[generation_info, seed],
-        outputs=[seed, seed]
+        outputs=[seed, seed],
+        show_progress="hidden",
     )
-
