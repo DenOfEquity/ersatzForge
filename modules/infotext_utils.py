@@ -240,7 +240,7 @@ def restore_old_hires_fix_params(res):
     res['HiRes resize-2'] = height
 
 
-def parse_generation_parameters(x: str, skip_fields: list[str] | None = None):
+def parse_generation_parameters(x: str, skip_fields: list[str] | None = None, force_ignore_styles=False):
     """parses generation parameters string, the one you see in text field under the picture in UI:
 ```
 girl with an artist's beret, determined, blue eyes, desert scene, computer monitors, heavy makeup, by Alphonse Mucha and Charlie Bowater, ((eyeshadow)), (coquettish), detailed, intricate
@@ -313,7 +313,7 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
             print(f"Error parsing \"{k}: {v}\"")
 
     # Extract styles from prompt
-    if shared.opts.infotext_styles != "Ignore":
+    if shared.opts.infotext_styles != "Ignore" and not force_ignore_styles:
         found_styles, prompt_no_styles, negative_prompt_no_styles = shared.prompt_styles.extract_styles_from_prompt(prompt, negative_prompt)
 
         same_hr_styles = True

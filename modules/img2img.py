@@ -96,7 +96,7 @@ def process_batch(p, input, output_dir, inpaint_mask_dir, args, to_scale=False, 
                     info_img_path = os.path.join(png_info_dir, os.path.basename(image))
                     info_img = images.read(info_img_path)
                 geninfo, _ = images.read_info_from_image(info_img)
-                parsed_parameters = parse_generation_parameters(geninfo)
+                parsed_parameters = parse_generation_parameters(geninfo, force_ignore_styles=True)
                 parsed_parameters = {k: v for k, v in parsed_parameters.items() if k in (png_info_props or {})}
             except Exception:
                 parsed_parameters = {}
@@ -190,7 +190,6 @@ def img2img_function(id_task: str, mode: int, prompt: str, negative_prompt: str,
             case _:
                 image = init_img_bg
                 mask = None
-
     elif mode == 1:  # inpaint upload mask
         image = init_img_inpaint
         mask = init_mask_inpaint
