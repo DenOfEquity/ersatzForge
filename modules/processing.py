@@ -1142,7 +1142,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
         extra_images_list=p.extra_result_images,
     )
 
-    if p.scripts is not None and not (state.interrupted or state.stopping_generation):
+    if p.scripts is not None:
         p.scripts.postprocess(p, res)
 
     return res
