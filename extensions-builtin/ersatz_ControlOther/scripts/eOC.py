@@ -310,9 +310,14 @@ class ersatzOtherControl(scripts.Script):
             return latent
 
 
-        if selected_tab == 0 and (kontext_1 is not None or kontext_2 is not None) and params.sd_model.is_flux:
-            imgs_data  = str(list(kontext_1.getdata(band=None))) if kontext_1 is not None else ""
-            imgs_data += str(list(kontext_2.getdata(band=None))) if kontext_2 is not None else ""
+        if selected_tab == 0 and params.sd_model.is_flux:
+            imgs_data = ""
+            for input_image in (kontext_1, kontext_2):
+                if input_image is not None:
+                    imgs_data += input_image if isinstance (input_image, str) else str(list(input_image.getdata(band=None)))
+            if imgs_data == "":
+                return
+
             kontext_image_hash = hash(imgs_data)
             kontext_latent_size = (w, h)
 
@@ -393,11 +398,14 @@ class ersatzOtherControl(scripts.Script):
             params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
 
-        if selected_tab == 1 and (klein_1 is not None or klein_2 is not None or klein_3 is not None or klein_4 is not None) and params.sd_model.is_flux2:
-            imgs_data  = str(list(klein_1.getdata(band=None))) if klein_1 is not None else ""
-            imgs_data += str(list(klein_2.getdata(band=None))) if klein_2 is not None else ""
-            imgs_data += str(list(klein_3.getdata(band=None))) if klein_3 is not None else ""
-            imgs_data += str(list(klein_4.getdata(band=None))) if klein_4 is not None else ""
+        elif selected_tab == 1 and params.sd_model.is_flux2:
+            imgs_data = ""
+            for input_image in (klein_1, klein_2, klein_3, klein_4):
+                if input_image is not None:
+                    imgs_data += input_image if isinstance (input_image, str) else str(list(input_image.getdata(band=None)))
+            if imgs_data == "":
+                return
+
             klein_image_hash = hash(imgs_data)
             klein_latent_size = (w, h)
             klein_resize = (klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize)
@@ -460,8 +468,11 @@ class ersatzOtherControl(scripts.Script):
             params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
 
-        if selected_tab == 2 and z_image is not None and z_strength > 0.0 and z_stop < 1.0 and params.sd_model.is_lumina2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
-            zitc_image_hash = hash(str(list(z_image.getdata(band=None))) + str(list(z_mask.getdata(band=None))) + z_version + z_mask_mode)
+        elif selected_tab == 2 and z_image is not None and z_strength > 0.0 and z_stop < 1.0 and params.sd_model.is_lumina2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
+            if isinstance (z_image, str):
+                zitc_image_hash = hash(z_image + z_mask + z_version + z_mask_mode)
+            else:
+                zitc_image_hash = hash(str(list(z_image.getdata(band=None))) + str(list(z_mask.getdata(band=None))) + z_version + z_mask_mode)
             zitc_latent_size = (w, h)
 
             if zitc_image_hash == self.zitc_image_hash and zitc_latent_size == self.zitc_latent_size:
