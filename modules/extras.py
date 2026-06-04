@@ -12,6 +12,7 @@ import safetensors.torch
 from modules_forge.main_entry import module_list, module_vae_list
 from backend.loader import replace_state_dict
 from backend.utils import load_torch_file
+from backend.convert_fp8_scaled import convert_state_dict_to_fp8_scaled
 
 import huggingface_guess
 
@@ -36,17 +37,6 @@ def run_pnginfo(image):
 
 checkpoint_dict_skip_on_merge = ["cond_stage_model.transformer.text_model.embeddings.position_ids"]
 
-def to_bfloat16(tensor):
-    return tensor.to(torch.bfloat16)
-
-def to_float16(tensor):
-    return tensor.to(torch.float16)
-
-def to_fp8e4m3(tensor):
-    return tensor.to(torch.float8_e4m3fn)
-
-def to_fp8e5m2(tensor):
-    return tensor.to(torch.float8_e5m2)
 
 def read_metadata(model_names):
     metadata = {}
@@ -409,25 +399,39 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
                 case 2:
                     regex = re.compile(r'\b(text_model|conditioner\.embedders)\.\b')
 
+                case "float32":
+                    for key in theta_0.keys():
+                        if re.search(regex, key):
+                            theta_0[key] = theta_0[key].to(torch.float32)
                 case "bfloat16":
                     for key in theta_0.keys():
                         if re.search(regex, key):
-                            theta_0[key] = to_bfloat16(theta_0[key])
+                            theta_0[key] = theta_0[key].to(torch.bfloat16)
                 case "float16":
                     for key in theta_0.keys():
                         if re.search(regex, key):
-                            theta_0[key] = to_float16(theta_0[key])
+                            theta_0[key] = theta_0[key].to(torch.float16)
                 case "fp8e4m3":
                     for key in theta_0.keys():
                         if re.search(regex, key):
-                            theta_0[key] = to_fp8e4m3(theta_0[key])
+                            theta_0[key] = theta_0[key].to(torch.float8_e4m3fn)
                 case "fp8e5m2":
                     for key in theta_0.keys():
                         if re.search(regex, key):
-                            theta_0[key] = to_fp8e5m2(theta_0[key])
-
+                            theta_0[key] = theta_0[key].to(torch.float8_e5m2)
+                case "fp8_scaled":
+                    converted = {}
+                    key_list = list(theta_0)
+                    for key in key_list:
+                        if re.search(regex, key):
+                            converted[key] = theta_0.pop(key)
+                    convert_state_dict_to_fp8_scaled(converted, keep_distillation=True, calib_samples=3072, iterations=500, top_k=1)
+                    key_list = list(converted)
+                    for key in key_list:
+                        theta_0[key] = converted.pop(key)
                 case "None (remove)":
-                    for key in theta_0.keys():
+                    key_list = list(theta_0)
+                    for key in key_list:
                         if re.search(regex, key):
                             theta_0.pop(key)
                 case _:

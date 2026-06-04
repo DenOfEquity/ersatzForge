@@ -6,6 +6,7 @@ from modules.ui_components import FormRow
 from modules.ui_common import ToolButton, refresh_symbol
 from modules_forge.main_entry import module_vae_list, module_te_list, refresh_vaete
 
+from backend.convert_fp8_scaled import fp8_scaled_conversion
 
 def update_interp_description(value, choices):
     interp_descriptions = {
@@ -182,10 +183,20 @@ class UiCheckpointMerger:
                     embeds_one = gr.Textbox(label='Single file to convert (if no Directory set)', value='')
                     output_dir = gr.Textbox(label='Save results to directory', value='.\models\embeddings')
                     convert = gr.Button('Convert', variant='primary', scale=0)
-                with gr.Row():
-                    message = gr.Markdown("")
+                message = gr.Markdown("")
 
                 convert.click(fn=convert_embeds, inputs=[embeds_one, embeds_dir, output_dir], outputs=[message])
+
+            with gr.Accordion(open=False, label="Clybius's fp8-scaled converter"):
+                with gr.Row():
+                    scaled_input = gr.Textbox(label='Single model file to convert', value='')
+                    scaled_mode = gr.Dropdown(label='Mode', choices=["fp8_scaled", "fp8_e4m3fn", "fp16"], value="fp8_scaled", scale=0)
+                    scaled_verbose = gr.Checkbox(label='Verbose output', value=False, scale=0)
+                    scaled_convert = gr.Button('Convert', variant='primary', scale=0)
+                scaled_avoid = gr.Textbox(label='Do not convert keys with matching names', value='')
+                scaled_remove = gr.Textbox(label='Discard keys with matching names', value='')
+                message = gr.Markdown("See console for progress during conversion.")
+                scaled_convert.click(fn=fp8_scaled_conversion, inputs=[scaled_input, scaled_avoid, scaled_remove, scaled_mode, scaled_verbose], outputs=[message])
 
 
             with gr.Row(equal_height=False):
@@ -216,11 +227,10 @@ class UiCheckpointMerger:
                     .then(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te], show_progress="hidden")
 
                     with FormRow():
-                        self.save_u = gr.Dropdown(label="Unet precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2"], value="float16")
+                        self.save_u = gr.Dropdown(label="Unet precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2", "fp8_scaled"], value="float16")
                         self.save_v = gr.Dropdown(label="VAE precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2"], value="float16")
                         self.save_t = gr.Dropdown(label="Text encoder(s) precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2"], value="float16")
                         self.calc_fp32 = gr.Checkbox(value=False, label="Calculate merge in float32")
-# if want to save fp32, must also set calc_fp32 for non-fp32 models
 
                     self.discard_weights = gr.Textbox(value="", label="Discard weights with matching name; e.g. Use 'model_ema' to discard EMA weights. 'embedding_manager|lora|control_model'", elem_id="modelmerger_discard_weights")
 
