@@ -821,6 +821,7 @@ def replace_state_dict(sd, asd, guess):
             size_str = "qwen3_8b"
         elif size == 3072:
             size_str = "ministral3_3b"
+            asd.pop("tekken_model", None)
         elif size == 2560:
             size_str = "qwen3_4b"
         elif size == 1024:
