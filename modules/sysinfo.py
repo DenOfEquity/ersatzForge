@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from modules import timer, shared_cmd_options, errors, launch_utils
+from modules import timer, shared_cmd_options, errors, launch_utils, shared, sd_models
 from modules.paths_internal import script_path, data_path, extensions_dir
 
 checksum_token = "DontStealMyGamePlz__WINNERS_DONT_USE_DRUGS__DONT_COPY_THAT_FLOPPY"
@@ -196,18 +196,10 @@ def get_extensions(*, enabled, fallback_disabled_extensions=None):
 
 
 def get_config():
-    try:
-        from modules import shared
-        return shared.opts.data
-    except Exception as _:
-        try:
-            with open(shared_cmd_options.cmd_opts.ui_settings_file, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            return str(e)
+    return shared.opts.data
+
 
 def set_config(req: dict[str, Any], is_api=False, run_callbacks=True, save_config=True):
-    from modules import shared, sd_models
     from modules_forge import main_entry
 
     should_refresh_model_loading_params = False
