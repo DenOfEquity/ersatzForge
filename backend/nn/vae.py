@@ -1,4 +1,3 @@
-import math
 import torch
 from einops import rearrange
 from diffusers.configuration_utils import ConfigMixin, register_to_config
@@ -335,9 +334,8 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
 
         self.bn_eps = 1e-4
         self.bn_momentum = 0.1
-        self.ps = [2, 2]
         self.bn = torch.nn.BatchNorm2d(
-            math.prod(self.ps) * latent_channels,
+            2 * 2 * latent_channels,   # patch size is fixed 2x2
             eps=self.bn_eps,
             momentum=self.bn_momentum,
             affine=False,
@@ -354,12 +352,12 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
         posterior = DiagonalGaussianDistribution(z)
         z = posterior.sample()
 
-        z = rearrange(
-            z,
-            "... c (i pi) (j pj)  -> ... (c pi pj) i j",
-            pi=self.ps[0],
-            pj=self.ps[1],
-        )
+        pad_h = z.shape[-2] % 2
+        pad_w = z.shape[-1] % 2
+        if pad_h or pad_w:
+            z = torch.nn.functional.pad(z, (0, pad_w, 0, pad_h))
+
+        z = rearrange(z, "b c (i pi) (j pj) -> b (c pi pj) i j", pi=2, pj=2)
 
         z = torch.nn.functional.batch_norm(
             z,
@@ -369,15 +367,7 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
             eps=self.bn_eps,
         )
 
-        h, w = z.shape[-2], z.shape[-1]
-        pad_h = 1 if h % 2 != 0 else 0
-        pad_w = 1 if w % 2 != 0 else 0
-        if pad_h or pad_w:
-            z = torch.nn.functional.pad(z, (0, pad_w, 0, pad_h))
-            h = z.shape[-2]
-            w = z.shape[-1]
-        z = z.reshape(z.shape[0], 32, 2, 2, h, w)
-        z = z.permute(0, 1, 4, 2, 5, 3).reshape(z.shape[0], 32, h * 2, w * 2)
+        z = rearrange(z, "b (c pi pj) i j -> b c (i pi) (j pj)", pi=2, pj=2)
  
         return z
 
@@ -388,23 +378,17 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
         oh, ow = z.shape[-2], z.shape[-1]
         if s.shape[1] != z.shape[1]:
             h, w = oh, ow
-            pad_h = 1 if h % 2 != 0 else 0
-            pad_w = 1 if w % 2 != 0 else 0
+            pad_h = h % 2
+            pad_w = w % 2
             if pad_h or pad_w:
                 z = torch.nn.functional.pad(z, (0, pad_w, 0, pad_h))
                 h = z.shape[-2]
                 w = z.shape[-1]
 
-            z = z.reshape(z.shape[0], 32, h // 2, 2, w // 2, 2)
-            z = z.permute(0, 1, 3, 5, 2, 4).reshape(z.shape[0], 128, h // 2, w // 2)
+            z = rearrange(z, "b c (i pi) (j pj) -> b (c pi pj) i j", pi=2, pj=2)
 
         z = z * s + m
-        z = rearrange(
-            z,
-            "... (c pi pj) i j -> ... c (i pi) (j pj)",
-            pi=self.ps[0],
-            pj=self.ps[1],
-        )
+        z = rearrange(z, "b (c pi pj) i j -> b c (i pi) (j pj)", pi=2, pj=2)
 
         if self.post_quant_conv is not None:
             z = self.post_quant_conv(z)
