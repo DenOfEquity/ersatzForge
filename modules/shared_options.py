@@ -167,6 +167,8 @@ options_templates.update(options_section(('dyPE', "dynamicPE", "sd"), {
 <strong>Dynamic Position Extrapolation for Ultra High Resolution Diffusion</strong> allows generating at higher resolutions before repetitions / distortions / multi-images appear in the output. <a href="https://noamissachar.github.io/DyPE/">official webpage</a>
 <br />
 It's not magic, distortions are still possible.
+<br />
+<strong>Position Embedding Scaling</strong> is a simpler method aiming for the same effect. It seems less prone to distortions at extreme aspect ratios, but may be lower quality overall if settings aren't ideal: Scheduler, Base resolution, internal parameters.
 """),
     "dynamicPE_flux": OptionInfo(0, "Base resolution for dynamic PE for Flux.1", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="dynamicPE flux").info("1024 is reasonable for Flux; slightly higher (1280) seems effective too. This Setting applies when the model is loaded. 0: disabled"),
     "dynamicPE_lumina2": OptionInfo(0, "Base resolution for dynamic PE for Lumina2 / Z-Image", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="dynamicPE lumina2").info("1408-1728 seems effective for Z-Image-Turbo. This Setting applies when the model is loaded. 0: disabled"),
@@ -183,7 +185,7 @@ image into latent space representation and back. Latent space representation is 
 For img2img, VAE is used to process user's input image before the sampling, and to create an image after sampling.
 """),
     "sd_vae": OptionInfo("Automatic", "(Managed by Forge)", gr.State, infotext='VAE'),
-    "sd_vae_overrides_per_model_preferences": OptionInfo(True, "Selected VAE / Text Encoder per-model preferences").info("you can set per-model VAE / Text Encoder by editing user metadata for checkpoints"),
+    "sd_vae_overrides_per_model_preferences": OptionInfo(True, "Auto-select Additional Modules per model").info("you can set per-model VAE / Text Encoder / other by editing user metadata for checkpoints"),
     "sd_vae_encode_method": OptionInfo("Full", "VAE type for encode", gr.Radio, {"choices": ["Full", "TAESD"]}, infotext='VAE Encoder').info("method to encode image to latent (use in img2img, hires-fix or inpaint mask)"),
     "sd_vae_decode_method": OptionInfo("Full", "VAE type for decode", gr.Radio, {"choices": ["Full", "TAESD"]}, infotext='VAE Decoder').info("method to decode latent to image"),
 }))

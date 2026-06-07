@@ -144,6 +144,9 @@ class Options:
     def set(self, key, value, is_api=False, run_callbacks=True):
         """sets an option and calls its onchange callback, returning True if the option changed and False otherwise"""
 
+        if key not in self.data_labels:
+            return False
+
         oldval = self.data.get(key, None)
         if oldval == value:
             return False
@@ -204,9 +207,6 @@ class Options:
             errors.report(f'\nCould not load settings\nThe config file "{filename}" is likely corrupted\nIt has been moved to the "tmp/config.json"\nReverting config to default\n\n''', exc_info=True)
             os.replace(filename, os.path.join(script_path, "tmp", "config.json"))
             self.data = {}
-        # 1.6.0 VAE defaults
-        if self.data.get('sd_vae_as_default') is not None and self.data.get('sd_vae_overrides_per_model_preferences') is None:
-            self.data['sd_vae_overrides_per_model_preferences'] = not self.data.get('sd_vae_as_default')
 
         # 1.1.1 quicksettings list migration
         if self.data.get('quicksettings') is not None and self.data.get('quicksettings_list') is None:
@@ -309,7 +309,7 @@ class Options:
             return None
 
         expected_type = type(default_value)
-        if expected_type == bool and value == "False":
+        if expected_type is bool and value == "False":
             value = False
         else:
             value = expected_type(value)
