@@ -31,11 +31,11 @@ def create_setting_component(key, is_quicksettings=False):
 
     if info.component is not None:
         comp = info.component
-    elif t == str:
+    elif t is str:
         comp = gr.Textbox
-    elif t == int:
+    elif t is int:
         comp = gr.Number
-    elif t == bool:
+    elif t is bool:
         comp = gr.Checkbox
     else:
         raise Exception(f'bad options item type: {t} for key {key}')

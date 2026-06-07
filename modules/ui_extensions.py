@@ -26,10 +26,10 @@ def apply_and_restart(disable_list, update_list, disable_all):
     check_access()
 
     disabled = json.loads(disable_list)
-    assert type(disabled) == list, f"wrong disable_list data for apply_and_restart: {disable_list}"
+    assert type(disabled) is list, f"wrong disable_list data for apply_and_restart: {disable_list}"
 
     update = json.loads(update_list)
-    assert type(update) == list, f"wrong update_list data for apply_and_restart: {update_list}"
+    assert type(update) is list, f"wrong update_list data for apply_and_restart: {update_list}"
 
     update = set(update)
 
@@ -56,7 +56,7 @@ def check_updates(id_task, disable_list):
     check_access()
 
     disabled = json.loads(disable_list)
-    assert type(disabled) == list, f"wrong disable_list data for apply_and_restart: {disable_list}"
+    assert type(disabled) is list, f"wrong disable_list data for apply_and_restart: {disable_list}"
 
     exts = [ext for ext in extensions.extensions if ext.remote is not None and ext.name not in disabled]
     shared.state.job_count = len(exts)

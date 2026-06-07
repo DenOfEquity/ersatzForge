@@ -78,25 +78,25 @@ class UiLoadsave:
         if type(x) in [gr.Slider, gr.Radio, gr.Checkbox, gr.Textbox, gr.Number, gr.Dropdown, ToolButton, gr.Button] and x.visible:
             apply_field(x, 'visible')
 
-        if type(x) == gr.Slider:
+        if type(x) is gr.Slider:
             apply_field(x, 'value')
             apply_field(x, 'minimum')
             apply_field(x, 'maximum')
             apply_field(x, 'step')
 
-        if type(x) == gr.Radio:
+        if type(x) is gr.Radio:
             apply_field(x, 'value', lambda val: val in radio_choices(x))
 
-        if type(x) == gr.Checkbox:
+        if type(x) is gr.Checkbox:
             apply_field(x, 'value')
 
-        if type(x) == gr.Textbox:
+        if type(x) is gr.Textbox:
             apply_field(x, 'value')
 
-        if type(x) == gr.Number:
+        if type(x) is gr.Number:
             apply_field(x, 'value')
 
-        if type(x) == gr.Dropdown:
+        if type(x) is gr.Dropdown:
             def check_dropdown(val):
                 choices = radio_choices(x)
                 if getattr(x, 'multiselect', False):
@@ -106,7 +106,7 @@ class UiLoadsave:
 
             apply_field(x, 'value', check_dropdown, getattr(x, 'init_field', None))
 
-        if type(x) == InputAccordion:
+        if type(x) is InputAccordion:
             if hasattr(x, 'custom_script_source'):
                 x.accordion.custom_script_source = x.custom_script_source
             if x.accordion.visible:
@@ -116,15 +116,15 @@ class UiLoadsave:
 
         def check_tab_id(tab_id):
             tab_items = list(filter(lambda e: isinstance(e, gr.TabItem), x.children))
-            if type(tab_id) == str:
+            if type(tab_id) is str:
                 tab_ids = [t.id for t in tab_items]
                 return tab_id in tab_ids
-            elif type(tab_id) == int:
+            elif type(tab_id) is int:
                 return 0 <= tab_id < len(tab_items)
             else:
                 return False
 
-        if type(x) == gr.Tabs:
+        if type(x) is gr.Tabs:
             apply_field(x, 'selected', check_tab_id)
 
     def add_block(self, x, path=""):
