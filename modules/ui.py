@@ -58,7 +58,6 @@ if cmd_opts.ngrok is not None:
 
 
 # Using constants for these since the variation selector isn't visible.
-# Important that they exactly match script.js for tooltip to work.
 random_symbol = '\U0001f3b2\ufe0f'  # 🎲️
 reuse_symbol = '\u267b\ufe0f'  # ♻️
 paste_symbol = '\u2199\ufe0f'  # ↙
@@ -71,7 +70,12 @@ switch_values_symbol = '\U000021C5' # ⇅
 detect_image_size_symbol = '\U0001F4D0'  # 📐
 
 
-plaintext_to_html = ui_common.plaintext_to_html
+def roundM(i, m):
+    i = int(i)
+    m = int(m)
+    
+    half_m = m // 2
+    return m * ((i + half_m) // m)
 
 
 def calc_resolution_hires(enable, width, height, hr_scale, hr_resize_x, hr_resize_y):
@@ -92,8 +96,8 @@ def calc_resolution_hires(enable, width, height, hr_scale, hr_resize_x, hr_resiz
         factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
     else:
         factor = 16
-    new_width  = factor * ((hr_resize_x + (factor // 2)) // factor)
-    new_height = factor * ((hr_resize_y + (factor // 2)) // factor)
+    new_width  = roundM(hr_resize_x, factor)
+    new_height = roundM(hr_resize_y, factor)
 
     return f"from <span class='resolution'>{width}×{height}</span> to <span class='resolution'>{new_width}×{new_height}</span>"
 
@@ -109,8 +113,8 @@ def resize_from_to_html(width, height, scale_by):
         factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
     else:
         factor = 16
-    target_width  = factor * ((target_width  + (factor // 2)) // factor)
-    target_height = factor * ((target_height + (factor // 2)) // factor)
+    target_width  = roundM(target_width, factor)
+    target_height = roundM(target_height, factor)
 
     message = f"resize: from {width}×{height} to {target_width}×{target_height}"
 
@@ -562,9 +566,9 @@ def create_ui():
 
                                         res_switch_btn.click(fn=lambda w, h: (h, w), inputs=[width, height], outputs=[width, height], show_progress='hidden', queue=False)
                                         detect_image_size_btn.click(
-                                            fn=lambda w, h: (w or gr.skip(), h or gr.skip()),
+                                            fn=lambda w, h, s: (roundM(w,s) or gr.skip(), roundM(h,s) or gr.skip()),
                                             js="currentImg2imgSourceResolution",
-                                            inputs=[dummy_component, dummy_component],
+                                            inputs=[dummy_component, dummy_component, gr.State(width.step)],
                                             outputs=[width, height],
                                             show_progress='hidden',
                                         )
@@ -584,15 +588,15 @@ def create_ui():
 
                                     scale_by.change(**on_change_args)
 
-                                    def updateWH (img):
+                                    def updateWH (img, step):
                                         if img and shared.opts.img2img_autosize:
-                                            return img.size[0], img.size[1]
+                                            return roundM(img.size[0], step), roundM(img.size[1], step)
                                         else:
                                             return gr.skip(), gr.skip()
 
                                     img_sources = [init_img.background, init_img_inpaint]
                                     for i in img_sources:
-                                        i.change(fn=updateWH, inputs=[i], outputs=[width, height], show_progress='hidden').then(**on_change_args)
+                                        i.change(fn=updateWH, inputs=[i, gr.State(width.step)], outputs=[width, height], show_progress='hidden').then(**on_change_args)
 
                             tab_scale_to.select(fn=lambda: 0, inputs=None, outputs=[selected_scale_tab])
                             tab_scale_by.select(fn=lambda: 1, inputs=None, outputs=[selected_scale_tab])

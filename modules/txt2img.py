@@ -4,7 +4,7 @@ from contextlib import closing
 
 from modules import processing, infotext_utils, scripts, shared
 from modules.infotext_utils import create_override_settings_dict, parse_generation_parameters
-from modules.ui import plaintext_to_html
+from modules.ui_common import plaintext_to_html
 
 from modules_forge import main_thread
 
@@ -100,7 +100,7 @@ def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_in
             with closing(p):
                 if iteration == iterations-1:
                     del p.override_settings['samples_save']
-                    
+
                 if processed := scripts.scripts_txt2img.run(p, *p.script_args) is None:
                     processed = processing.process_images(p)
 

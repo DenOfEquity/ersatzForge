@@ -8,7 +8,7 @@ from modules import images, shared, scripts
 from modules.infotext_utils import create_override_settings_dict, parse_generation_parameters
 from modules.processing import Processed, StableDiffusionProcessingImg2Img, process_images, fix_seed
 from modules.sd_models import get_closet_checkpoint_match
-from modules.ui import plaintext_to_html
+from modules.ui_common import plaintext_to_html
 from modules_forge import main_thread
 
 
@@ -61,10 +61,9 @@ def process_batch(p, input, output_dir, inpaint_mask_dir, args, to_scale=False, 
         # Use the EXIF orientation of photos taken by smartphones.
         img = ImageOps.exif_transpose(img)
 
-        if to_scale:
-            factor = 8 if shared.sd_model.is_webui_legacy_model() else 16
-            p.width  = factor * ((int(img.width  * scale_by) + (factor // 2)) // factor)
-            p.height = factor * ((int(img.height * scale_by) + (factor // 2)) // factor)
+        if to_scale: # values will be fixed in processing.manage_model()
+            p.width  = int(img.width  * scale_by)
+            p.height = int(img.height * scale_by)
 
         p.init_images = [img] * p.batch_size
 
