@@ -481,11 +481,11 @@ Code order is: (all must be present)<br/>
 <li>additional modules 1, 2, ...: <em>optional</em> <sub>note: copy names as they appear in the dropdown menu; comma-separated</sub></li>
 </ol>
 """),
-    "preset_code_chroma": shared.OptionInfo("", "Chroma preset code", gr.Textbox, {"maxlines": 1, "placeholder": "see UI defaults 'flux'"}),
-    "preset_code_klein": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 4", "Flux2 Klein preset code", gr.Textbox, {"maxlines": 1}),
-    "preset_code_zimage": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Z-Image preset code", gr.Textbox, {"maxlines": 1}),
-    "preset_code_anima": shared.OptionInfo("None, 0, 1024, 1024, 4.0, None, Extended Reverse-Time SDE, Beta, 30", "Anima preset code", gr.Textbox, {"maxlines": 1}),
-    "preset_code_ernie": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Beta, 8", "ERNIE preset code", gr.Textbox, {"maxlines": 1}),
+    "preset_code_chroma": shared.OptionInfo("", "Chroma preset code", gr.Textbox, {"max_lines": 1, "placeholder": "see UI defaults 'flux'"}),
+    "preset_code_klein": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 4", "Flux2 Klein preset code", gr.Textbox, {"max_lines": 1}),
+    "preset_code_zimage": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Z-Image preset code", gr.Textbox, {"max_lines": 1}),
+    "preset_code_anima": shared.OptionInfo("None, 0, 1024, 1024, 4.0, None, Extended Reverse-Time SDE, Beta, 30", "Anima preset code", gr.Textbox, {"max_lines": 1}),
+    "preset_code_ernie": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Beta, 8", "ERNIE preset code", gr.Textbox, {"max_lines": 1}),
 
 }))
 
