@@ -159,7 +159,7 @@ options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), 
     "sdxl_refiner_low_aesthetic_score": OptionInfo(2.5, "SDXL low aesthetic score", gr.Slider, {"minimum": 0, "maximum": 10, "step": 0.1}).info("used for refiner model negative prompt"),
     "sdxl_refiner_high_aesthetic_score": OptionInfo(6.0, "SDXL high aesthetic score", gr.Slider, {"minimum": 0, "maximum": 10, "step": 0.1}).info("used for refiner model prompt"),
     "sdxl_flow_shift": OptionInfo(3.0, "Flow Shift for SDXL flow match models. Relevant models are detected by name.", gr.Slider, {"minimum": 0.01, "maximum": 12.0, "step": 0.01}, infotext="SDXL Shift"),
-    "sdxl_flow_models": OptionInfo("bigaspv25, nyaflow, snakebite2, snakelite, mugen", "Name filtering for SDXL flow match models. Options separated by commas. Names can be fragments or the exact model name. Minimum length: four characters.", gr.Textbox, {"maxlines": 1}),
+    "sdxl_flow_models": OptionInfo("bigaspv25, nyaflow, snakebite2, snakelite, mugen", "Name filtering for SDXL flow match models. Options separated by commas. Names can be fragments or the exact model name. Minimum length: four characters.", gr.Textbox, {"max_lines": 1}),
 }))
 
 options_templates.update(options_section(('dyPE', "dynamicPE", "sd"), {
@@ -185,7 +185,7 @@ image into latent space representation and back. Latent space representation is 
 For img2img, VAE is used to process user's input image before the sampling, and to create an image after sampling.
 """),
     "sd_vae": OptionInfo("Automatic", "(Managed by Forge)", gr.State, infotext='VAE'),
-    "sd_vae_overrides_per_model_preferences": OptionInfo(True, "Auto-select Additional Modules per model").info("you can set per-model VAE / Text Encoder / other by editing user metadata for checkpoints"),
+    "sd_vae_overrides_per_model_preferences": OptionInfo(True, "Auto-select Additional modules per model").info("you can set per-model VAE / Text Encoder / other by editing user metadata for checkpoints"),
     "sd_vae_encode_method": OptionInfo("Full", "VAE type for encode", gr.Radio, {"choices": ["Full", "TAESD"]}, infotext='VAE Encoder').info("method to encode image to latent (use in img2img, hires-fix or inpaint mask)"),
     "sd_vae_decode_method": OptionInfo("Full", "VAE type for decode", gr.Radio, {"choices": ["Full", "TAESD"]}, infotext='VAE Decoder').info("method to decode latent to image"),
 }))
@@ -206,7 +206,6 @@ options_templates.update(options_section(('img2img', "img2img", "sd"), {
 
 options_templates.update(options_section(('optimizations', "Optimizations", "sd"), {
     "s_min_uncond": OptionInfo(0.0, "Negative Guidance minimum sigma", gr.Slider, {"minimum": 0.0, "maximum": 15.0, "step": 0.01}, infotext='NGMS').link("PR", "https://github.com/AUTOMATIC1111/stablediffusion-webui/pull/9177").info("skip negative prompt for some steps when the image is almost ready; 0=disable, higher=faster"),
-    "s_min_uncond_all": OptionInfo(False, "Negative Guidance minimum sigma all steps", infotext='NGMS all steps').info("By default, NGMS above skips every other step; this makes it skip all steps"), # worthless, see sd_samplers_cfg_denoiser to remove
     "token_merging_ratio": OptionInfo(0.0, "Token merging ratio", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}, infotext='Token merging ratio').link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/9256").info("0=disable, higher=faster"),
     "token_merging_ratio_img2img": OptionInfo(0.0, "Token merging ratio for img2img", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}).info("only applies if non-zero and overrides above"),
     "token_merging_ratio_hr": OptionInfo(0.0, "Token merging ratio for high-res pass", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}, infotext='Token merging ratio hr').info("only applies if non-zero and overrides above"),
@@ -214,9 +213,6 @@ options_templates.update(options_section(('optimizations', "Optimizations", "sd"
 }))
 
 options_templates.update(options_section(('compatibility', "Compatibility", "sd"), {
-    "forge_try_reproduce": OptionInfo('None', "Try to reproduce the results from external software", gr.Radio, lambda: {"choices": ['None', 'Diffusers', 'ComfyUI', 'WebUI 1.5', 'InvokeAI', 'EasyDiffusion', 'DrawThings']}),
-    "auto_backcompat": OptionInfo(True, "Automatic backward compatibility").info("automatically enable options for backwards compatibility when importing generation parameters from infotext that has program version."),
-    "use_old_emphasis_implementation": OptionInfo(False, "Use old emphasis implementation. Can be useful to reproduce old seeds."),
     "use_old_karras_scheduler_sigmas": OptionInfo(False, "Use old karras scheduler sigmas (0.1 to 10).", infotext='Old Karras sigmas'),
     "hires_fix_use_firstpass_conds": OptionInfo(False, "For hires fix, calculate conds of second pass using extra networks of first pass."),
     "use_old_scheduling": OptionInfo(False, "Use old prompt editing timelines.", infotext="Old prompt editing timelines").info("For [red:green:N]; OLD: If N < 1, it's a fraction of steps (hires fix uses range from 0 to 1), if N >= 1, it's an absolute number of steps; NEW: If N has a decimal point in it, it's a fraction of steps (hires fix uses range from 1 to 2), otherwise it's an absolute number of steps"),
@@ -233,21 +229,16 @@ options_templates.update(options_section(('interrogate', "Interrogate"), {
 
 options_templates.update(options_section(('extra_networks', "Extra Networks", "sd"), {
     "extra_networks_show_hidden_directories": OptionInfo(True, "Show hidden directories").info("directory is hidden if its name starts with \".\"."),
-    "extra_networks_dir_button_function": OptionInfo(False, "Add a '/' to the beginning of directory buttons").info("Buttons will display the contents of the selected directory without acting as a search filter."),
     "extra_networks_hidden_models": OptionInfo("When searched", "Show cards for models in hidden directories", gr.Radio, {"choices": ["Always", "When searched", "Never"]}).info('"When searched" option will only show the item when the search string has 4 characters or more'),
-    "extra_networks_default_multiplier": OptionInfo(1.0, "Default multiplier for extra networks", gr.Slider, {"minimum": 0.0, "maximum": 2.0, "step": 0.01}),
     "extra_networks_card_width": OptionInfo(0, "Card width for Extra Networks").info("in pixels"),
     "extra_networks_card_height": OptionInfo(0, "Card height for Extra Networks").info("in pixels"),
     "extra_networks_card_text_scale": OptionInfo(1.0, "Card text scale", gr.Slider, {"minimum": 0.0, "maximum": 2.0, "step": 0.01}).info("1 = original size"),
     "extra_networks_card_show_desc": OptionInfo(True, "Show description on card"),
     "extra_networks_card_description_is_html": OptionInfo(False, "Treat card description as HTML"),
-    "extra_networks_card_order_field": OptionInfo("Path", "Default order field for Extra Networks cards", gr.Dropdown, {"choices": ['Path', 'Name', 'Date Modified']}).needs_reload_ui(),
-    "extra_networks_card_order": OptionInfo("Ascending", "Default order for Extra Networks cards", gr.Dropdown, {"choices": ['Ascending', 'Descending']}).needs_reload_ui(),
     "extra_networks_tree_view_style": OptionInfo("Dirs", "Extra Networks directory view style", gr.Radio, {"choices": ["Tree", "Dirs"]}).needs_reload_ui(),
     "extra_networks_tree_view_default_enabled": OptionInfo(True, "Show the Extra Networks directory view by default").needs_reload_ui(),
     "extra_networks_tree_view_default_width": OptionInfo(180, "Default width for the Extra Networks directory tree view", gr.Number).needs_reload_ui(),
     "extra_networks_add_text_separator": OptionInfo(" ", "Extra networks separator").info("extra text to add before <...> when adding extra network to prompt"),
-    "ui_extra_networks_tab_reorder": OptionInfo("", "Extra networks tab order").needs_reload_ui(),
     "textual_inversion_print_at_load": OptionInfo(False, "Print a list of Textual Inversion embeddings when loading model"),
 }))
 
@@ -257,7 +248,6 @@ options_templates.update(options_section(('ui_prompt_editing', "Prompt editing",
     "keyedit_delimiters": OptionInfo(r".,\/!?%^*;:{}=`~() ", "Word delimiters when editing the prompt with Ctrl+up/down"),
     "keyedit_delimiters_whitespace": OptionInfo(["Tab", "Carriage Return", "Line Feed"], "Ctrl+up/down whitespace delimiters", gr.CheckboxGroup, lambda: {"choices": ["Tab", "Carriage Return", "Line Feed"]}),
     "disable_token_counters": OptionInfo(False, "Disable prompt token counters").needs_reload_ui(),
-    "include_styles_into_token_counters": OptionInfo(True, "Count tokens of enabled styles").info("When calculating how many tokens the prompt has, also consider tokens added by enabled styles."),
 }))
 
 options_templates.update(options_section(('ui_gallery', "Gallery", "ui"), {
@@ -271,8 +261,6 @@ options_templates.update(options_section(('ui_gallery', "Gallery", "ui"), {
 options_templates.update(options_section(('ui_alternatives', "UI alternatives", "ui"), {
     "use_ui_config_json": OptionInfo(False, "Use 'ui-config.json' to store UI settings").needs_reload_ui(),
     "sd_checkpoint_dropdown_use_short": OptionInfo(False, "Checkpoint dropdown: use filenames without paths").info("models in subdirectories like photo/sd15.ckpt will be listed as just sd15.ckpt"),
-    "txt2img_settings_accordion": OptionInfo(False, "Settings in txt2img hidden under Accordion").needs_reload_ui(),
-    "img2img_settings_accordion": OptionInfo(False, "Settings in img2img hidden under Accordion").needs_reload_ui(),
 }))
 
 options_templates.update(options_section(('ui', "User interface", "ui"), {
@@ -306,8 +294,6 @@ It is displayed in UI below the image. To use infotext, paste it into the prompt
 
     "add_model_name_to_info": OptionInfo(True, "Add model name to infotext"),
     "add_model_hash_to_info": OptionInfo(True, "Add model hash to infotext"),
-    "add_vae_name_to_info": OptionInfo(True, "Add VAE name to infotext"),
-    "add_vae_hash_to_info": OptionInfo(True, "Add VAE hash to infotext"),
     "disable_weights_auto_swap": OptionInfo(True, "Disregard checkpoint information from pasted infotext").info("when reading generation parameters from text into UI"),
     "infotext_skip_pasting": OptionInfo([], "Disregard fields from pasted infotext", ui_components.DropdownMulti, lambda: {"choices": shared_items.get_infotext_names()}),
     "infotext_styles": OptionInfo("Apply if any", "Infer styles from prompts of pasted infotext", gr.Radio, {"choices": ["Ignore", "Apply", "Discard", "Apply if any"]}).info("when reading generation parameters from text into UI)").html("""<ul style='margin-left: 1.5em'>

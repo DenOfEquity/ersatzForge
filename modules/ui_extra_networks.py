@@ -510,12 +510,8 @@ class ExtraNetworksPage:
 
                     subdir = os.path.abspath(x)[len(parentdir):]
 
-                    if shared.opts.extra_networks_dir_button_function:
-                        if not subdir.startswith(os.path.sep):
-                            subdir = os.path.sep + subdir
-                    else:
-                        while subdir.startswith(os.path.sep):
-                            subdir = subdir[1:]
+                    while subdir.startswith(os.path.sep):
+                        subdir = subdir[1:]
 
                     is_empty = len(os.listdir(x)) == 0
                     if not is_empty and not subdir.endswith(os.path.sep):
@@ -592,10 +588,10 @@ class ExtraNetworksPage:
         page_params = {
             "tabname": tabname,
             "extra_networks_tabname": self.extra_networks_tabname,
-            "data_sortdir": shared.opts.extra_networks_card_order,
-            "sort_path_active": ' extra-network-control--enabled' if shared.opts.extra_networks_card_order_field == 'Path' else '',
-            "sort_name_active": ' extra-network-control--enabled' if shared.opts.extra_networks_card_order_field == 'Name' else '',
-            "sort_date_modified_active": ' extra-network-control--enabled' if shared.opts.extra_networks_card_order_field == 'Date Modified' else '',
+            "data_sortdir": 'Ascending',
+            "sort_path_active": ' extra-network-control--enabled',
+            "sort_name_active": '',
+            "sort_date_modified_active": '',
             "tree_view_btn_extra_class": "extra-network-control--enabled" if show_tree else "",
             "items_html": self.create_card_view_html(tabname, none_message="Loading..." if empty else None),
             "extra_networks_tree_view_default_width": shared.opts.extra_networks_tree_view_default_width,
@@ -702,19 +698,7 @@ class ExtraNetworksUi:
 
 
 def pages_in_preferred_order(pages):
-    tab_order = [x.lower().strip() for x in shared.opts.ui_extra_networks_tab_reorder.split(",")]
-
-    def tab_name_score(name):
-        name = name.lower()
-        for i, possible_match in enumerate(tab_order):
-            if possible_match in name:
-                return i
-
-        return len(pages)
-
-    tab_scores = {page.name: (tab_name_score(page.name), original_index) for original_index, page in enumerate(pages)}
-
-    return sorted(pages, key=lambda x: tab_scores[x.name])
+    return sorted(pages, key=lambda x: x.name)
 
 
 def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):

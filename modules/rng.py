@@ -111,9 +111,6 @@ def create_noisy_latents_perlin(seed, shape, generator=None):
 
 
 def get_noise_source_type():
-    if shared.opts.forge_try_reproduce in ['ComfyUI', 'DrawThings']:
-        return "CPU"
-
     return shared.opts.randn_source
 
 

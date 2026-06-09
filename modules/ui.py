@@ -156,11 +156,8 @@ def update_token_counter(text, steps, styles, *, is_positive=True):
     styles = params.styles
     is_positive = params.is_positive
 
-    if shared.opts.include_styles_into_token_counters:
-        apply_styles = shared.prompt_styles.apply_styles_to_prompt if is_positive else shared.prompt_styles.apply_negative_styles_to_prompt
-        text = apply_styles(text, styles)
-    else:
-        text = comments.strip_comments(text).strip()
+    apply_styles = shared.prompt_styles.apply_styles_to_prompt if is_positive else shared.prompt_styles.apply_negative_styles_to_prompt
+    text = apply_styles(text, styles)
 
     try:
         text, _ = extra_networks.parse_prompt(text)
@@ -240,8 +237,6 @@ def create_ui():
 
         with gr.Tab("Generation", id="txt2img_generation") as txt2img_generation_tab, ResizeHandleRow(equal_height=False):
             with ExitStack() as stack:
-                if shared.opts.txt2img_settings_accordion:
-                    stack.enter_context(gr.Accordion("Open for Settings", open=False))
                 stack.enter_context(gr.Column(variant='compact', elem_id="txt2img_settings"))
 
                 scripts.scripts_txt2img.prepare_ui()
@@ -503,8 +498,6 @@ def create_ui():
 
         with gr.Tab("Generation", id="img2img_generation") as img2img_generation_tab, ResizeHandleRow(equal_height=False):
             with ExitStack() as stack:
-                if shared.opts.img2img_settings_accordion:
-                    stack.enter_context(gr.Accordion("Open for Settings", open=False))
                 stack.enter_context(gr.Column(variant='compact', elem_id="img2img_settings"))
 
                 scripts.scripts_img2img.prepare_ui()

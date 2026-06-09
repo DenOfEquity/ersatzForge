@@ -8,7 +8,7 @@ import sys
 
 import gradio as gr
 from modules.paths import data_path
-from modules import shared, ui_tempdir, script_callbacks, processing, infotext_versions, images, prompt_parser, errors, sd_models, sd_samplers, sd_schedulers
+from modules import shared, ui_tempdir, script_callbacks, processing, images, prompt_parser, errors, sd_models, sd_samplers, sd_schedulers
 from PIL import Image
 
 from modules_forge import main_entry
@@ -86,7 +86,7 @@ def image_from_url_text(filedata):
         filedata = filedata
 
     filename = None
-    if type(filedata) == dict and filedata.get("is_file", False):
+    if type(filedata) is dict and filedata.get("is_file", False):
         filename = filedata["name"]
 
     elif isinstance(filedata, tuple) and len(filedata) == 2:  # gradio 4.16 sends images from gallery as a list of tuples
@@ -317,7 +317,7 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
         found_styles, prompt_no_styles, negative_prompt_no_styles = shared.prompt_styles.extract_styles_from_prompt(prompt, negative_prompt)
 
         same_hr_styles = True
-        if ("HiRes prompt" in res or "HiRes negative prompt" in res) and (infotext_ver > infotext_versions.v180_hr_styles if (infotext_ver := infotext_versions.parse_version(res.get("Version"))) else True):
+        if "HiRes prompt" in res or "HiRes negative prompt" in res:
             hr_prompt, hr_negative_prompt = res.get("HiRes prompt", prompt), res.get("HiRes negative prompt", negative_prompt)
             hr_found_styles, hr_prompt_no_styles, hr_negative_prompt_no_styles = shared.prompt_styles.extract_styles_from_prompt(hr_prompt, hr_negative_prompt)
 
@@ -422,8 +422,6 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
     if "Tiling" in res:
         if res["Tiling"] == "True":
             res["Tiling"] = "X and Y"
-
-    infotext_versions.backcompat(res)
 
     for key in skip_fields:
         res.pop(key, None)
@@ -622,9 +620,9 @@ def connect_paste(button, paste_fields, input_comp, override_settings_component,
                 try:
                     valtype = type(output.value)
 
-                    if valtype == bool and v == "False":
+                    if valtype is bool and v == "False":
                         val = False
-                    elif valtype == int:
+                    elif valtype is int:
                         val = float(v)
                     else:
                         val = valtype(v)

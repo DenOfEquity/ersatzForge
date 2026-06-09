@@ -127,11 +127,9 @@ class CFGDenoiser(torch.nn.Module):
         if shared.opts.skip_early_cond > 0 and self.step / self.total_steps <= shared.opts.skip_early_cond:
             cond_scale = 1.0
             self.p.extra_generation_params["Skip Early CFG"] = shared.opts.skip_early_cond
-        elif (self.step % 2 or shared.opts.s_min_uncond_all) and s_min_uncond > 0 and sigma[0] < s_min_uncond:
+        elif s_min_uncond > 0 and sigma[0] < s_min_uncond:
             cond_scale = 1.0
             self.p.extra_generation_params["NGMS"] = s_min_uncond
-            if shared.opts.s_min_uncond_all:
-                self.p.extra_generation_params["NGMS all steps"] = shared.opts.s_min_uncond_all
 
         denoised, cond_pred, uncond_pred = sampling_function(self, denoiser_params=denoiser_params, cond_scale=cond_scale, cond_composition=cond_composition)
 
@@ -163,5 +161,3 @@ class CFGDenoiser(torch.nn.Module):
             return eps
 
         return denoised.to(device=original_x_device, dtype=original_x_dtype)
-
-
