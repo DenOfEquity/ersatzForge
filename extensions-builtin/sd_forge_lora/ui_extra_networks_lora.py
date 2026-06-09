@@ -41,7 +41,7 @@ class ExtraNetworksPageLora(ui_extra_networks.ExtraNetworksPage):
 
         self.read_user_metadata(item)
         activation_text = item["user_metadata"].get("activation text")
-        preferred_weight = item["user_metadata"].get("preferred weight", shared.opts.extra_networks_default_multiplier)
+        preferred_weight = item["user_metadata"].get("preferred weight", 1.0)
         item["prompt"] = ui_extra_networks.quote_js(f"<lora:{alias}:{preferred_weight}>" + ((" " + activation_text) if activation_text else ""))
 
         negative_prompt = item["user_metadata"].get("negative text", "")
