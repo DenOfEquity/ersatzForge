@@ -5,7 +5,6 @@ from functools import wraps
 import gradio as gr
 import gradio.component_meta
 
-
 from modules import scripts, ui_tempdir, patches
 
 
@@ -117,8 +116,7 @@ class EventWrapper:
 
     def __call__(self, *args, **kwargs):
         if '_js' in kwargs:
-            kwargs['js'] = kwargs['_js']
-            del kwargs['_js']
+            kwargs['js'] = kwargs.pop('_js')
         return self.replaced_event(*args, **kwargs)
 
     @property
@@ -178,3 +176,4 @@ gr.events.Dependency = Dependency
 
 gr.Box = gr.Group
 
+gr.strings.en["PUBLIC_SHARE_TRUE"] = ""
