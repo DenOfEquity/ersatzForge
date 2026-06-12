@@ -18,15 +18,18 @@ class ControlLLLiteAnimaPatcher(ControlModelPatcher):
         self.state_dict = state_dict
         self.inpaint_masked_input = inpaint_masked_input
         self._lllite_net = None
+        self.patched_model_id = None
 
     def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
         unet = process.sd_model.forge_objects.unet
         dit = unet.model.diffusion_model
+        model_filename = process.sd_model.sd_checkpoint_info.filename
 
-        if self._lllite_net is None:
+        if self._lllite_net is None or self.patched_model_id != model_filename:
             cfg = infer_anima_config(self.state_dict)
             self._lllite_net = ControlNetLLLiteDiT(dit, **cfg)
             load_lllite_weights_from_dict(self._lllite_net, self.state_dict)
+            self.patched_model_id = model_filename
 
         device = unet.load_device
         dtype = unet.model.computation_dtype
