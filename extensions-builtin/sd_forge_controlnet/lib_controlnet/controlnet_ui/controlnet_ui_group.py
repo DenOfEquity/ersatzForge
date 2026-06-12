@@ -182,14 +182,13 @@ class ControlNetUiGroup(object):
 
         ControlNetUiGroup.all_ui_groups.append(self)
 
-    def render(self, tabname: str, elem_id_tabname: str) -> None:
+    def render(self, tabname: str) -> None:
         """The pure HTML structure of a single ControlNetUnit. Calling this
         function will populate `self` with all gradio element declared
         in local scope.
 
         Args:
-            tabname:
-            elem_id_tabname:
+            tabname: {txt|img}2img_controlnet-{n}
 
         Returns:
             None
@@ -198,12 +197,12 @@ class ControlNetUiGroup(object):
         self.openpose_editor = OpenposeEditor()
 
         with gr.Group(visible=not self.is_img2img) as self.image_upload_panel:
-            with gr.Tabs(visible=True):
-                with gr.Tab(label="Single image") as self.upload_tab:
+            with gr.Tabs(visible=True, id=f"{tabname}_input_tabs"):
+                with gr.TabItem(label="Single image", id=f"{tabname}_single_input", elem_id=f"{tabname}_single_input") as self.upload_tab:
                     with gr.Row(elem_classes=["cnet-image-row"], equal_height=True):
                         with gr.Group(elem_classes=["cnet-input-image-group"]):
                             self.image = ForgeCanvas(
-                                elem_id=f"{elem_id_tabname}_{tabname}_input_image",
+                                elem_id=f"{tabname}_input_image",
                                 elem_classes=["cnet-image"],
                                 contrast_scribbles=True,
                                 height=300,
@@ -215,9 +214,9 @@ class ControlNetUiGroup(object):
                                 visible=False, elem_classes=["cnet-generated-image-group"]
                         ) as self.generated_image_group:
                             self.generated_image = gr.Image(
-                                elem_id=f"{elem_id_tabname}_{tabname}_generated_image",
+                                elem_id=f"{tabname}_generated_image",
                                 elem_classes=["cnet-image"],
-                                height=300,
+                                height=296,
                                 type="numpy",
                                 show_download_button=True,
                                 interactive=False,
@@ -235,7 +234,7 @@ class ControlNetUiGroup(object):
                                 visible=False, elem_classes=["cnet-mask-image-group"]
                         ) as self.mask_image_group:
                             self.mask_image = ForgeCanvas(
-                                elem_id=f"{elem_id_tabname}_{tabname}_mask_image",
+                                elem_id=f"{tabname}_mask_image",
                                 elem_classes=["cnet-mask-image"],
                                 height=300,
                                 scribble_color='#FFFFFF',
@@ -246,35 +245,32 @@ class ControlNetUiGroup(object):
                                 numpy=True
                             )
 
-                with gr.Tab(label="Batch folder") as self.batch_tab:
+                with gr.TabItem(label="Batch folder", id=f"{tabname}_batch_input", elem_id=f"{tabname}_batch_input") as self.batch_tab:
                     with gr.Row():
                         self.batch_image_dir = gr.Textbox(
                             label="Input directory",
                             placeholder="Input directory path to the control images.",
-                            elem_id=f"{elem_id_tabname}_{tabname}_batch_image_dir",
+                            elem_id=f"{tabname}_batch_image_dir",
                         )
                         self.batch_mask_dir = gr.Textbox(
                             label="Mask directory",
                             placeholder="Mask directory path to the control images.",
-                            elem_id=f"{elem_id_tabname}_{tabname}_batch_mask_dir",
+                            elem_id=f"{tabname}_batch_mask_dir",
                             visible=False,
                         )
 
-                with gr.Tab(label="Multiple images") as self.merge_tab:
+                with gr.TabItem(label="Multiple images", id=f"{tabname}_multi_input", elem_id=f"{tabname}_multi_input") as self.merge_tab:
                     with gr.Row():
-                        with gr.Column():
-                            self.batch_input_gallery = gr.Gallery(
-                                columns=[4], rows=[2], object_fit="contain", height="auto", label="Images"
-                            )
-                        with gr.Group(visible=False, elem_classes=["cnet-mask-gallery-group"]) as self.batch_mask_gallery_group:
-                            with gr.Column():
-                                self.batch_mask_gallery = gr.Gallery(
-                                    columns=[4], rows=[2], object_fit="contain", height="auto", label="Masks"
-                                )
+                        self.batch_input_gallery = gr.Gallery(
+                            columns=[4], rows=[2], object_fit="contain", height="auto", label="Images"
+                        )
+                        self.batch_mask_gallery = gr.Gallery(
+                            columns=[4], rows=[2], object_fit="contain", height="auto", label="Masks", visible=False
+                        )
 
-            self.upload_tab.select(fn=lambda: InputMode.SIMPLE, inputs=None, outputs=[self.input_mode], show_progress="hidden")
-            self.batch_tab.select(fn=lambda: InputMode.BATCH, inputs=None, outputs=[self.input_mode], show_progress="hidden")
-            self.merge_tab.select(fn=lambda: InputMode.MERGE, inputs=None, outputs=[self.input_mode], show_progress="hidden")
+            self.upload_tab.select(fn=lambda: InputMode.SIMPLE, inputs=None, outputs=self.input_mode, show_progress="hidden")
+            self.batch_tab.select(fn=lambda: InputMode.BATCH, inputs=None, outputs=self.input_mode, show_progress="hidden")
+            self.merge_tab.select(fn=lambda: InputMode.MERGE, inputs=None, outputs=self.input_mode, show_progress="hidden")
 
             if self.photopea:
                 self.photopea.attach_photopea_output(self.generated_image)
@@ -285,25 +281,25 @@ class ControlNetUiGroup(object):
             self.pixel_perfect = gr.Checkbox(
                 label="Pixel perfect",
                 value=self.default_unit.pixel_perfect,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_pixel_perfect_checkbox",
+                elem_id=f"{tabname}_controlnet_pixel_perfect_checkbox",
             )
             self.preprocessor_preview = gr.Checkbox(
                 label="Allow preview",
                 value=False,
                 elem_classes=["cnet-allow-preview"],
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_preprocessor_preview_checkbox",
+                elem_id=f"{tabname}_controlnet_preprocessor_preview_checkbox",
                 visible=not self.is_img2img,
             )
             self.mask_upload = gr.Checkbox(
                 label="Use mask",
                 value=False,
                 elem_classes=["cnet-mask-upload"],
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_mask_upload_checkbox",
+                elem_id=f"{tabname}_controlnet_mask_upload_checkbox",
                 visible=not self.is_img2img,
             )
             self.send_dimen_button = ToolButton(
                 value=ControlNetUiGroup.tossup_symbol,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_send_dimen_button",
+                elem_id=f"{tabname}_controlnet_send_dimen_button",
                 elem_classes=["cnet-toolbutton"],
                 tooltip=ControlNetUiGroup.tooltips[ControlNetUiGroup.tossup_symbol],
             )
@@ -313,7 +309,7 @@ class ControlNetUiGroup(object):
                 self.upload_independent_img_in_img2img = gr.Checkbox(
                     label="Independent control",
                     value=False,
-                    elem_id=f"{elem_id_tabname}_{tabname}_controlnet_same_img2img_checkbox",
+                    elem_id=f"{tabname}_controlnet_same_img2img_checkbox",
                     elem_classes=["cnet-unit-same_img2img"],
                 )
             else:
@@ -323,7 +319,7 @@ class ControlNetUiGroup(object):
             global_state.get_all_preprocessor_tags(),
             label="Control type",
             value="All",
-            elem_id=f"{elem_id_tabname}_{tabname}_controlnet_type_filter_radio",
+            elem_id=f"{tabname}_controlnet_type_filter_radio",
             elem_classes="controlnet_control_type_filter_group",
             scale=0,
         )
@@ -333,12 +329,12 @@ class ControlNetUiGroup(object):
                 global_state.get_all_preprocessor_names(),
                 label="Preprocessor",
                 value=self.default_unit.module,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_preprocessor_dropdown",
+                elem_id=f"{tabname}_controlnet_preprocessor_dropdown",
             )
             self.trigger_preprocessor = ToolButton(
                 value=ControlNetUiGroup.trigger_symbol,
                 visible=not self.is_img2img,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_trigger_preprocessor",
+                elem_id=f"{tabname}_controlnet_trigger_preprocessor",
                 elem_classes=["cnet-run-preprocessor", "cnet-toolbutton"],
                 tooltip=ControlNetUiGroup.tooltips[ControlNetUiGroup.trigger_symbol],
             )
@@ -346,11 +342,11 @@ class ControlNetUiGroup(object):
                 global_state.get_all_controlnet_names(),
                 label="Model",
                 value=self.default_unit.model,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_model_dropdown",
+                elem_id=f"{tabname}_controlnet_model_dropdown",
             )
             self.refresh_models = ToolButton(
                 value=ControlNetUiGroup.refresh_symbol,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_refresh_models",
+                elem_id=f"{tabname}_controlnet_refresh_models",
                 elem_classes=["cnet-toolbutton"],
                 tooltip=ControlNetUiGroup.tooltips[ControlNetUiGroup.refresh_symbol],
             )
@@ -362,7 +358,7 @@ class ControlNetUiGroup(object):
                 minimum=0.0,
                 maximum=2.0,
                 step=0.01,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_control_weight_slider",
+                elem_id=f"{tabname}_controlnet_control_weight_slider",
                 elem_classes="controlnet_control_weight_slider",
             )
             self.timestep_range = RangeSlider(
@@ -370,7 +366,7 @@ class ControlNetUiGroup(object):
                 minimum=0,
                 maximum=1.0,
                 value=(self.default_unit.guidance_start, self.default_unit.guidance_end),
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_control_step_slider",
+                elem_id=f"{tabname}_controlnet_control_step_slider",
                 elem_classes="controlnet_control_step_slider",
             )
             self.guidance_start = gr.State(self.default_unit.guidance_start)
@@ -381,14 +377,14 @@ class ControlNetUiGroup(object):
                 choices=[e.value for e in external_code.ControlMode],
                 value=self.default_unit.control_mode.value,
                 label="Control mode",
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_control_mode_radio",
+                elem_id=f"{tabname}_controlnet_control_mode_radio",
                 elem_classes="controlnet_control_mode_radio",
             )
             self.resize_mode = gr.Dropdown(
                 choices=[e.value for e in external_code.ResizeMode],
                 value=self.default_unit.resize_mode.value,
                 label="Resize mode",
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_resize_mode_radio",
+                elem_id=f"{tabname}_controlnet_resize_mode_radio",
                 elem_classes="controlnet_resize_mode_radio",
                 visible=not self.is_img2img,
             )
@@ -396,7 +392,7 @@ class ControlNetUiGroup(object):
                 choices=[e.value for e in HiResFixOption],
                 value=self.default_unit.hr_option.value,
                 label="HiRes-fix option",
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_hr_option_radio",
+                elem_id=f"{tabname}_controlnet_hr_option_radio",
                 elem_classes="controlnet_hr_option_radio",
                 visible=not self.is_img2img,
             )
@@ -416,7 +412,7 @@ class ControlNetUiGroup(object):
                 maximum=2048,
                 visible=False,
                 interactive=True,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_preprocessor_resolution_slider",
+                elem_id=f"{tabname}_controlnet_preprocessor_resolution_slider",
             )
             self.threshold_a = gr.Slider(
                 label="Threshold A",
@@ -425,7 +421,7 @@ class ControlNetUiGroup(object):
                 maximum=1024,
                 visible=False,
                 interactive=True,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_threshold_A_slider",
+                elem_id=f"{tabname}_controlnet_threshold_A_slider",
             )
             self.threshold_b = gr.Slider(
                 label="Threshold B",
@@ -434,7 +430,7 @@ class ControlNetUiGroup(object):
                 maximum=1024,
                 visible=False,
                 interactive=True,
-                elem_id=f"{elem_id_tabname}_{tabname}_controlnet_threshold_B_slider",
+                elem_id=f"{tabname}_controlnet_threshold_B_slider",
             )
 
         self.batch_image_dir_state = gr.State("")
@@ -504,15 +500,21 @@ class ControlNetUiGroup(object):
         """Register event handler for send dimension button."""
 
         def send_dimensions(image):
-            def closestheight(num):
-                rem = num % 8
-                if rem <= 4:
-                    return round(num - rem)
-                else:
-                    return round(num + (8 - rem))
-
             if image is not None:
-                return closestheight(image.shape[1]), closestheight(image.shape[0])
+                step = 32
+                w, h = image.shape[1], image.shape[0]
+
+                if (d := w % step) <= step // 2:
+                    w -= d
+                else:
+                    w += step - d
+
+                if (d := h % step) <= step // 2:
+                    h -= d
+                else:
+                    h += step - d
+
+                return w, h
             else:
                 return gr.skip(), gr.skip()
 
@@ -787,19 +789,16 @@ class ControlNetUiGroup(object):
         def on_checkbox_click(checked: bool, canvas_height: int, canvas_width: int):
             if not checked:
                 # Clear mask_image if unchecked.
-                return gr.update(visible=False), gr.update(value=None), gr.update(value=None, visible=False), \
-                        gr.update(visible=False), gr.update(value=None)
+                return gr.update(visible=False), gr.update(value=None), gr.update(value=None, visible=False), gr.update(value=None, visible=False)
             else:
                 # Init an empty canvas the same size as the generation target.
                 empty_canvas = np.zeros(shape=(canvas_height, canvas_width, 3), dtype=np.uint8)
-                return gr.update(visible=True), gr.update(value=empty_canvas), gr.update(visible=True), \
-                        gr.update(visible=True), gr.skip()
+                return gr.update(visible=True), gr.update(value=empty_canvas), gr.update(visible=True), gr.update(visible=True)
 
         self.mask_upload.change(
             fn=on_checkbox_click,
             inputs=[self.mask_upload, self.height_slider, self.width_slider],
-            outputs=[self.mask_image_group, self.mask_image.background, self.batch_mask_dir,
-                     self.batch_mask_gallery_group, self.batch_mask_gallery],
+            outputs=[self.mask_image_group, self.mask_image.background, self.batch_mask_dir, self.batch_mask_gallery],
             show_progress="hidden",
         )
 
