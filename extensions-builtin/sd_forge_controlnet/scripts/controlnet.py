@@ -97,7 +97,7 @@ class ControlNetForForgeOfficial(scripts.Script):
                         ) as enabled:
                             group = ControlNetUiGroup(is_img2img, default_unit, photopea)
                             ui_groups.append(group)
-                            controls.append(group.render(f"ControlNet-{i}", elem_id_tabname))
+                            controls.append(group.render(f"{elem_id_tabname}-{i}"))
                         enabled.change(fn=lambda x:x, inputs=[enabled], outputs=[group.enabled], show_progress="hidden")
 
         for i, ui_group in enumerate(ui_groups):
