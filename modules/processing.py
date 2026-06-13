@@ -1024,10 +1024,10 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 p.prompts = p.all_prompts[n * p.batch_size:(n + 1) * p.batch_size]
                 p.negative_prompts = p.all_negative_prompts[n * p.batch_size:(n + 1) * p.batch_size]
 
-                if not (state.interrupted or state.stopping_generation):
-                    batch_params = scripts.PostprocessBatchListArgs(list(x_samples_ddim))
-                    p.scripts.postprocess_batch_list(p, batch_params, batch_number=n)
-                    x_samples_ddim = batch_params.images
+                # controlnet uses postprocess_batch_list, including for unpatching, so can't avoid after interrupt
+                batch_params = scripts.PostprocessBatchListArgs(list(x_samples_ddim))
+                p.scripts.postprocess_batch_list(p, batch_params, batch_number=n)
+                x_samples_ddim = batch_params.images
 
             save_samples = p.save_samples()
 
