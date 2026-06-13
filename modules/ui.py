@@ -359,11 +359,8 @@ def create_ui():
                         scripts.scripts_txt2img.setup_ui_for_section(category)
 
             hr_resolution_preview_inputs = [enable_hr, width, height, hr_scale, hr_resize_x, hr_resize_y]
-
             for component in hr_resolution_preview_inputs:
-                event = component.release if isinstance(component, gr.Slider) else component.change
-
-                event(
+                component.change(
                     fn=calc_resolution_hires,
                     js="onCalcResolutionHires",
                     inputs=hr_resolution_preview_inputs,
