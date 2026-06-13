@@ -719,6 +719,15 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
             if d != torch.device("cpu"):
                 free_memory(memory_for_inference+extra_memory, d, models_already_loaded)
 
+        for m in models_already_loaded:
+            available_memory = get_free_memory(torch.device("cuda"))
+            if available_memory >= memory_for_inference+extra_memory:
+                break
+
+            if m.device != torch.device("cpu"):
+                print(f"{cc.INFO}[Memory Management]{cc.RESET} Insufficient free memory for inference. {cc.INFO}Reload{cc.RESET} {m.model.model.__class__.__name__}")
+                m.model_load(memory_for_inference, models_already_loaded)
+
         moving_time = time.perf_counter() - execution_start_time
         if moving_time > 0.1:
             print(f"Memory cleanup has taken {moving_time:.2f} seconds.")
