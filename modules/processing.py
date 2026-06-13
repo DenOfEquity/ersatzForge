@@ -1444,21 +1444,25 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             for i in range(samples.shape[0]):
                 save_intermediate(samples, i)
 
-            if self.latent_scale_mode["mode"] == "NNet" and \
-                (shared.sd_model.is_sd1 or shared.sd_model.is_sd2 or shared.sd_model.is_sdxl) and \
-                (self.hr_scale == 1.25 or self.hr_scale == 1.5 or self.hr_scale == 2.0):
-                # use City96 NeuralNet latent upscalers: https://github.com/city96/SD-Latent-Upscaler/
-                version = "xl" if shared.sd_model.is_sdxl else "v1"
-                if self.hr_scale == 1.25:
-                    scale = "1.25"
-                elif self.hr_scale == 1.5:
-                    scale = "1.5"
-                elif self.hr_scale == 2:
-                    scale = "2.0"
+            if self.latent_scale_mode["mode"] == "NNet":
+                if (self.sd_model.is_sd1 or self.sd_model.is_sd2 or self.sd_model.is_sdxl) and \
+                    not getattr(self.sd_model, "is_mugen", False) and \
+                    (self.hr_scale == 1.25 or self.hr_scale == 1.5 or self.hr_scale == 2.0):
+                    # use City96 NeuralNet latent upscalers: https://github.com/city96/SD-Latent-Upscaler/
+                    version = "xl" if self.sd_model.is_sdxl else "v1"
+                    if self.hr_scale == 1.25:
+                        scale = "1.25"
+                    elif self.hr_scale == 1.5:
+                        scale = "1.5"
+                    elif self.hr_scale == 2:
+                        scale = "2.0"
 
-                latent_scale = 0.13025 if shared.sd_model.is_sdxl else 0.18215
-                samples = latent_upscale_nn.upscale (samples / latent_scale, version, scale) * latent_scale
-
+                    latent_scale = 0.13025 if self.sd_model.is_sdxl else 0.18215
+                    samples = latent_upscale_nn.upscale(samples / latent_scale, version, scale) * latent_scale
+                elif (self.sd_model.is_ernie or self.sd_model.is_flux2 or (self.sd_model.is_sdxl and getattr(self.sd_model, "is_mugen", False))) and \
+                    self.hr_scale == 2.0:
+                    # use TensorForger's flux2 latent upscaler: https://github.com/tensorforger/comfyui-flow-upscaler
+                    samples = latent_upscale_nn.upscale_f2(samples)
             else:
                 self.latent_scale_mode = shared.latent_upscale_modes['Latent (antialiased)']
                 samples = torch.nn.functional.interpolate(samples, size=(target_height // opt_f, target_width // opt_f), mode=self.latent_scale_mode["mode"], antialias=self.latent_scale_mode["antialias"])
