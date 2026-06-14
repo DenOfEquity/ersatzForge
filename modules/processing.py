@@ -423,6 +423,9 @@ class StableDiffusionProcessing:
             if old_schedules != new_schedules:
                 self.extra_generation_params["Old prompt editing timelines"] = True
 
+        if extra_network_data:
+            extra_network_data = [end.items for end in extra_network_data["lora"]]
+
         cached_params = self.cached_params(required_prompts, steps, extra_network_data, is_negative, hires_steps, opts.use_old_scheduling)
 
         for cache in self.cond_cache:
