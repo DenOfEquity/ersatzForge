@@ -175,6 +175,7 @@ class ControlNetUnit:
     processor_res: int = 512
     threshold_a: float = 64
     threshold_b: float = 256
+    timestep_range = (0.0, 100.0)
     guidance_start: float = 0.0
     guidance_end: float = 1.0
     pixel_perfect: bool = True
@@ -196,6 +197,7 @@ class ControlNetUnit:
             "processor_res",
             "threshold_a",
             "threshold_b",
+            "timestep_range",
             "guidance_start",
             "guidance_end",
             "pixel_perfect",

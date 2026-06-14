@@ -35,6 +35,9 @@ def serialize_unit(unit: external_code.ControlNetUnit) -> str:
         if getattr(unit, field) != -1
         # Note: exclude hidden slider values.
     }
+
+    log_value.pop("Timestep Range", None)
+
     if not all("," not in str(v) and ":" not in str(v) for v in log_value.values()):
         logger.error(f"Unexpected tokens encountered:\n{log_value}")
         return ""
@@ -102,10 +105,19 @@ class Infotext(object):
                 continue
 
             assert isinstance(v, str), f"Expect string but got {v}."
+
+            guidance_start = 0
+            guidance_end = 100
+            
             try:
                 for field, value in vars(parse_unit(v)).items():
                     if field == "image":
                         continue
+                    elif field == "guidance_start":
+                        guidance_start = int(float(value) * 100)
+                    elif field == "guidance_end":
+                        guidance_end = int(float(value) * 100)
+
                     if value is None:
                         logger.debug(f"InfoText: Skipping {field} because value is None.")
                         continue
@@ -113,9 +125,10 @@ class Infotext(object):
                     component_locator = f"{k} {field}"
                     updates[component_locator] = value
                     logger.debug(f"InfoText: Setting {component_locator} = {value}")
+
+                updates[f"{k} timestep_range"] = (guidance_start, guidance_end)
             except Exception as e:
                 logger.warn(
                     f"Failed to parse infotext, legacy format infotext is no longer supported:\n{v}\n{e}"
                 )
-
         results.update(updates)

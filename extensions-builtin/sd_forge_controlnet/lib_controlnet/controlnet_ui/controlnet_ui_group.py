@@ -135,7 +135,7 @@ class ControlNetUiGroup(object):
         # dummy_gradio_update_trigger is useful when a field with no event subscriber available changes.
         # e.g. gr.Gallery, gr.State, etc. After an update to gr.State / gr.Gallery, please increment
         # this counter to trigger a sync update of UiControlNetUnit.
-        self.dummy_gradio_update_trigger = None
+        # self.dummy_gradio_update_trigger = None
         self.enabled = None
         self.upload_tab = None
         self.image = None
@@ -193,11 +193,11 @@ class ControlNetUiGroup(object):
         Returns:
             None
         """
-        self.dummy_gradio_update_trigger = gr.Number(value=0, visible=False)
+        # self.dummy_gradio_update_trigger = gr.Number(value=0, visible=False)
         self.openpose_editor = OpenposeEditor()
 
         with gr.Group(visible=not self.is_img2img) as self.image_upload_panel:
-            with gr.Tabs(visible=True, id=f"{tabname}_input_tabs"):
+            with gr.Tabs(visible=True, elem_id=f"{tabname}_input_tabs"):
                 with gr.TabItem(label="Single image", id=f"{tabname}_single_input", elem_id=f"{tabname}_single_input") as self.upload_tab:
                     with gr.Row(elem_classes=["cnet-image-row"], equal_height=True):
                         with gr.Group(elem_classes=["cnet-input-image-group"]):
@@ -362,10 +362,11 @@ class ControlNetUiGroup(object):
                 elem_classes="controlnet_control_weight_slider",
             )
             self.timestep_range = RangeSlider(
-                label='Timestep Range',
+                label='Timestep Range %',
                 minimum=0,
-                maximum=1.0,
-                value=(self.default_unit.guidance_start, self.default_unit.guidance_end),
+                maximum=100, # step not working for number adjustment (OK for slider), so changed display to %
+                step=1,
+                value=self.default_unit.timestep_range,
                 elem_id=f"{tabname}_controlnet_control_step_slider",
                 elem_classes="controlnet_control_step_slider",
             )
@@ -398,9 +399,10 @@ class ControlNetUiGroup(object):
             )
 
         self.timestep_range.change(
-            lambda x: (x[0], x[1]),
+            lambda x: (x[0] / 100.0, x[1] / 100.0),
             inputs=[self.timestep_range],
-            outputs=[self.guidance_start, self.guidance_end]
+            outputs=[self.guidance_start, self.guidance_end],
+            show_progress="hidden"
         )
 
         # advanced options
@@ -463,25 +465,27 @@ class ControlNetUiGroup(object):
         )
 
         unit = gr.State(self.default_unit)
-        for comp in unit_args + (self.dummy_gradio_update_trigger,):
-            event_subscribers = []
-            if hasattr(comp, "edit"):
-                event_subscribers.append(comp.edit)
-            elif hasattr(comp, "click"):
-                event_subscribers.append(comp.click)
-            elif isinstance(comp, gr.Slider) and hasattr(comp, "release"):
-                event_subscribers.append(comp.release)
-            elif hasattr(comp, "change"):
-                event_subscribers.append(comp.change)
+        # for comp in unit_args + (self.dummy_gradio_update_trigger,):
+            # event_subscribers = []
+            # if hasattr(comp, "edit"):
+                # event_subscribers.append(comp.edit)
+            # elif hasattr(comp, "click"):
+                # event_subscribers.append(comp.click)
+            # elif isinstance(comp, gr.Slider) and hasattr(comp, "release"):
+                # event_subscribers.append(comp.release)
+            # elif hasattr(comp, "change"):
+                # event_subscribers.append(comp.change)
 
-            if hasattr(comp, "clear"):
-                event_subscribers.append(comp.clear)
+            # if hasattr(comp, "clear"):
+                # event_subscribers.append(comp.clear)
 
-            for event_subscriber in event_subscribers:
-                event_subscriber(
-                    fn=UiControlNetUnit, inputs=list(unit_args), outputs=unit
-                )
+            # for event_subscriber in event_subscribers:
+                # event_subscriber(
+                    # fn=UiControlNetUnit, inputs=list(unit_args), outputs=unit
+                # )
 
+        # Ctrl+Enter sends a click, and clicking submit is a click, so the above seems unnecessary
+        # maybe for extensions controlling ControlNet
         (
             ControlNetUiGroup.a1111_context.img2img_submit_button
             if self.is_img2img
