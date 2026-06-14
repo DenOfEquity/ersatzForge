@@ -624,30 +624,19 @@ def on_ui_settings():
     section = ('control_net', "ControlNet")
     shared.opts.add_option("control_net_models_path", shared.OptionInfo(
         "", "Extra path to scan for ControlNet models (e.g. training output directory)", section=section))
-    shared.opts.add_option("control_net_modules_path", shared.OptionInfo(
-        "",
-        "Path to directory containing annotator model directories (requires restart, overrides corresponding command line flag)",
-        section=section))
     shared.opts.add_option("control_net_unit_count", shared.OptionInfo(
-        3, "Multi-ControlNet: ControlNet unit number (requires restart)", gradio.Slider,
-        {"minimum": 1, "maximum": 10, "step": 1}, section=section))
+        3, "Multi-ControlNet: ControlNet unit number", gradio.Slider,
+        {"minimum": 1, "maximum": 10, "step": 1}, section=section).needs_reload_ui())
     shared.opts.add_option("control_net_model_cache_size", shared.OptionInfo(
-        3, "Model cache size (requires restart)", gradio.Slider, {"minimum": 1, "maximum": 10, "step": 1}, section=section))
+        3, "ControlNet model cache size", gradio.Slider, {"minimum": 1, "maximum": 10, "step": 1}, section=section))
     shared.opts.add_option("control_net_append_detectmap", shared.OptionInfo(
         False, "Append detectmap to output", gradio.Checkbox, {"interactive": True}, section=section))
-    shared.opts.add_option("control_net_allow_script_control", shared.OptionInfo(
-        False, "Allow other script to control this extension", gradio.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("control_net_sync_field_args", shared.OptionInfo(
         True, "Paste ControlNet parameters in infotext", gradio.Checkbox, {"interactive": True}, section=section))
-    shared.opts.add_option("controlnet_show_batch_images_in_ui", shared.OptionInfo(
-        False, "Show batch images in gradio gallery output", gradio.Checkbox, {"interactive": True}, section=section))
-    shared.opts.add_option("controlnet_increment_seed_during_batch", shared.OptionInfo(
-        False, "Increment seed after each controlnet batch iteration", gradio.Checkbox, {"interactive": True},
-        section=section))
     shared.opts.add_option("controlnet_disable_openpose_edit", shared.OptionInfo(
-        False, "Disable openpose edit", gradio.Checkbox, {"interactive": True}, section=section))
+        False, "Disable openpose edit", gradio.Checkbox, {"interactive": True}, section=section).needs_reload_ui())
     shared.opts.add_option("controlnet_disable_photopea_edit", shared.OptionInfo(
-        False, "Disable photopea edit", gradio.Checkbox, {"interactive": True}, section=section))
+        False, "Disable photopea edit", gradio.Checkbox, {"interactive": True}, section=section).needs_reload_ui())
     shared.opts.add_option("controlnet_photopea_warning", shared.OptionInfo(
         True, "Photopea popup warning", gradio.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("controlnet_input_thumbnail", shared.OptionInfo(
