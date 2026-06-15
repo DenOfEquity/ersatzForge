@@ -1,10 +1,31 @@
+from collections import OrderedDict
 import torch
 
 from backend.utils import load_torch_file
 from backend.state_dict import transformers_convert, state_dict_prefix_replace
-from backend import operations, memory_management
-from backend.patcher.base import ModelPatcher
+from backend import memory_management
 from transformers import modeling_utils, CLIPVisionConfig, CLIPVisionModelWithProjection
+
+
+class ClipVisionImageCache:
+    def __init__(self):
+        self.cache = OrderedDict()
+
+    def get(self, key):
+        if key in self.cache:
+            self.cache.move_to_end(key)
+            return self.cache[key]
+        return None
+
+    def put(self, key, model):
+        self.cache[key] = model
+        self.cache.move_to_end(key)
+
+        max_size = 11
+        while len(self.cache) > max_size:
+            self.cache.popitem(last=False)
+
+_CLIPVISION_IMAGE_CACHE = ClipVisionImageCache()
 
 
 CLIP_VISION_G = {
@@ -92,24 +113,18 @@ class ClipVisionModel:
     def __init__(self, config):
         config = CLIPVisionConfig(**config)
 
-        self.load_device = memory_management.get_torch_device()     #text_encoder_device()
+        self.device = memory_management.text_encoder_device()
         self.offload_device = memory_management.text_encoder_offload_device()
 
-        if memory_management.should_use_fp16(self.load_device, prioritize_performance=False, manual_cast=True):
+        if memory_management.should_use_fp16(self.device, prioritize_performance=False, manual_cast=True):
             self.dtype = torch.float16
         else:
             self.dtype = torch.float32
 
-        with operations.using_forge_operations():
-            with modeling_utils.no_init_weights():
-                self.model = CLIPVisionModelWithProjection(config)
+        with modeling_utils.no_init_weights():
+            self.model = CLIPVisionModelWithProjection(config).eval()
 
-        self.model.to(self.dtype)
-        self.patcher = ModelPatcher(
-            self.model,
-            load_device=self.load_device,
-            offload_device=self.offload_device
-        )
+        self.model.to(self.offload_device, self.dtype)
 
     def load_sd(self, sd):
         return self.model.load_state_dict(sd, strict=False)
@@ -117,15 +132,26 @@ class ClipVisionModel:
     def get_sd(self):
         return self.model.state_dict()
 
-    def encode_image(self, image):
-        memory_management.load_model_gpu(self.patcher)
-        pixel_values = clip_preprocess(image.to(self.load_device))
-        outputs = self.model(pixel_values=pixel_values, output_hidden_states=True)
+    def encode_image(self, image, size=224):
+        global _CLIPVISION_IMAGE_CACHE
 
-        o = Output()
-        o["last_hidden_state"] = outputs.last_hidden_state.to(memory_management.intermediate_device())
-        o["penultimate_hidden_states"] = outputs.hidden_states[-2].to(memory_management.intermediate_device())
-        o["image_embeds"] = outputs.image_embeds.to(memory_management.intermediate_device())
+        pixel_values = clip_preprocess(image.to(self.device), size=size)
+
+        key = hash(str(pixel_values))
+        o = _CLIPVISION_IMAGE_CACHE.get(key)
+
+        if o is None:
+            self.model.to(self.device)
+            outputs = self.model(pixel_values=pixel_values, output_hidden_states=True)
+            self.model.to(self.offload_device)
+            memory_management.soft_empty_cache()
+
+            o = Output()
+            o["last_hidden_state"] = outputs.last_hidden_state.to(memory_management.intermediate_device())
+            o["penultimate_hidden_states"] = outputs.hidden_states[-2].to(memory_management.intermediate_device())
+            o["image_embeds"] = outputs.image_embeds.to(memory_management.intermediate_device())
+
+            _CLIPVISION_IMAGE_CACHE.put(key, o)
 
         return o
 
