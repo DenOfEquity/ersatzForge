@@ -30,6 +30,12 @@ class CPUState(Enum):
     MPS = 2
 
 
+class Partial(Enum):
+    DISABLED = 0
+    LOAD = 1
+    UNLOAD = 2
+
+
 # Determine VRAM State
 controlnet_on_cpu = False
 tiled_conv2d = 0
@@ -37,8 +43,6 @@ tiled_conv2d = 0
 vram_state = VRAMState.NORMAL_VRAM
 set_vram_to = VRAMState.NORMAL_VRAM
 cpu_state = CPUState.GPU
-
-total_vram = 0
 
 xpu_available = False
 
@@ -228,11 +232,11 @@ elif args.always_high_vram or args.always_gpu:
 FORCE_FP32 = False
 FORCE_FP16 = False
 if args.all_in_fp32:
-    print(f"{cc.WARNING}Forcing FP32.{cc.RESET}")
+    print(f"{cc.WARNING}Forcing FP32{cc.RESET}")
     FORCE_FP32 = True
 
 if args.all_in_fp16:
-    print(f"{cc.WARNING}Forcing FP16.{cc.RESET}")
+    print(f"{cc.WARNING}Forcing FP16{cc.RESET}")
     FORCE_FP16 = True
 
 if set_vram_to in (VRAMState.LOW_VRAM, VRAMState.NO_VRAM):
@@ -468,8 +472,8 @@ class LoadedModel:
         self.inclusive_memory = 0
         self.exclusive_memory = 0
 
-    def model_load(self, memory_for_inference=0, keep_loaded=[]):
-        global vram_state, controlnet_on_cpu
+    def model_load(self, memory_for_inference=0, keep_loaded=[], partial=Partial.DISABLED):
+        global vram_state, controlnet_on_cpu, signal_empty_cache
 
         torch_dev = self.model.load_device
 
@@ -494,7 +498,8 @@ class LoadedModel:
         bake_gguf_model(self.real_model)
         soft_empty_cache()
 
-        print(f"{cc.INFO}[Memory Management]{cc.RESET} Target: {self.model.model.__class__.__name__}, ", end="")
+        if partial == Partial.DISABLED:
+            print(f"{cc.INFO}[Memory Management] {cc.INFO2}[LOAD] {cc.LOAD}{self.model.model.__class__.__name__}{cc.RESET}, ", end="")
 
         need_cpu_swap = False
         if 'Autoencoder' in self.model.model.__class__.__name__ or 'CLIPVisionModelWithProjection' in self.model.model.__class__.__name__:
@@ -505,6 +510,10 @@ class LoadedModel:
             gpu_memory_available = 0
             need_cpu_swap = True
         elif vram_set_state == VRAMState.NO_VRAM:
+            gpu_memory_available = 0
+            need_cpu_swap = True
+
+        elif self.device == torch.device("cpu"):
             gpu_memory_available = 0
             need_cpu_swap = True
 
@@ -527,9 +536,16 @@ class LoadedModel:
                 extra_memory += (1024 * 1024 * 1024 * 0.5)
 
             current_free_mem = get_free_memory(torch_dev)
-            print(f"Free GPU: {current_free_mem / (1024 * 1024):.2f} MB, Model Require: {model_require / (1024 * 1024):.2f} MB, Previously Loaded: {previously_loaded / (1024 * 1024):.2f} MB, Inference Require: {memory_for_inference / (1024 * 1024):.2f} MB, Extra: {extra_memory / (1024 * 1024):.2f} MB, ", end="")
+            if partial != Partial.UNLOAD:
+                print(f"Free GPU: {current_free_mem / (1024 * 1024):.2f} MB, Model Require: {model_require / (1024 * 1024):.2f} MB, Previously Loaded: {previously_loaded / (1024 * 1024):.2f} MB, Inference Require: {memory_for_inference / (1024 * 1024):.2f} MB, Extra: {extra_memory / (1024 * 1024):.2f} MB, ", end="")
             if vram_set_state == VRAMState.VERY_LOW_VRAM:
                 total_required_memory = memory_for_inference + extra_memory
+                need_cpu_swap = True
+            elif partial == Partial.LOAD:
+                total_required_memory = memory_for_inference + extra_memory + self.exclusive_memory
+                need_cpu_swap = True
+            elif partial == Partial.UNLOAD: # already freed
+                total_required_memory = 0
                 need_cpu_swap = True
             else:
                 total_required_memory = memory_for_inference + extra_memory + self.exclusive_memory + self.inclusive_memory
@@ -544,7 +560,8 @@ class LoadedModel:
 
         if not need_cpu_swap:
             self.real_model = self.model.forge_patch_model(self.device)
-            print(f"Loaded to {str(self.device)}.")
+            if partial != Partial.UNLOAD:
+                print(f"Loaded to {str(self.device)}.")
         else:
             gpu_modules, gpu_modules_only_extras, cpu_modules = build_module_profile(self.real_model, gpu_memory_available)
             pin_memory = PIN_SHARED_MEMORY and is_device_cpu(self.model.offload_device)
@@ -583,7 +600,8 @@ class LoadedModel:
 
             swap_flag = 'Shared' if PIN_SHARED_MEMORY else 'CPU'
             method_flag = 'asynchronous' if stream.should_use_stream() else 'blocked'
-            print(f"{swap_flag} Swap Loaded ({method_flag} method): {swap_counter / (1024 * 1024):.2f} MB, GPU Loaded: {mem_counter / (1024 * 1024):.2f} MB.")
+            if partial != Partial.UNLOAD:
+                print(f"{swap_flag} Swap Loaded ({method_flag} method): {swap_counter / (1024 * 1024):.2f} MB, GPU Loaded: {mem_counter / (1024 * 1024):.2f} MB.")
 
             self.model_accelerated = True
 
@@ -612,8 +630,6 @@ class LoadedModel:
             self.model.forge_unpatch_model(self.model.offload_device)
             self.model.model_patches_to(self.model.offload_device)
 
-        soft_empty_cache()
-
     def __eq__(self, other):
         return self.model is other.model
 
@@ -639,22 +655,22 @@ def free_memory(memory_required, device, keep_loaded=[]):
     unloaded_model = False
     offload_everything = memory_required == 1e30 or ALWAYS_VRAM_OFFLOAD or vram_state == VRAMState.NO_VRAM
     if offload_everything:
-        print(f"{cc.INFO2}[Keep loaded: {keep_loaded_names}]{cc.RESET} Trying to free all memory for {device} ... ", end="")
+        print(f"{cc.INFO2}[Keep loaded: {cc.LOAD}{keep_loaded_names}]{cc.RESET} Trying to free all memory for {device} ... ", end="")
         i = len(current_loaded_models) - 1
         while i >= 0:
             if current_loaded_models[i] not in keep_loaded:
-                print(f"unload {current_loaded_models[i].model.model.__class__.__name__} ", end="")
+                print(f"{cc.INFO2}[UNLOAD] {cc.LOAD2}{current_loaded_models[i].model.model.__class__.__name__}{cc.RESET}, ", end="")
                 current_loaded_models.pop(i).model_unload()
                 unloaded_model = True
             i -= 1
         free_memory = get_free_memory(device)
         print(f"Current free memory is {free_memory / (1024 * 1024):.2f} MB ... Done.")
     elif free_memory < memory_required:
-        print(f"{cc.INFO2}[Keep loaded: {keep_loaded_names}]{cc.RESET} Trying to free {memory_required / (1024 * 1024):.2f} MB for {device} ... ", end="")
+        print(f"{cc.INFO2}[Keep loaded: {cc.LOAD}{keep_loaded_names}]{cc.RESET} Trying to free {memory_required / (1024 * 1024):.2f} MB for {device} ... ", end="")
         i = len(current_loaded_models) - 1
         while i >= 0 and free_memory < memory_required:
             if current_loaded_models[i] not in keep_loaded:
-                print(f"Current free memory is {free_memory / (1024 * 1024):.2f} MB - unload {current_loaded_models[i].model.model.__class__.__name__} ... ", end="")
+                print(f"Current free memory is {free_memory / (1024 * 1024):.2f} MB - {cc.INFO2}[UNLOAD] {cc.LOAD2}{current_loaded_models[i].model.model.__class__.__name__}{cc.RESET}, ", end="")
                 current_loaded_models.pop(i).model_unload()
                 unloaded_model = True
                 free_memory = get_free_memory(device)
@@ -682,18 +698,33 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
         memory_required = 1 * 1024 * 1024 * 1024
 
     memory_for_inference = memory_required + extra_inference_memory + hard_memory_preservation
+    allowed_partial_models = ["KModel", "ControlNet"] # cannot include models with layer types not supported by ForgeOperations
 
     models_to_load = []
     models_already_loaded = []
     extra_memory = 0
     for x in models:
         loaded_model = LoadedModel(x)
+        matched = False
 
         # check for clones - model patched by SAG/PAG/APG/FreeU whatever - can use already loaded;
         # LoRA changes - must offload/reload; may be possible to patch/refresh inline but didn't seem to work well
-        matched = False
         for i in range(len(current_loaded_models)):
-            if (x.is_clone(current_loaded_models[i].model) and getattr(x, 'lora_patches', {}) is getattr(current_loaded_models[i].model, 'lora_patches', {})) or loaded_model == current_loaded_models[i]:
+            if x.model.__class__.__name__ != current_loaded_models[i].model.model.__class__.__name__:
+                continue
+
+            if x.model.__class__.__name__ in allowed_partial_models:
+                if hasattr(x, "model"):
+                    x_uuid = getattr(x.model, "uuid", 0)
+                if hasattr(current_loaded_models[i].model, "model"):
+                    c_uuid = getattr(current_loaded_models[i].model.model, "uuid", 1)
+            else:
+                x_uuid = 0
+                c_uuid = 1
+
+            # clone check fails if model is partially loaded
+            if (x.is_clone(current_loaded_models[i].model) or x_uuid == c_uuid) and \
+                    getattr(x, "lora_patches", {}) == getattr(current_loaded_models[i].model, "lora_patches", {}):
                 models_already_loaded.append(current_loaded_models[i])
                 matched = True
 
@@ -708,41 +739,62 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
                             pass
                 if getattr(current_loaded_models[i].real_model, 'gguf_baked', False):
                     extra_memory += (1024 * 1024 * 1024 * 0.5)
+
                 break
 
         if not matched:
             models_to_load.append(loaded_model)
 
-    if len(models_to_load) == 0:
-        devs = set(model.device for model in models_already_loaded)
-        for d in devs:
-            if d != torch.device("cpu"):
-                free_memory(memory_for_inference+extra_memory, d, models_already_loaded)
+    done_partial_load = False
+    ## potential partial load/reload
+    for m in models_already_loaded:
+        if m.device != torch.device("cpu"):
+            if m.model.model.__class__.__name__ in allowed_partial_models:
+                available_memory = get_free_memory(m.device)
+                exclusive_memory = module_size(m.model.model, exclude_device=m.device)[0]
+                if exclusive_memory > 0 and available_memory > memory_for_inference+extra_memory:
+                    print(f"{cc.INFO}[Memory Management] {cc.INFO2}[LOAD (partial)] {cc.LOAD}{m.model.model.__class__.__name__}{cc.RESET}, ", end="")
+                    m.model_load(memory_for_inference, models_already_loaded, partial=Partial.LOAD)
+                    done_partial_load = True
 
-        for m in models_already_loaded:
-            available_memory = get_free_memory(torch.device("cuda"))
-            if available_memory >= memory_for_inference+extra_memory:
-                break
+    ## potential partial unload : not if trying to load now; only for allowed model types
+    total_memory_needed = 128*1024*1024 + memory_for_inference+extra_memory
+    for m in models_to_load:
+        if m.device != torch.device("cpu"):
+            total_memory_needed += module_size(m.model.model)[0]
 
-            if m.device != torch.device("cpu"):
-                print(f"{cc.INFO}[Memory Management]{cc.RESET} Insufficient free memory for inference. {cc.INFO}Reload{cc.RESET} {m.model.model.__class__.__name__}")
-                m.model_load(memory_for_inference, models_already_loaded)
+    i = len(current_loaded_models) - 1
+    while i >= 0:
+        m = current_loaded_models[i]
+        if m.device != torch.device("cpu"):
+            if m.model not in models and m not in models_already_loaded and m.model.model.__class__.__name__ in allowed_partial_models:
+                available_memory = get_free_memory(m.device)
+                inclusive_memory = module_size(m.model.model, include_device=m.device)[0]
+                if inclusive_memory > 0 and available_memory < total_memory_needed:
+                    print(f"{cc.INFO}[Memory Management] {cc.INFO2}[UNLOAD (partial)] {cc.LOAD}{m.model.model.__class__.__name__}{cc.RESET}", end="")
+                    m.model_load(total_memory_needed, current_loaded_models, partial=Partial.UNLOAD)
+                    done_partial_load = True
+                    inclusive_memory = module_size(m.model.model, include_device=m.device)[0]
+                    if inclusive_memory == 0:
+                        print(f" {cc.INFO2}(full unload){cc.RESET}, ", end="")
+                        current_loaded_models.pop(i).model_unload()
+                    else:
+                        print(", ", end="")
+        i -= 1
 
-        moving_time = time.perf_counter() - execution_start_time
-        if moving_time > 0.1:
-            print(f"Memory cleanup has taken {moving_time:.2f} seconds.")
+    if done_partial_load and len(models_to_load) == 0:
+        soft_empty_cache()
 
-        return
+    ## load new, will fully unload other models if necessary
+    for load_model in models_to_load:
+        unload_model_clones(load_model.model)
+        soft_empty_cache()
 
-    for loaded_model in models_to_load:
-        unload_model_clones(loaded_model.model)
-        if loaded_model.device != torch.device("cpu"):
-            loaded_model.model_load(memory_for_inference, models_to_load+models_already_loaded)
-            current_loaded_models.append(loaded_model)
+        load_model.model_load(memory_for_inference, models_to_load+models_already_loaded)
+        current_loaded_models.append(load_model)
 
-    moving_time = time.perf_counter() - execution_start_time
-    if moving_time > 0.1:
-        print(f"Moving model(s) has taken {moving_time:.2f} seconds.")
+    if (moving_time := time.perf_counter() - execution_start_time) > 0.1:
+        print(f"Moving model(s) / cleanup has taken {moving_time:.2f} seconds.")
 
     return
 
@@ -758,10 +810,7 @@ def dtype_size(dtype):
     elif dtype == torch.float32:
         dtype_size = 4
     else:
-        try:
-            dtype_size = dtype.itemsize
-        except:  # Old pytorch doesn't have .itemsize
-            pass
+        dtype_size = dtype.itemsize
     return dtype_size
 
 
@@ -833,22 +882,9 @@ def text_encoder_offload_device():
     else:
         return torch.device("cpu")
 
-
-# def text_encoder_device():
-    # if args.always_cpu:
-        # return torch.device("cpu")
-    # else:
-        # return get_torch_device()
-
-
 def text_encoder_device():
     if args.always_gpu:
         return get_torch_device()
-    elif vram_state == VRAMState.HIGH_VRAM or vram_state == VRAMState.NORMAL_VRAM:
-        if should_use_fp16(prioritize_performance=False):
-            return get_torch_device()
-        else:
-            return torch.device("cpu")
     else:
         return torch.device("cpu")
 
@@ -1081,15 +1117,17 @@ def get_free_memory(dev=None, torch_free_too=False):
             mem_active = stats['active_bytes.all.current']
             mem_reserved = stats['reserved_bytes.all.current']
             mem_free_torch = mem_reserved - mem_active
-            mem_free_xpu = torch.xpu.get_device_properties(dev).total_memory - mem_reserved
-            mem_free_total = mem_free_xpu + mem_free_torch
+            mem_free_xpu = torch.xpu.get_device_properties(dev).total_memory
+            # mem_free_total = mem_free_xpu - mem_reserved + mem_free_torch
+            mem_free_total = mem_free_xpu - mem_reserved
         else:
             stats = torch.cuda.memory_stats(dev)
             mem_active = stats['active_bytes.all.current']
             mem_reserved = stats['reserved_bytes.all.current']
-            mem_free_cuda, _ = torch.cuda.mem_get_info(dev)
             mem_free_torch = mem_reserved - mem_active
-            mem_free_total = mem_free_cuda + mem_free_torch
+            mem_free_cuda, mem_total_cuda = torch.cuda.mem_get_info(dev)
+            # mem_free_total = mem_free_cuda + mem_free_torch
+            mem_free_total = mem_total_cuda - mem_reserved
 
     if torch_free_too:
         return (mem_free_total, mem_free_torch)
@@ -1266,3 +1304,6 @@ def soft_empty_cache(force=False):
 
 def unload_all_models():
     free_memory(1e30, get_torch_device())
+
+
+## not recognising as same model when should partial reload

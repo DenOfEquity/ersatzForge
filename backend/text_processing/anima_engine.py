@@ -107,7 +107,7 @@ class AnimaTextProcessingEngine:
 
 
     def anima_preprocess(self, cross_attn: torch.Tensor, t5xxl_ids: torch.Tensor, t5xxl_weights: torch.Tensor) -> torch.Tensor:
-        device = memory_management.text_encoder_device()
+        device = memory_management.get_torch_device()
 
         cross_attn = cross_attn.unsqueeze(0).to(device=device)
         t5xxl_ids = t5xxl_ids.unsqueeze(0).to(device=device)
@@ -128,7 +128,7 @@ class AnimaTextProcessingEngine:
         return cross_attn
 
     def process_embeds(self, batch_tokens):
-        device = memory_management.text_encoder_device()
+        device = memory_management.get_torch_device()
 
         embeds_out = []
         attention_masks = []
@@ -167,4 +167,7 @@ class AnimaTextProcessingEngine:
     def process_tokens(self, batch_tokens):
         embeds, mask, count, info = self.process_embeds(batch_tokens)
         z, _ = self.text_encoder(input_ids=None, embeds=embeds, attention_mask=mask, num_tokens=count, embeds_info=info)
+
+        memory_management.soft_empty_cache()
+
         return z

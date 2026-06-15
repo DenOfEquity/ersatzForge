@@ -1,4 +1,5 @@
 import torch
+import uuid
 
 from backend import memory_management, attention
 from backend.modules.k_prediction import k_prediction_from_diffusers_scheduler
@@ -20,6 +21,8 @@ class KModel(torch.nn.Module):
             self.predictor = k_prediction_from_diffusers_scheduler(diffusers_scheduler)
         else:
             self.predictor = k_predictor
+
+        self.uuid = 'uuid_' + uuid.uuid4().hex
 
     def apply_model(self, x, t, c_concat=None, c_crossattn=None, control=None, transformer_options={}, **kwargs):
         sigma = t
@@ -50,21 +53,26 @@ class KModel(torch.nn.Module):
             dtype_size = 4
 
         # true memory requirements may not be so simply calculated, may be quadratic to image size
-        # also cond size is relevant
-        # 1.65 values may be adjustable down, now that moved previews to CPU
+        # also cond size is relevant, tested with 300+ token prompts
         match (self.diffusion_model.__class__.__name__):
-            case "IntegratedChromaDCTTransformer2DModel":
-                scaler = 1.65 / 3.0
-            case "IntegratedChromaTransformer2DModel":
-                scaler = 1.65
+            case "IntegratedChromaDCTTransformer2DModel": # untested
+                scaler = (2.3 / 3.0) / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.75)
+            case "IntegratedChromaTransformer2DModel": # assumed same as flux, untested
+                scaler = 2.3 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.75)
             case "Lumina2DiT":
-                scaler = 1.22
+                scaler = 1.7
             case "IntegratedFlux2Transformer2DModel":
-                scaler = 1.3
+                scaler = 1.2
+            case "IntegratedFluxTransformer2DModel":
+                scaler = 2.3 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.75)
             case "ERNIEImageModel":
-                scaler = 0.65
+                scaler = 0.95
             case "MiniTrainDIT":
-                scaler = 0.78
+                scaler = 1.65
+            case "IntegratedUNet2DConditionModel": # under estimates for sd1.5, but that seems a fair tradeoff
+                scaler = 5.8 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.6)
+                if input_shape[1] == 32: # mugen SDXL
+                    scaler /= 4 # retest
             case _:
                 scaler = 1.65
 

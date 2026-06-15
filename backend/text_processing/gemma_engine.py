@@ -98,7 +98,7 @@ class GemmaTextProcessingEngine:
         return zs
 
     def process_embeds(self, batch_tokens):
-        device = memory_management.text_encoder_device()
+        device = memory_management.get_torch_device()
 
         embeds_out = []
         attention_masks = []
@@ -139,5 +139,7 @@ class GemmaTextProcessingEngine:
             embeds *= (original_mean / new_mean)
 
         z, _ = self.text_encoder(input_ids=None, embeds=embeds, attention_mask=mask, num_tokens=count)#, intermediate_output=-2, final_layer_norm_intermediate=False)
+
+        memory_management.soft_empty_cache()
 
         return z

@@ -25,9 +25,9 @@ class T5TextProcessingEngine:
         self.id_end = 1
         self.id_pad = 0
 
-        vocab = self.tokenizer.get_vocab()
+        # vocab = self.tokenizer.get_vocab()
 
-        self.comma_token = vocab.get(',</w>', None)
+        # self.comma_token = vocab.get(',</w>', None)
 
     def tokenize(self, texts):
         tokenized = self.tokenizer(texts, truncation=False, add_special_tokens=self.add_special_tokens)["input_ids"]
@@ -51,17 +51,18 @@ class T5TextProcessingEngine:
         return torch.tensor(attention_masks, dtype=torch.long)
 
     def encode_with_transformers(self, tokens, attention_mask=None):
-        device = memory_management.text_encoder_device()
+        device = memory_management.get_torch_device()
         offload_device = memory_management.text_encoder_offload_device()
         tokens = tokens.to(device)
-        self.text_encoder.shared.to(device=device, dtype=torch.float32)
+        self.text_encoder.shared = self.text_encoder.shared.to(device=device, dtype=torch.float32)
 
         if attention_mask is not None:
+            attention_mask = attention_mask.to(device)
             z = self.text_encoder(input_ids=tokens, attention_mask=attention_mask)
         else:
             z = self.text_encoder(input_ids=tokens,)
 
-        self.text_encoder.shared.to(device=offload_device)
+        self.text_encoder.shared = self.text_encoder.shared.to(device=offload_device)
 
         return z
 
@@ -154,6 +155,8 @@ class T5TextProcessingEngine:
         else:
             tokens = torch.asarray(batch_tokens)
             z = self.encode_with_transformers(tokens)
+
+        memory_management.soft_empty_cache()
 
         self.emphasis.tokens = batch_tokens
         self.emphasis.multipliers = torch.asarray(batch_multipliers).to(z)

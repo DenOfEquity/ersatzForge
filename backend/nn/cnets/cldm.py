@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn
+import uuid
 
 from backend.attention import attention_function
 from backend.nn.unet import timestep_embedding, exists, conv_nd, SpatialTransformer, TimestepEmbedSequential, ResBlock, Downsample
@@ -326,6 +327,8 @@ class ControlNet(nn.Module):
                     return self.linear_2(torch.nn.functional.silu(self.linear_1(c_type)))
 
             self.control_add_embedding = ControlAddEmbedding(control_add_embed_dim, time_embed_dim, self.num_control_type)
+
+        self.uuid = 'uuid_' + uuid.uuid4().hex
 
     def union_controlnet_merge(self, hint, control_type, emb, context):
         # https://github.com/xinsir6/ControlNetPlus

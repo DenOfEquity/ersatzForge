@@ -108,7 +108,7 @@ class ClassicTextProcessingEngine:
         return tokenized
 
     def encode_with_transformers(self, tokens):
-        target_device = memory_management.text_encoder_device()
+        target_device = memory_management.get_torch_device()
 
         self.text_encoder.transformer.text_model.embeddings.position_ids = self.text_encoder.transformer.text_model.embeddings.position_ids.to(device=target_device)
         self.text_encoder.transformer.text_model.embeddings.position_embedding = self.text_encoder.transformer.text_model.embeddings.position_embedding.to(dtype=torch.float32)
@@ -240,7 +240,6 @@ class ClassicTextProcessingEngine:
 
         batch_chunks, token_count = self.process_texts(texts)
 
-        # used_embeddings = {}
         chunk_count = max([len(x) for x in batch_chunks])
 
         zs = []
@@ -250,10 +249,6 @@ class ClassicTextProcessingEngine:
             tokens = [x.tokens for x in batch_chunk]
             multipliers = [x.multipliers for x in batch_chunk]
             self.embeddings.fixes = [x.fixes for x in batch_chunk]
-
-            # for fixes in self.embeddings.fixes:
-                # for _position, embedding in fixes:
-                    # used_embeddings[embedding.name] = embedding
 
             z = self.process_tokens(tokens, multipliers)
             zs.append(z)
@@ -272,6 +267,8 @@ class ClassicTextProcessingEngine:
                 tokens[batch_pos, index + 1:tokens.shape[1]] = self.id_pad
 
         z = self.encode_with_transformers(tokens)
+
+        memory_management.soft_empty_cache()
 
         pooled = getattr(z, 'pooled', None)
 

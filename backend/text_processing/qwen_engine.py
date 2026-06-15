@@ -123,7 +123,7 @@ class Qwen3TextProcessingEngine:
         return zs
 
     def process_embeds(self, batch_tokens):
-        device = memory_management.text_encoder_device()
+        device = memory_management.get_torch_device()
 
         embeds_out = []
         attention_masks = []
@@ -132,22 +132,14 @@ class Qwen3TextProcessingEngine:
         for tokens in batch_tokens:
             attention_mask = []
             tokens_temp = []
-            eos = False
-            index = 0
 
             for t in tokens:
                 token = int(t)
-                attention_mask.append(0 if eos else 1)
+                attention_mask.append(0 if token == self.id_pad else 1)
                 tokens_temp += [token]
-                if not eos and token == self.id_pad:
-                    attention_mask[-1] = 0
-                    eos = True
-                index += 1
 
             tokens_embed = torch.tensor([tokens_temp], device=device, dtype=torch.long)
             tokens_embed = self.text_encoder.get_input_embeddings()(tokens_embed)
-
-            index = 0
 
             embeds_out.append(tokens_embed)
             attention_masks.append(attention_mask)
@@ -174,6 +166,8 @@ class Qwen3TextProcessingEngine:
             intermediate_output=self.intermediate_output,
             final_layer_norm_intermediate=self.layer_norm_hidden_state,
         )
+
+        memory_management.soft_empty_cache()
 
         if self.is_flux2:
             z = torch.stack((z[:, 0], z[:, 1], z[:, 2]), dim=1)
