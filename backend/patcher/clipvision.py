@@ -1,4 +1,3 @@
-from collections import OrderedDict
 import torch
 
 from backend.utils import load_torch_file
@@ -6,26 +5,10 @@ from backend.state_dict import transformers_convert, state_dict_prefix_replace
 from backend import memory_management
 from transformers import modeling_utils, CLIPVisionConfig, CLIPVisionModelWithProjection
 
+from modules_forge.shared import GenericCache
 
-class ClipVisionImageCache:
-    def __init__(self):
-        self.cache = OrderedDict()
 
-    def get(self, key):
-        if key in self.cache:
-            self.cache.move_to_end(key)
-            return self.cache[key]
-        return None
-
-    def put(self, key, model):
-        self.cache[key] = model
-        self.cache.move_to_end(key)
-
-        max_size = 11
-        while len(self.cache) > max_size:
-            self.cache.popitem(last=False)
-
-_CLIPVISION_IMAGE_CACHE = ClipVisionImageCache()
+_CLIPVISION_IMAGE_CACHE = GenericCache(max_size=11)
 
 
 CLIP_VISION_G = {
@@ -96,17 +79,22 @@ class Output:
 
 
 def clip_preprocess(image, size=224):
-    mean = torch.tensor([0.48145466, 0.4578275, 0.40821073], device=image.device, dtype=image.dtype)
-    std = torch.tensor([0.26862954, 0.26130258, 0.27577711], device=image.device, dtype=image.dtype)
+    view = [3, 1, 1] if image.ndim == 3 else [1, 3, 1, 1]
+
+    mean = torch.tensor([0.48145466, 0.4578275, 0.40821073], device=image.device, dtype=image.dtype).view(view)
+    std = torch.tensor([0.26862954, 0.26130258, 0.27577711], device=image.device, dtype=image.dtype).view(view)
+
     image = image.movedim(-1, 1)
+
     if not (image.shape[2] == size and image.shape[3] == size):
         scale = (size / min(image.shape[2], image.shape[3]))
         image = torch.nn.functional.interpolate(image, size=(round(scale * image.shape[2]), round(scale * image.shape[3])), mode="bicubic", antialias=True)
         h = (image.shape[2] - size) // 2
         w = (image.shape[3] - size) // 2
         image = image[:, :, h:h + size, w:w + size]
+
     image = torch.clip((255. * image), 0, 255).round() / 255.0
-    return (image - mean.view([3, 1, 1])) / std.view([3, 1, 1])
+    return (image - mean) / std
 
 
 class ClipVisionModel:
