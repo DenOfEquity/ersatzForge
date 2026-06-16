@@ -56,12 +56,13 @@ def add_supported_control_model(control_model):
     return
 
 
-# caching by Haoming02, ForgeNeo
+# original caching by Haoming02, ForgeNeo
 from collections import OrderedDict
 
-class ModelCache:
-    def __init__(self):
+class GenericCache:
+    def __init__(self, max_size=1):
         self.cache = OrderedDict()
+        self.max_size = max_size
 
     def get(self, key):
         if key in self.cache:
@@ -69,15 +70,17 @@ class ModelCache:
             return self.cache[key]
         return None
 
-    def put(self, key, model):
-        self.cache[key] = model
+    def put(self, key, store):
+        self.cache[key] = store
         self.cache.move_to_end(key)
 
-        max_size = max(1, shared.opts.data.get("control_net_model_cache_size", 3))
-        while len(self.cache) > max_size:
+        while len(self.cache) > self.max_size:
             self.cache.popitem(last=False)
 
-_CONTROL_MODEL_CACHE = ModelCache()
+    def set_max_size(self, max_size):
+        self.max_size = max(1, max_size)
+
+_CONTROL_MODEL_CACHE = GenericCache()
 
 
 def try_load_supported_control_model(ckpt_path):
@@ -92,6 +95,7 @@ def try_load_supported_control_model(ckpt_path):
             state_dict_copy = dict(state_dict)
             control_model = supported_type.try_build_from_state_dict(state_dict_copy, ckpt_path, metadata)
             if control_model is not None:
+                _CONTROL_MODEL_CACHE.set_max_size(shared.opts.data.get("control_net_model_cache_size", 3))
                 _CONTROL_MODEL_CACHE.put(ckpt_path, control_model)
                 break
 
