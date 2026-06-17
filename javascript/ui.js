@@ -9,7 +9,6 @@ function set_theme(theme) {
 
 function all_gallery_buttons() {
     var allGalleryButtons = get_uiCurrentTabContent().querySelectorAll('div[id$=_gallery].gradio-gallery .thumbnails > .thumbnail-item.thumbnail-small');
-    // var allGalleryButtons = gradioApp().querySelectorAll('[style="display: block;"].tabitem div[id$=_gallery].gradio-gallery .thumbnails > .thumbnail-item.thumbnail-small');
     var visibleGalleryButtons = [];
     allGalleryButtons.forEach(function(elem) {
         if (elem.parentElement.offsetParent) {
@@ -17,6 +16,14 @@ function all_gallery_buttons() {
         }
     });
     return visibleGalleryButtons;
+}
+
+function selected_gallery_button_filename() {
+    let button = all_gallery_buttons().find(elem => elem.classList.contains('selected')) ?? null;
+    if (button) {
+        return button.querySelector('img').src;
+    }
+	return "";
 }
 
 function selected_gallery_button() {
