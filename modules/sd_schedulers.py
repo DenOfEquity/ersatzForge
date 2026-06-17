@@ -49,7 +49,7 @@ def simple_scheduler(n, sigma_min, sigma_max, inner_model, device):
         sigs += [float(inner_model.sigmas[-(1 + int(x * ss))])]
 
     if isinstance(inner_model.predictor, Prediction):
-        lo = sigs[-1]
+        lo = sigs[-1] if n > 1 else 0.0
         hi = sigs[0] - lo
         for x in range(n):
             sigs[x] -= lo
@@ -88,7 +88,7 @@ def ddim_scheduler(n, sigma_min, sigma_max, inner_model, device):
     sigs = sigs[::-1]
 
     if isinstance(inner_model.predictor, Prediction):
-        lo = sigs[-1]
+        lo = sigs[-1] if n > 1 else 0.0
         hi = sigs[0] - lo
         for x in range(n):
             sigs[x] -= lo
@@ -118,7 +118,7 @@ def beta_scheduler(n, sigma_min, sigma_max, inner_model, device):
         last_t = t
 
     if isinstance(inner_model.predictor, Prediction):
-        lo = sigs[-1]
+        lo = sigs[-1] if n > 1 else 0.0
         hi = sigs[0] - lo
         for x in range(n):
             sigs[x] -= lo
@@ -143,7 +143,7 @@ def turbo_scheduler(n, sigma_min, sigma_max, inner_model, device):
         sigmas = unet.model.predictor.sigma(timesteps.to(device=unet.model.predictor.sigmas.device))
 
     if isinstance(inner_model.predictor, Prediction):
-        lo = sigmas[-1].clone()
+        lo = sigmas[-1].clone() if n > 1 else 0.0
         hi = sigmas[0].clone() - lo
 
         sigmas -= lo
@@ -253,7 +253,7 @@ def sigmoid_offset_sigmas(n, sigma_min, sigma_max, inner_model, device):
         sigs.append(float(inner_model.sigmas[t]))
 
     if isinstance(inner_model.predictor, Prediction):
-        lo = sigs[-1]
+        lo = sigs[-1] if n > 1 else 0.0
         hi = sigs[0] - lo
         for x in range(n):
             sigs[x] -= lo
