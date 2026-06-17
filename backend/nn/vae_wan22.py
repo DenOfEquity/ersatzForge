@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from einops import rearrange
 
-from .vae_wan import AttentionBlock, CausalConv3d, RMS_norm
+from .vae_wan import AttentionBlock, RMS_norm
 
 
 class Resample(nn.Module):
@@ -45,7 +45,6 @@ class Resample(nn.Module):
 
 
 class ResidualBlock(nn.Module):
-
     def __init__(self, in_dim, out_dim, dropout=0.0):
         super().__init__()
         self.in_dim = in_dim
@@ -55,13 +54,13 @@ class ResidualBlock(nn.Module):
         self.residual = nn.Sequential(
             RMS_norm(in_dim, images=False),
             nn.SiLU(),
-            CausalConv3d(in_dim, out_dim, 3, padding=1),
+            nn.Conv3d(in_dim, out_dim, 3, padding=1, temporal_pad=True),
             RMS_norm(out_dim, images=False),
             nn.SiLU(),
             nn.Dropout(dropout),
-            CausalConv3d(out_dim, out_dim, 3, padding=1),
+            nn.Conv3d(out_dim, out_dim, 3, padding=1, temporal_pad=True),
         )
-        self.shortcut = CausalConv3d(in_dim, out_dim, 1) if in_dim != out_dim else nn.Identity()
+        self.shortcut = nn.Conv3d(in_dim, out_dim, 1) if in_dim != out_dim else nn.Identity()
 
     def forward(self, x):
         old_x = x
@@ -105,7 +104,6 @@ def unpatchify(x, patch_size):
 
 
 class AvgDown3D(nn.Module):
-
     def __init__(
         self,
         in_channels,
@@ -159,7 +157,6 @@ class AvgDown3D(nn.Module):
 
 
 class DupUp3D(nn.Module):
-
     def __init__(
         self,
         in_channels: int,
@@ -204,7 +201,6 @@ class DupUp3D(nn.Module):
 
 
 class Down_ResidualBlock(nn.Module):
-
     def __init__(self, in_dim, out_dim, dropout, mult, down_flag=False):
         super().__init__()
 
@@ -274,7 +270,6 @@ class Up_ResidualBlock(nn.Module):
 
 
 class Encoder3d(nn.Module):
-
     def __init__(
         self,
         dim=128,
@@ -296,7 +291,7 @@ class Encoder3d(nn.Module):
         scale = 1.0
 
         # init block
-        self.conv1 = CausalConv3d(12, dims[0], 3, padding=1)
+        self.conv1 = nn.Conv3d(12, dims[0], 3, padding=1, temporal_pad=True)
 
         # downsample blocks
         downsamples = []
@@ -324,7 +319,7 @@ class Encoder3d(nn.Module):
         self.head = nn.Sequential(
             RMS_norm(out_dim, images=False),
             nn.SiLU(),
-            CausalConv3d(out_dim, z_dim, 3, padding=1),
+            nn.Conv3d(out_dim, z_dim, 3, padding=1, temporal_pad=True),
         )
 
     def forward(self, x):
@@ -343,7 +338,6 @@ class Encoder3d(nn.Module):
 
 
 class Decoder3d(nn.Module):
-
     def __init__(
         self,
         dim=128,
@@ -363,7 +357,7 @@ class Decoder3d(nn.Module):
         # dimensions
         dims = [dim * u for u in [dim_mult[-1]] + dim_mult[::-1]]
         # init block
-        self.conv1 = CausalConv3d(z_dim, dims[0], 3, padding=1)
+        self.conv1 = nn.Conv3d(z_dim, dims[0], 3, padding=1, temporal_pad=True)
 
         # middle blocks
         self.middle = nn.Sequential(
@@ -390,7 +384,7 @@ class Decoder3d(nn.Module):
         self.head = nn.Sequential(
             RMS_norm(out_dim, images=False),
             nn.SiLU(),
-            CausalConv3d(out_dim, 12, 3, padding=1),
+            nn.Conv3d(out_dim, 12, 3, padding=1, temporal_pad=True),
         )
 
     def forward(self, x, first_chunk=False):
@@ -405,14 +399,6 @@ class Decoder3d(nn.Module):
         for layer in self.head:
             x = layer(x)
         return x
-
-
-def count_conv3d(model):
-    count = 0
-    for m in model.modules():
-        if isinstance(m, CausalConv3d):
-            count += 1
-    return count
 
 
 class AutoencoderKLWan22(nn.Module, ConfigMixin):
@@ -446,8 +432,8 @@ class AutoencoderKLWan22(nn.Module, ConfigMixin):
             attn_scales,
             dropout,
         )
-        self.conv1 = CausalConv3d(z_dim * 2, z_dim * 2, 1)
-        self.conv2 = CausalConv3d(z_dim, z_dim, 1)
+        self.conv1 = nn.Conv3d(z_dim * 2, z_dim * 2, 1)
+        self.conv2 = nn.Conv3d(z_dim, z_dim, 1)
         self.decoder = Decoder3d(
             dec_dim,
             z_dim,

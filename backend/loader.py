@@ -435,12 +435,12 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             offload_device = memory_management.unet_offload_device()
 
             if storage_dtype in ['nf4', 'fp4', 'gguf']:
-                initial_device = memory_management.unet_inital_load_device(parameters=state_dict_parameters, dtype=computation_dtype)
+                initial_device = memory_management.unet_initial_load_device(parameters=state_dict_parameters, dtype=computation_dtype)
                 with modeling_utils.no_init_weights():
                     with using_forge_operations(device=initial_device, dtype=computation_dtype, manual_cast_enabled=False, bnb_dtype=storage_dtype):
                         model = model_loader(unet_config)
             else:
-                initial_device = memory_management.unet_inital_load_device(parameters=state_dict_parameters, dtype=storage_dtype)
+                initial_device = memory_management.unet_initial_load_device(parameters=state_dict_parameters, dtype=storage_dtype)
                 need_manual_cast = storage_dtype != computation_dtype
                 to_args = dict(device=initial_device, dtype=storage_dtype)
 

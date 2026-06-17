@@ -502,18 +502,19 @@ class LoadedModel:
             print(f"{cc.INFO}[Memory Management] {cc.INFO2}[LOAD] {cc.LOAD}{self.model.model.__class__.__name__}{cc.RESET}, ", end="")
 
         need_cpu_swap = False
-        if 'Autoencoder' in self.model.model.__class__.__name__ or 'CLIPVisionModelWithProjection' in self.model.model.__class__.__name__:
-            # VAE must be fully on one device
-            free_memory(memory_for_inference, self.device, keep_loaded=keep_loaded)
-            need_cpu_swap = False
-        elif 'ControlNet' in self.model.model.__class__.__name__ and controlnet_on_cpu:
+
+        # if 'Autoencoder' in self.model.model.__class__.__name__:
+            ## not necessary for any currently supported VAEs
+            # if VAE contains layers not supported by ForgeOperations then VAE must be fully on one device
+            # free_memory(memory_for_inference, self.device, keep_loaded=keep_loaded)
+            # need_cpu_swap = False
+        if self.device == torch.device("cpu"):
             gpu_memory_available = 0
             need_cpu_swap = True
         elif vram_set_state == VRAMState.NO_VRAM:
             gpu_memory_available = 0
             need_cpu_swap = True
-
-        elif self.device == torch.device("cpu"):
+        elif 'ControlNet' in self.model.model.__class__.__name__ and controlnet_on_cpu:
             gpu_memory_available = 0
             need_cpu_swap = True
 
@@ -821,7 +822,7 @@ def unet_offload_device():
         return torch.device("cpu")
 
 
-def unet_inital_load_device(parameters, dtype):
+def unet_initial_load_device(parameters, dtype):
     torch_dev = get_torch_device()
     if vram_state == VRAMState.HIGH_VRAM:
         return torch_dev
@@ -912,10 +913,20 @@ def intermediate_device():
         return torch.device("cpu")
 
 
+# VAE patcher uses these functions for setup, then sets self.device=get_torch_device()
+# so VAE *runs on* torch device, but is *loaded on* CPU = more VRAM for decode; no performance cost if VAE is one-pass
+# may break with future VAEs if they use custom layers (already fixed wan2.1/2.2)
+
 def vae_device():
-    if args.vae_in_cpu:
+    if args.always_gpu:
+        return get_torch_device()
+    else:
         return torch.device("cpu")
-    return get_torch_device()
+
+# def vae_device():
+    # if args.vae_in_cpu:
+        # return torch.device("cpu")
+    # return get_torch_device()
 
 
 def vae_offload_device():
@@ -1304,6 +1315,3 @@ def soft_empty_cache(force=False):
 
 def unload_all_models():
     free_memory(1e30, get_torch_device())
-
-
-## not recognising as same model when should partial reload

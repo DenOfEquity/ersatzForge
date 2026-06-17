@@ -54,7 +54,7 @@ def tiled_scale(samples, function, tile=(64, 64), overlap=8, upscale_amount=4, o
 
 
 # this tiled decoder lightly modified from diffusers.models.autoencoders.autoencoder_kl.py
-# faster than original (1 pass instead of 3) and better blending
+# faster than original webUI tiled method (1 pass instead of 3) and better blending
 @torch.inference_mode()
 def tiled_decode_diffusers(samples, function, tile_x=64, tile_y=64, overlap=8, upscale=4, out_channels=3, device="cpu"):
     def blend_v(a: torch.Tensor, b: torch.Tensor, blend_extent: int) -> torch.Tensor:
@@ -102,6 +102,7 @@ def tiled_decode_diffusers(samples, function, tile_x=64, tile_y=64, overlap=8, u
     return output
 
 
+# best run on strips of either full width or full height
 @torch.inference_mode()
 def tiled_decode_DoE(samples, function, tile_x=64, tile_y=64, overlap=8, upscale=4, out_channels=3, device="cpu"):
     def blend_v(a: torch.Tensor, b: torch.Tensor, blend_extent: int) -> torch.Tensor:
@@ -130,7 +131,6 @@ def tiled_decode_DoE(samples, function, tile_x=64, tile_y=64, overlap=8, upscale
     tile_y -= overlap_y
     tile_x = min(samples.shape[-1], tile_x)
     tile_y = min(samples.shape[-2], tile_y)
-
 
     for b in trange(samples.shape[0]):
         rows = []
@@ -204,7 +204,7 @@ class VAE:
         if model.__class__.__name__ == "AutoencoderKLWan22":
             self.memory_used_decode = lambda shape, dtype: (8 * 64854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
         else:
-            self.memory_used_decode = lambda shape, dtype: (64854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
+            self.memory_used_decode = lambda shape, dtype: (72854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
             
         if hasattr(model.config, "downscale_ratio"):
             self.downscale_ratio = int(model.config.downscale_ratio)
@@ -219,10 +219,7 @@ class VAE:
 
         self.first_stage_model = model.eval()
 
-        if device is None:
-            device = memory_management.vae_device()
-
-        self.device = device
+        self.device = device or memory_management.vae_device()
         offload_device = memory_management.vae_offload_device()
 
         if dtype is None:
@@ -237,6 +234,7 @@ class VAE:
             load_device=self.device,
             offload_device=offload_device
         )
+        self.device = memory_management.get_torch_device()
 
     def clone(self):
         n = VAE(no_init=True)

@@ -221,11 +221,17 @@ class ForgeOperations:
 
 
     class Conv3d(torch.nn.Conv3d):
+        # modified to support CausalConv3d from WAN2.1 and 2.2 VAE
+        # implementation of those models adjusted to include 'temporal_pad=True' wherever CausalConv3d is init'd with padding
         def __init__(self, *args, **kwargs):
+            self.temporal_pad = kwargs.pop('temporal_pad', False)
             kwargs['device'] = current_device
             kwargs['dtype'] = current_dtype
             super().__init__(*args, **kwargs)
             self.parameters_manual_cast = current_manual_cast_enabled
+            if self.temporal_pad:
+                self._padding = [self.padding[2], self.padding[2], self.padding[1], self.padding[1], 2 * self.padding[0], 0]
+                self.padding = (0, 0, 0)
 
         def reset_parameters(self):
             return None
@@ -234,9 +240,13 @@ class ForgeOperations:
             if self.parameters_manual_cast:
                 weight, bias, signal = weights_manual_cast(self, x)
                 with main_stream_worker(weight, bias, signal):
+                    if self.temporal_pad:
+                        x = torch.nn.functional.pad(x, self._padding)
                     return self._conv_forward(x, weight, bias)
             else:
                 weight, bias = get_weight_and_bias(self)
+                if self.temporal_pad:
+                    x = torch.nn.functional.pad(x, self._padding)
                 return super()._conv_forward(x, weight, bias)
 
     class Conv1d(torch.nn.Conv1d):
