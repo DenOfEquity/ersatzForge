@@ -627,7 +627,7 @@ def replace_state_dict(sd, asd, guess):
         'conditioner.embedders.1.model.transformer.resblocks.0.ln_1.bias'               : 'conditioner.embedders.1.model.transformer.',
         'text_encoders.clip_g.transformer.text_model.encoder.layers.0.layer_norm1.bias' : 'text_encoders.clip_g.transformer.',
         'text_model.encoder.layers.0.layer_norm1.bias'                                  : '',
-        'transformer.resblocks.0.ln_1.bias'                                             : 'transformer.'
+        'transformer.resblocks.0.ln_1.bias'                                             : 'transformer.',
     }
     for CLIP_key in CLIP_G.keys():
         if CLIP_key in asd and asd[CLIP_key].shape[0] == 1280:
@@ -684,9 +684,20 @@ def replace_state_dict(sd, asd, guess):
                         new_k = new_prefix + k
                         sd[new_k] = v
                 else:
+                    keys_to_replace = {
+                        "positional_embedding"   : "text_model.embeddings.position_embedding.weight",
+                        "token_embedding.weight" : "text_model.embeddings.token_embedding.weight",
+                        "ln_final.weight"        : "text_model.final_layer_norm.weight",
+                        "ln_final.bias"          : "text_model.final_layer_norm.bias",
+                        "text_projection"        : "text_projection.weight",
+                    }
                     for k, v in asd.items():
-                        new_k = k.replace(old_prefix, new_prefix)
-                        sd[new_k] = v
+                        if k.startswith(old_prefix):
+                            new_k = new_prefix + k[len(old_prefix):]
+                            sd[new_k] = v
+                        elif k in keys_to_replace:
+                            new_k = new_prefix + keys_to_replace[k]
+                            sd[new_k] = v
 
     ##  CLIP-L
     CLIP_L = {     #   key to identify source model                                                    old_prefix
@@ -694,7 +705,7 @@ def replace_state_dict(sd, asd, guess):
         'conditioner.embedders.0.transformer.text_model.encoder.layers.0.layer_norm1.bias'  : 'conditioner.embedders.0.transformer.',
         'text_encoders.clip_l.transformer.text_model.encoder.layers.0.layer_norm1.bias'     : 'text_encoders.clip_l.transformer.',
         'text_model.encoder.layers.0.layer_norm1.bias'                                      : '',
-        'transformer.resblocks.0.ln_1.bias'                                                 : 'transformer.'
+        'transformer.resblocks.0.ln_1.bias'                                                 : 'transformer.',
     }
 
     for CLIP_key in CLIP_L.keys():
@@ -751,9 +762,20 @@ def replace_state_dict(sd, asd, guess):
                         new_k = new_prefix + k
                         sd[new_k] = v
                 else:
+                    keys_to_replace = {
+                        "positional_embedding"   : "text_model.embeddings.position_embedding.weight",
+                        "token_embedding.weight" : "text_model.embeddings.token_embedding.weight",
+                        "ln_final.weight"        : "text_model.final_layer_norm.weight",
+                        "ln_final.bias"          : "text_model.final_layer_norm.bias",
+                        # "text_projection"        : "text_projection.weight",
+                    }
                     for k, v in asd.items():
-                        new_k = k.replace(old_prefix, new_prefix)
-                        sd[new_k] = v
+                        if k.startswith(old_prefix):
+                            new_k = new_prefix + k[len(old_prefix):]
+                            sd[new_k] = v
+                        elif k in keys_to_replace:
+                            new_k = new_prefix + keys_to_replace[k]
+                            sd[new_k] = v
 
     # T5
     if model_type in ['flux', 'sd3', 'csms', 'wan']:
