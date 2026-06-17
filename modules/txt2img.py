@@ -55,7 +55,7 @@ def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_in
     assert len(gallery) > 0, 'No image to upscale'
 
     if gallery_index < 0 or gallery_index >= len(gallery):
-        return gallery, generation_info, f'Bad image index: {gallery_index}', ''
+        return gradio.skip(), gradio.skip(), f'Bad image index: {gallery_index}', ''
 
     geninfo = json.loads(generation_info)
 
@@ -64,7 +64,7 @@ def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_in
     #   catch if user tries to upscale a control image, this function will fail later trying to get infotext that doesn't exist
     count_images = len(geninfo.get('infotexts'))        #   note: we have batch_size in geninfo, but not batch_count
     if len(gallery) > 1 and (gallery_index < first_image_index or gallery_index >= count_images):
-        return gallery, generation_info, 'Unable to upscale grid or control images.', ''
+        return gradio.skip(), gradio.skip(), 'Unable to upscale grid or control images.', ''
 
     p = txt2img_create_processing(id_task, *args, force_enable_hr=True)
     p.batch_size = 1
