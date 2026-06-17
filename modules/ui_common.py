@@ -58,18 +58,20 @@ class OutputPanel:
 def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2img, extras
     res = OutputPanel()
 
-    def open_folder(f, images=None, index=None):
+    def open_folder(filename):
         if shared.cmd_opts.hide_ui_dir_config:
             return
 
-        try:
-            if 'Subdirectory' in shared.opts.open_dir_button_choice:
-                image_dir = os.path.split(images[index][0].filename.rsplit('?', 1)[0])[0]
+        f = shared.opts.outdir_samples or outdir
 
-                if 'temp' in shared.opts.open_dir_button_choice or not ui_tempdir.is_gradio_temp_path(image_dir):
-                    f = image_dir
-        except Exception:
-            pass
+        if filename.startswith("http://") and "/file=" in filename:
+            filename = filename.split("/file=", 1)[1]
+            if os.path.exists(filename):
+                if 'Subdirectory' in shared.opts.open_dir_button_choice:
+                    image_dir = os.path.split(filename)[0]
+
+                    if 'temp' in shared.opts.open_dir_button_choice or not ui_tempdir.is_gradio_temp_path(image_dir):
+                        f = image_dir
 
         util.open_folder(f)
 
@@ -95,12 +97,9 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
                 res.button_upscale = ToolButton('✨', elem_id=f'{tabname}_upscale', tooltip="Create an upscaled version of the current image using HiRes fix settings.")
 
         open_folder_button.click(
-            fn=lambda images, index: open_folder(shared.opts.outdir_samples or outdir, images, index),
-            js="(y, w) => [y, selected_gallery_index()]",
-            inputs=[
-                res.gallery,
-                open_folder_button,  # placeholder for index
-            ],
+            fn=open_folder,
+            js="selected_gallery_button_filename",
+            inputs=[dummy],
             outputs=None,
         )
 
@@ -116,7 +115,6 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
             res.gallery.change(fn=select_gallery_and_update_gen_info, js="function(x, y, z){ return [x, y, selected_gallery_index()] }", inputs=[res.generation_info, res.infotext, dummy], outputs=[res.gallery, res.infotext], show_progress="hidden").then(fn=None, js="setup_gallery_lightbox", inputs=None, outputs=None)
 
         res.html_log = gr.HTML(elem_id=f'html_log_{tabname}', elem_classes="html-log")
-
 
         paste_field_names = []
         if tabname == "txt2img":
