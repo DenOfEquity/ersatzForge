@@ -5,16 +5,16 @@ import json
 from safetensors import safe_open
 
 import backend.misc.checkpoint_pickle
-from backend.operations_gguf import ParameterGGUF
+from backend.operations_gguf import ParameterGGUF, get_orig_shape
 
 
 def read_arbitrary_config(directory):
-    config_path = os.path.join(directory, 'config.json')
+    config_path = os.path.join(directory, "config.json")
 
     if not os.path.exists(config_path):
-        raise FileNotFoundError(f"No config.json file found in the directory: {directory}")
+        raise FileNotFoundError(f"No 'config.json' file found in the directory: {directory}")
 
-    with open(config_path, 'rt', encoding='utf-8') as file:
+    with open(config_path, "rt", encoding="utf-8") as file:
         config_data = json.load(file)
 
     return config_data
@@ -35,19 +35,34 @@ def load_torch_file(ckpt, safe_load=False, device=None, return_metadata=False):
                 if return_metadata:
                     metadata = f.metadata()
         except Exception:
-            raise ValueError(f'\nModel "{ckpt}" is corrupt or invalid...\nPlease download the model again\n') from None
+            raise ValueError(f"\nModel '{ckpt}' is corrupt or invalid...\nPlease download the model again\n") from None
 
     elif ckpt.lower().endswith(".gguf"):
         reader = gguf.GGUFReader(ckpt)
+        arch = reader.get_field("general.architecture")
+        arch = str(arch.parts[arch.data[-1]], encoding="utf-8").lower()
+        
         sd = {}
         for tensor in reader.tensors:
-            sd[str(tensor.name)] = ParameterGGUF(tensor)
+            tensor_name = str(tensor.name)
+            torch_tensor = torch.from_numpy(tensor.data)
+            shape = get_orig_shape(reader, tensor_name) or torch.Size(tuple(int(v) for v in reversed(tensor.shape)))
+
+            if tensor.tensor_type == gguf.GGMLQuantizationType.F32:
+                torch_tensor = torch_tensor.view(*shape)
+                dequant = torch_tensor.view(torch.float32)
+                sd[tensor_name] = torch.nn.Parameter(dequant, requires_grad=False)
+            elif tensor.tensor_type == gguf.GGMLQuantizationType.F16:
+                torch_tensor = torch_tensor.view(*shape)
+                dequant = torch_tensor.view(torch.float16)#.to(torch.float32)
+                sd[tensor_name] = torch.nn.Parameter(dequant, requires_grad=False)
+            else:
+                sd[tensor_name] = ParameterGGUF(torch_tensor, tensor_type=tensor.tensor_type, tensor_shape=shape)
+                if arch == "cosmos" and tensor_name.startswith("llm_adapter."):
+                    sd[tensor_name] = sd[tensor_name].dequantize_as_pytorch_parameter()
+
     else:
-        # if safe_load:
-            # if 'weights_only' not in torch.load.__code__.co_varnames:
-                # print("Warning torch.load doesn't support weights_only on this pytorch version, loading unsafely.")
-                # safe_load = False
-        if safe_load:
+        if safe_load: # Torch defaults to weights_only=True since 2.6
             pl_sd = torch.load(ckpt, map_location=device, weights_only=True)
         else:
             pl_sd = torch.load(ckpt, map_location=device, pickle_module=backend.misc.checkpoint_pickle)
@@ -162,7 +177,7 @@ def nested_move_to_device(obj, **kwargs):
 
 def get_state_dict_after_quant(model, prefix=''):
     for m in model.modules():
-        if hasattr(m, 'weight') and hasattr(m.weight, 'bnb_quantized'):
+        if hasattr(m, "weight") and hasattr(m.weight, "bnb_quantized"):
             if not m.weight.bnb_quantized:
                 original_device = m.weight.device
                 m.cuda()
@@ -174,14 +189,24 @@ def get_state_dict_after_quant(model, prefix=''):
 
 
 def beautiful_print_gguf_state_dict_statics(state_dict):
-    type_counts = {}
+    type_counts = { "F32": 0, "F16" : 0, }
     for _k, v in state_dict.items():
-        gguf_cls = getattr(v, 'gguf_cls', None)
+        gguf_cls = getattr(v, "gguf_cls", None)
         if gguf_cls is not None:
             type_name = gguf_cls.__name__
             if type_name in type_counts:
                 type_counts[type_name] += 1
             else:
                 type_counts[type_name] = 1
-    print(f'GGUF state dict: {type_counts}')
+        else:
+            if v.dtype == torch.float32:
+                type_counts["F32"] += 1
+            elif v.dtype == torch.float16:
+                type_counts["F16"] += 1
+
+    for t in list(type_counts.keys()):
+        if type_counts[t] == 0:
+            del type_counts[t]
+
+    print(f"GGUF state dict: {type_counts}")
     return
