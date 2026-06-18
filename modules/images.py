@@ -655,7 +655,7 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
     os.makedirs(path, exist_ok=True)
 
     if forced_filename is None:
-        if short_filename or seed is None: # from Extras
+        if short_filename == True and seed is None: # from Extras
             basecount = get_next_sequence_number(path, "")
             fullfn = os.path.join(path, f"{basecount:05}{suffix}.{extension}")
         else:

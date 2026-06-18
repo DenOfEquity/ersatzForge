@@ -188,8 +188,6 @@ class StableDiffusionProcessing:
 
     sd_model_name: str = field(default=None, init=False)
     sd_model_hash: str = field(default=None, init=False)
-    sd_vae_name: str = field(default=None, init=False)
-    sd_vae_hash: str = field(default=None, init=False)
 
     is_api: bool = field(default=False, init=False)
 
@@ -499,8 +497,6 @@ class Processed:
         self.face_restoration_model = opts.face_restoration_model
         self.sd_model_name = p.sd_model_name
         self.sd_model_hash = p.sd_model_hash
-        self.sd_vae_name = p.sd_vae_name
-        self.sd_vae_hash = p.sd_vae_hash
         self.seed_resize_from_w = p.seed_resize_from_w
         self.seed_resize_from_h = p.seed_resize_from_h
         self.denoising_strength = getattr(p, 'denoising_strength', None)
@@ -550,8 +546,6 @@ class Processed:
             "face_restoration_model": self.face_restoration_model if self.face_restoration_model not in ["None", None] else None,
             "sd_model_name": self.sd_model_name,
             "sd_model_hash": self.sd_model_hash,
-            "sd_vae_name": self.sd_vae_name,
-            "sd_vae_hash": self.sd_vae_hash,
             "seed_resize_from_w": self.seed_resize_from_w,
             "seed_resize_from_h": self.seed_resize_from_h,
             "denoising_strength": self.denoising_strength,
@@ -893,8 +887,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
     p.sd_model_name = shared.sd_model.sd_checkpoint_info.name_for_extra
     p.sd_model_hash = shared.sd_model.sd_model_hash
-    p.sd_vae_name = None #removeable? maybe needed for back-compat
-    p.sd_vae_hash = None #removeable? maybe needed for back-compat
 
     apply_circular_forge(p.sd_model, p.tiling)
 
@@ -1109,25 +1101,31 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                     # also write append a permanent log? datetime: infotext
                     file.write(infotexts[0])
 
-        if not infotexts:
-            infotexts.append(Processed(p, []).infotext(p, 0))
+    if not infotexts:
+        infotexts.append(Processed(p, []).infotext(p, 0))
 
-        p.color_corrections = None
+    p.color_corrections = None
 
-        index_of_first_image = 0
-        unwanted_grid_because_of_img_count = len(output_images) < 2 and opts.grid_only_if_multiple
-        if (opts.return_grid or opts.grid_save) and not p.do_not_save_grid and not unwanted_grid_because_of_img_count:
-            grid = images.image_grid(output_images, p.batch_size)
-            text = infotext(use_main_prompt=True)
+    index_of_first_image = 0
+    unwanted_grid_because_of_img_count = len(output_images) < 2 and opts.grid_only_if_multiple
+    if (opts.return_grid or opts.grid_save) and not p.do_not_save_grid and not unwanted_grid_because_of_img_count:
+        grid = images.image_grid(output_images, p.batch_size)
+        text = infotext(use_main_prompt=True)
+        if opts.enable_pnginfo:
+            grid.info["parameters"] = text
 
-            if opts.return_grid:
-                infotexts.insert(0, text)
-                if opts.enable_pnginfo:
-                    grid.info["parameters"] = text
-                output_images.insert(0, grid)
-                index_of_first_image = 1
-            if opts.grid_save and p.check_autosave():
-                images.save_image(grid, p.outpath_grids, "grid", p.all_seeds[0], p.all_prompts[0], opts.grid_format, info=text, p=p, grid=True)
+        if (opts.grid_save and p.check_autosave()):
+            images.save_image(grid, p.outpath_grids, "grid", p.all_seeds[0], p.all_prompts[0], opts.grid_format, info=text, p=p, grid=True)
+        elif opts.return_grid: # gallery can break if grid not directly saved
+            from modules.ui_tempdir import save_pil_to_file
+            filename = save_pil_to_file(grid)
+            grid.already_saved_as = filename
+
+        if opts.return_grid:
+            infotexts.insert(0, text)
+            output_images.insert(0, grid)
+            index_of_first_image = 1
+
 
     if not p.disable_extra_networks and p.extra_network_data:
         extra_networks.deactivate(p, p.extra_network_data)
