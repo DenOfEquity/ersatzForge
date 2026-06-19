@@ -13,7 +13,7 @@ def update_interp_description(value, choices):
         "None"                      : (1, "Allows for format conversion and VAE baking."),
         "Weighted sum"              : (2, "Requires two models: A and B. The result is calculated as A * (1 - M) + B * M"),
         "Add difference"            : (3, "Requires three models: A, B and C. The result is calculated as A + (B - C) * M"),
-        "SmoothBlend"               : (2, "Requires two models: A and B. The result is blended from 100% A for first input block to (multiplier)% B for last output block. For SD1/2/XL."),
+        "SmoothBlend"               : (2, "Requires two models: A and B. The result is blended from 100% A for first input block to (multiplier)% B for last output block. For SD1/2/XL / Anima."),
         "Extract Unet"              : (1, "Takes one model (A) as input. Only output name option is relevant."),
         "Extract VAE"               : (1, "Takes one model (A) as input. Only output name option is relevant."),
         "Extract Text encoder(s)"   : (1, "Takes one model (A) as input. Only output name option is relevant."),

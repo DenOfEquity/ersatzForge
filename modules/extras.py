@@ -159,13 +159,13 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
 
         #   strip unwanted keys immediately - reduce memory use and processing
         if interp_method == "Extract Unet":
-            regex = re.compile(r'^(?!.*(model\.diffusion_model)\.)')
+            regex = re.compile(r"^(?!.*(model\.diffusion_model|net\.blocks)\.)")
             strip = 8
         elif interp_method == "Extract VAE":
-            regex = re.compile(r'^(?!.*(first_stage_model|vae)\.)')
+            regex = re.compile(r"^(?!.*(first_stage_model|vae)\.)")
             strip = 8
         elif interp_method == "Extract Text encoder(s)":
-            regex = re.compile(r'^(?!.*(text_model|conditioner\.embedders|cond_stage_model|text_encoders)\.)')
+            regex = re.compile(r"^(?!.*(text_model|conditioner\.embedders|cond_stage_model|text_encoders)\.)")
             strip = 8
         else:
             strip = 0
@@ -178,19 +178,19 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
 
             match strip:
                 case 1:
-                    regex = re.compile(r'(text_model|conditioner\.embedders|cond_stage_model|text_encoders)\.')
+                    regex = re.compile(r"(text_model|conditioner\.embedders|cond_stage_model|text_encoders)\.")
                 case 2:
-                    regex = re.compile(r'(first_stage_model|vae)\.')
+                    regex = re.compile(r"(first_stage_model|vae)\.")
                 case 3:
-                    regex = re.compile(r'(text_model|conditioner\.embedders|cond_stage_model|text_encoders|first_stage_model|vae)\.')
+                    regex = re.compile(r"(text_model|conditioner\.embedders|cond_stage_model|text_encoders|first_stage_model|vae)\.")
                 case 4:
-                    regex = re.compile(r'(model\.diffusion_model)\.')
+                    regex = re.compile(r"(model\.diffusion_model|net\.blocks)\.")
                 case 5:
-                    regex = re.compile(r'(text_model|conditioner\.embedders|cond_stage_model|text_encoders|model\.diffusion_model)\.')
+                    regex = re.compile(r"(text_model|conditioner\.embedders|cond_stage_model|text_encoders|model\.diffusion_model|net\.blocks)\.")
                 case 6:
-                    regex = re.compile(r'(first_stage_model|vae|model\.diffusion_model)\.')
+                    regex = re.compile(r"(first_stage_model|vae|model\.diffusion_model|net\.blocks)\.")
                 case 7:
-                    regex = re.compile(r'(text_model|conditioner\.embedders|cond_stage_model|text_encoders|first_stage_model|vae|model\.diffusion_model)\.')
+                    regex = re.compile(r"(text_model|conditioner\.embedders|cond_stage_model|text_encoders|first_stage_model|vae|model\.diffusion_model|net\.blocks)\.")
                 case _:
                     pass
 
@@ -212,35 +212,45 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
         return theta
 
     if theta_func2:
-        shared.state.textinfo = 'Loading B'
+        shared.state.textinfo = "Loading B"
         theta_1 = load_model(secondary_model_info.filename, "B")
     else:
         theta_1 = None
 
     if theta_func1:
-        shared.state.textinfo = 'Loading C'
+        shared.state.textinfo = "Loading C"
         theta_2 = load_model(tertiary_model_info.filename, "C")
 
-        shared.state.textinfo = 'Merging B and C'
+        shared.state.textinfo = "Merging B and C"
         for key in theta_1.keys():
             if key in checkpoint_dict_skip_on_merge:
                 continue
 
-            if 'model' in key:
-                if key in theta_2:
-                    t2 = theta_2.pop(key)   # .get(key, torch.zeros_like(theta_1[key]))
-                    theta_1[key] = theta_func1(theta_1[key], t2)
-                else:
-                    theta_1[key] = torch.zeros_like(theta_1[key])
+            if key.startswith("net."):
+                _key = key[4:]
+            elif key.startswith("model.diffusion_model."):
+                _key = key[22:]
+            else:
+                continue
+
+            a = theta_1[key]
+            if ("net." + _key in theta_2):
+                b = theta_2.pop("net." + _key)
+                theta_1[key] = theta_func1(a, b)
+            elif ("model.diffusion_model." + _key in theta_2):
+                b = theta_2.pop("model.diffusion_model." + _key)
+                theta_1[key] = theta_func1(a, b)
+            else: # this is a difference calculation, so no match = 0 difference
+                theta_1[key] = torch.zeros_like(theta_1[key])
 
         del theta_2
         shared.state.nextjob()
 
-    shared.state.textinfo = 'Loading A'
+    shared.state.textinfo = "Loading A"
     theta_0 = load_model(primary_model_info.filename, "A")
 
     if "Extract" in interp_method:
-        filename = filename_generator() if custom_name == '' else custom_name
+        filename = filename_generator() if custom_name == "" else custom_name
         filename += ".safetensors"
 
 # should these paths be hardcoded?
@@ -270,78 +280,135 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
         return [gr.skip(), gr.skip(), "Checkpoint saved to " + output_modelname]
 
     if theta_1:
-        shared.state.textinfo = 'Merging A and B'
+        shared.state.textinfo = "Merging A and B"
+
+        anima = False
+        sd = False
+        generic = True
+        if "net.blocks.0.adaln_modulation_cross_attn.1.weight" in theta_0 or \
+           "model.diffusion_model.blocks.0.adaln_modulation_cross_attn.1.weight" in theta_0:
+            anima = True
+        elif "model.diffusion_model.output_blocks.0.0.emb_layers.1.bias" in theta_0:
+            sd = True
+
 
         if interp_method == "SmoothBlend":
-            total_key_count = 24.0 if 'model.diffusion_model.output_blocks.11.0.emb_layers.1.bias' in theta_0.keys() else 19.0
+            if anima:
+                total_layers_anima = 28
 
-            for key in theta_0.keys():
-                if 'model' in key and key in theta_1:
-
-                    if key in checkpoint_dict_skip_on_merge:
+                for key in theta_0.keys():
+                    if key.startswith("net."):
+                        _key = key[4:]
+                    elif key.startswith("model.diffusion_model."):
+                        _key = key[22:]
+                    else:
                         continue
 
+                    if _key.startswith("blocks."):
+                        this_layer = int(_key.split('.')[1])
+                    else:
+                        this_layer = 0 #13
+
                     a = theta_0[key]
-                    b = theta_1.pop(key)
+                    if ("net." + _key in theta_1):
+                        b = theta_1.pop("net." + _key)
+                    elif ("model.diffusion_model." + _key in theta_1):
+                        b = theta_1.pop("model.diffusion_model." + _key)
+                    else:
+                        continue
+
+                    muli = float(this_layer) / (total_layers_anima - 1)
+                    muli = min(multiplier, muli)
+                    theta_0[key] = theta_func2(a, b, muli)
+
+
+            elif sd:
+                for key in theta_0.keys():
+                    if "model" in key and key in theta_1:
+                        total_key_count = 24.0 if "model.diffusion_model.output_blocks.11.0.emb_layers.1.bias" in theta_0.keys() else 19.0
+                        if key in checkpoint_dict_skip_on_merge:
+                            continue
+
+                        a = theta_0[key]
+                        b = theta_1.pop(key)
 
 #input 0-11, middle 0 output 0-11 : 12 + 1 + 12 = 25 (0->24) for sd1.5
 #input 0-8, middle 0 output 0-8 : 9 + 1 + 9 = 19 (0->18) for sdxl?
 
-                    if 'input_blocks' in key:
-                        key_count = 0
-                    elif 'middle_block' in key:
-                        key_count = 12 if total_key_count == 24.0 else 9
-                    elif 'output_blocks' in key:
-                        key_count = 13 if total_key_count == 24.0 else 10
-                    elif '.out.' in key:
-                        key_count = total_key_count
+                        if "input_blocks" in key:
+                            key_count = 0
+                        elif "middle_block" in key:
+                            key_count = 12 if total_key_count == 24.0 else 9
+                        elif "output_blocks" in key:
+                            key_count = 13 if total_key_count == 24.0 else 10
+                        elif ".out." in key:
+                            key_count = total_key_count
+                        else:
+                            continue
+
+                        if "middle_block" not in key:
+                            for i in range(11, -1, -1):
+                                if f"_blocks.{i}." in key:
+                                    key_count += i
+                                    break
+
+                        muli = float(key_count) / total_key_count
+                        muli = min(multiplier, muli)
+                        theta_0[key] = theta_func2(a, b, muli)
+
+        else: # weighted sum
+            if anima:
+                for key in theta_0.keys():
+                    if key.startswith("net."):
+                        _key = key[4:]
+                    elif key.startswith("model.diffusion_model."):
+                        _key = key[22:]
                     else:
-                        continue
-
-                    if 'middle_block' not in key:
-                        for i in range(11, -1, -1):
-                            if f'_blocks.{i}.' in key:
-                                key_count += i
-                                break
-
-                    muli = float(key_count) / total_key_count
-                    # muli *= multiplier
-                    muli = min(multiplier, muli)
-                    theta_0[key] = theta_func2(a, b, muli)
-
-        else:
-            for key in theta_0.keys():
-                if 'model' in key and key in theta_1:
-
-                    if key in checkpoint_dict_skip_on_merge:
                         continue
 
                     a = theta_0[key]
-                    b = theta_1.pop(key)
-
-                    # this enables merging an inpainting model (A) with another one (B);
-                    # where normal model would have 4 channels, for latent space, inpainting model would
-                    # have another 4 channels for unmasked picture's latent space, plus one channel for mask, for a total of 9
-                    if a.shape != b.shape and a.shape[0:1] + a.shape[2:] == b.shape[0:1] + b.shape[2:]:
-                        if a.shape[1] == 4 and b.shape[1] == 9:
-                            raise RuntimeError("When merging inpainting model with a normal one, A must be the inpainting model.")
-                        if a.shape[1] == 4 and b.shape[1] == 8:
-                            raise RuntimeError("When merging instruct-pix2pix model with a normal one, A must be the instruct-pix2pix model.")
-
-                        if a.shape[1] == 8 and b.shape[1] == 4:#If we have an Instruct-Pix2Pix model...
-                            theta_0[key][:, 0:4, :, :] = theta_func2(a[:, 0:4, :, :], b, multiplier)#Merge only the vectors the models have in common.  Otherwise we get an error due to dimension mismatch.
-                            result_is_instruct_pix2pix_model = True
-                        else:
-                            assert a.shape[1] == 9 and b.shape[1] == 4, f"Bad dimensions for merged layer {key}: A={a.shape}, B={b.shape}"
-                            theta_0[key][:, 0:4, :, :] = theta_func2(a[:, 0:4, :, :], b, multiplier)
-                            result_is_inpainting_model = True
+                    if ("net." + _key in theta_1):
+                        b = theta_1.pop("net." + _key)
+                    elif ("model.diffusion_model." + _key in theta_1):
+                        b = theta_1.pop("model.diffusion_model." + _key)
                     else:
-                        theta_0[key] = theta_func2(a, b, multiplier)
+                        continue
+
+                    theta_0[key] = theta_func2(a, b, multiplier)
+
+            elif sd or generic:
+                for key in theta_0.keys():
+                    if "model" in key and key in theta_1:
+
+                        if key in checkpoint_dict_skip_on_merge:
+                            continue
+
+                        a = theta_0[key]
+                        b = theta_1.pop(key)
+
+                        # this enables merging an inpainting model (A) with another one (B);
+                        # where normal model would have 4 channels, for latent space, inpainting model would
+                        # have another 4 channels for unmasked picture's latent space, plus one channel for mask, for a total of 9
+                        if a.shape != b.shape and a.shape[0:1] + a.shape[2:] == b.shape[0:1] + b.shape[2:]:
+                            if a.shape[1] == 4 and b.shape[1] == 9:
+                                raise RuntimeError("When merging inpainting model with a normal one, A must be the inpainting model.")
+                            if a.shape[1] == 4 and b.shape[1] == 8:
+                                raise RuntimeError("When merging instruct-pix2pix model with a normal one, A must be the instruct-pix2pix model.")
+
+                            if a.shape[1] == 8 and b.shape[1] == 4:#If we have an Instruct-Pix2Pix model...
+                                theta_0[key][:, 0:4, :, :] = theta_func2(a[:, 0:4, :, :], b, multiplier)#Merge only the vectors the models have in common.  Otherwise we get an error due to dimension mismatch.
+                                result_is_instruct_pix2pix_model = True
+                            else:
+                                assert a.shape[1] == 9 and b.shape[1] == 4, f"Bad dimensions for merged layer {key}: A={a.shape}, B={b.shape}"
+                                theta_0[key][:, 0:4, :, :] = theta_func2(a[:, 0:4, :, :], b, multiplier)
+                                result_is_inpainting_model = True
+                        else:
+                            theta_0[key] = theta_func2(a, b, multiplier)
 
         del theta_1
         shared.state.nextjob()
     else:
-        shared.state.textinfo = 'Copying A'
+        shared.state.textinfo = "Copying A"
 
     if save_u != "None (remove)" and ("" != bake_in_vae or [] != bake_in_te):
         guess = huggingface_guess.guess(theta_0)
@@ -350,7 +417,7 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
 
     # bake in vae
     if "" != bake_in_vae:
-        shared.state.textinfo = f'Baking in VAE from {bake_in_vae}'
+        shared.state.textinfo = f"Baking in VAE from {bake_in_vae}"
         vae_dict = load_torch_file(module_vae_list[bake_in_vae])
 
         if guess:
@@ -366,7 +433,7 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
     # bake in text encoders
     if bake_in_te != []:
         for te in bake_in_te:
-            shared.state.textinfo = f'Baking in Text encoder from {te}'
+            shared.state.textinfo = f"Baking in Text encoder from {te}"
             te_dict = load_torch_file(module_list[te])
 
             if guess:
@@ -387,7 +454,7 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
             if re.search(regex, key):
                 theta_0.pop(key)
 
-    shared.state.textinfo = 'Converting keys to selected dtypes'
+    shared.state.textinfo = "Converting keys to selected dtypes"
     saves = [0, save_u, 1, save_v, 2, save_t]
     for save in saves:
         if save != "None" and save != "No change":
@@ -395,9 +462,9 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
                 case 0:
                     regex = re.compile("model.diffusion_model.|double_block.|single_block.")    #   untested if this hits inpaint, pix2pix keys
                 case 1:
-                    regex = re.compile(r'\b(first_stage_model|vae)\.\b')
+                    regex = re.compile(r"\b(first_stage_model|vae)\.\b")
                 case 2:
-                    regex = re.compile(r'\b(text_model|conditioner\.embedders)\.\b')
+                    regex = re.compile(r"\b(text_model|conditioner\.embedders)\.\b")
 
                 case "float32":
                     for key in theta_0.keys():
@@ -465,7 +532,7 @@ def run_modelmerger(id_task, model_names, interp_method, multiplier, save_u, sav
         try:
             metadata.update(json.loads(metadata_json))
         except Exception as e:
-            errors.display(e, "readin metadata from json")
+            errors.display(e, "reading metadata from json")
 
         metadata["format"] = "pt"
 
