@@ -1448,24 +1448,39 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             if self.latent_scale_mode["mode"] == "NNet":
                 if (self.sd_model.is_sd1 or self.sd_model.is_sd2 or self.sd_model.is_sdxl) and \
                     not getattr(self.sd_model, "is_mugen", False) and \
-                    (self.hr_scale == 1.25 or self.hr_scale == 1.5 or self.hr_scale == 2.0):
+                    self.hr_scale in [1.25, 1.5, 2.0, 2.25, 2.5, 3.0, 4.0]:
                     # use City96 NeuralNet latent upscalers: https://github.com/city96/SD-Latent-Upscaler/
                     version = "xl" if self.sd_model.is_sdxl else "v1"
-                    if self.hr_scale == 1.25:
-                        scale = "1.25"
-                    elif self.hr_scale == 1.5:
-                        scale = "1.5"
-                    elif self.hr_scale == 2:
-                        scale = "2.0"
-
                     latent_scale = 0.13025 if self.sd_model.is_sdxl else 0.18215
-                    samples = latent_upscale_nn.upscale(samples / latent_scale, version, scale) * latent_scale
+
+                    # alternatively, if using NNet, just get as close as possible to intended output size
+                    # but don't limit to exact match
+
+                    while self.hr_scale > 1.0:
+                        if self.hr_scale == 1.25:
+                            scale = "1.25"
+                        elif self.hr_scale in [1.5, 2.25]:
+                            scale = "1.5"
+                        elif self.hr_scale in [2.0, 2.5, 3.0, 4.0]:
+                            scale = "2.0"
+
+                        samples = latent_upscale_nn.upscale(samples / latent_scale, version, scale) * latent_scale
+                        self.hr_scale /= float(scale)
+                    
                 elif (self.sd_model.is_ernie or self.sd_model.is_flux2 or (self.sd_model.is_sdxl and getattr(self.sd_model, "is_mugen", False))) and \
-                    self.hr_scale == 2.0:
+                    self.hr_scale in [2.0, 4.0]:
                     # use TensorForger's flux2 latent upscaler: https://github.com/tensorforger/comfyui-flow-upscaler
+                    if self.hr_scale == 4.0:
+                        samples = latent_upscale_nn.upscale_f2(samples)
                     samples = latent_upscale_nn.upscale_f2(samples)
-            else:
-                self.latent_scale_mode = shared.latent_upscale_modes['Latent (antialiased)']
+
+                else: # fall-back to basic
+                    self.hr_upscaler = "Latent (antialiased)"
+                    self.latent_scale_mode = shared.latent_upscale_modes[self.hr_upscaler]
+                    self.extra_generation_params["HiRes upscaler"] = self.hr_upscaler
+
+            # note: not elif because potential fall-back above
+            if self.latent_scale_mode["mode"] != "NNet":
                 samples = torch.nn.functional.interpolate(samples, size=(target_height // opt_f, target_width // opt_f), mode=self.latent_scale_mode["mode"], antialias=self.latent_scale_mode["antialias"])
 
             # Avoid making the inpainting conditioning unless necessary as
