@@ -1,4 +1,5 @@
-# Cherry-picked some good parts from ComfyUI with some bad parts fixed
+# Forge2: Cherry-picked some good parts from ComfyUI with some bad parts fixed
+# since: much tweaking, adjustmenting, fixing, additioning, reworking - no-one to blame but me at this point
 
 import time
 import psutil
@@ -551,7 +552,8 @@ class LoadedModel:
             else:
                 total_required_memory = memory_for_inference + extra_memory + self.exclusive_memory + self.inclusive_memory
 
-            free_memory(total_required_memory, self.device, keep_loaded=keep_loaded)
+            if total_required_memory > 0:
+                free_memory(total_required_memory, self.device, keep_loaded=keep_loaded)
             gpu_memory_available = get_free_memory(torch_dev) - memory_for_inference - extra_memory + previously_loaded
             if not need_cpu_swap:
                 need_cpu_swap = (gpu_memory_available < model_require + previously_loaded)
@@ -644,7 +646,7 @@ def unload_model_clones(model):
             to_unload = [i] + to_unload
 
     for i in to_unload:
-        current_loaded_models.pop(i).model_unload(avoid_model_moving=False)
+        current_loaded_models.pop(i).model_unload(avoid_model_moving=True)
 
 
 def free_memory(memory_required, device, keep_loaded=[]):
@@ -660,33 +662,31 @@ def free_memory(memory_required, device, keep_loaded=[]):
         i = len(current_loaded_models) - 1
         while i >= 0:
             if current_loaded_models[i] not in keep_loaded:
-                print(f"{cc.INFO2}[UNLOAD] {cc.LOAD2}{current_loaded_models[i].model.model.__class__.__name__}{cc.RESET}, ", end="")
+                print(f"{cc.INFO2}[UNLOAD] {cc.LOAD}{current_loaded_models[i].model.model.__class__.__name__}{cc.RESET}, ", end="")
                 current_loaded_models.pop(i).model_unload()
                 unloaded_model = True
             i -= 1
-        free_memory = get_free_memory(device)
-        print(f"Current free memory is {free_memory / (1024 * 1024):.2f} MB ... Done.")
     elif free_memory < memory_required:
         print(f"{cc.INFO2}[Keep loaded: {cc.LOAD}{keep_loaded_names}]{cc.RESET} Trying to free {memory_required / (1024 * 1024):.2f} MB for {device} ... ", end="")
         i = len(current_loaded_models) - 1
         while i >= 0 and free_memory < memory_required:
-            if current_loaded_models[i] not in keep_loaded:
-                print(f"Current free memory is {free_memory / (1024 * 1024):.2f} MB - {cc.INFO2}[UNLOAD] {cc.LOAD2}{current_loaded_models[i].model.model.__class__.__name__}{cc.RESET}, ", end="")
+            if current_loaded_models[i] not in keep_loaded and current_loaded_models[i].device != device:
+                print(f"{cc.INFO2}[UNLOAD] {cc.LOAD}{current_loaded_models[i].model.model.__class__.__name__}{cc.RESET}, ", end="")
                 current_loaded_models.pop(i).model_unload()
                 unloaded_model = True
                 free_memory = get_free_memory(device)
             i -= 1
-        print("Done.")
     else:
         return
 
     if unloaded_model:
         soft_empty_cache()
-    else:
-        if vram_state != VRAMState.HIGH_VRAM:
-            mem_free_total, mem_free_torch = get_free_memory(device, torch_free_too=True)
-            if mem_free_torch > mem_free_total * 0.25:
-                soft_empty_cache()
+    elif vram_state != VRAMState.HIGH_VRAM:
+        mem_free_total, mem_free_torch = get_free_memory(device, torch_free_too=True)
+        if mem_free_torch > mem_free_total * 0.25:
+            soft_empty_cache()
+
+    print(f"Current free memory is {free_memory / (1024 * 1024):.2f} MB ... Done.")
 
     return
 
@@ -1314,4 +1314,5 @@ def soft_empty_cache(force=False):
 
 
 def unload_all_models():
-    free_memory(1e30, get_torch_device())
+    if current_loaded_models != []:
+        free_memory(1e30, get_torch_device())
