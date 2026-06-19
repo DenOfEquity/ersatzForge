@@ -12,7 +12,6 @@ API_NOT_ALLOWED = [
     "sd_model",
     "outpath_samples",
     "outpath_grids",
-    "sampler_index",
     # "do_not_save_samples",
     # "do_not_save_grid",
     "extra_generation_params",
@@ -99,7 +98,7 @@ StableDiffusionTxt2ImgProcessingAPI = PydanticModelGenerator(
     "StableDiffusionProcessingTxt2Img",
     StableDiffusionProcessingTxt2Img,
     [
-        {"key": "sampler_index", "type": str, "default": "Euler"},
+        {"key": "sampler_name", "type": str, "default": "Euler"},
         {"key": "script_name", "type": str | None, "default": None},
         {"key": "script_args", "type": list, "default": []},
         {"key": "send_images", "type": bool, "default": True},
@@ -114,7 +113,7 @@ StableDiffusionImg2ImgProcessingAPI = PydanticModelGenerator(
     "StableDiffusionProcessingImg2Img",
     StableDiffusionProcessingImg2Img,
     [
-        {"key": "sampler_index", "type": str, "default": "Euler"},
+        {"key": "sampler_name", "type": str, "default": "Euler"},
         {"key": "init_images", "type": list | None, "default": None},
         {"key": "denoising_strength", "type": float, "default": 0.75},
         {"key": "mask", "type": str | None, "default": None},

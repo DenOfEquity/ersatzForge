@@ -115,7 +115,6 @@ class StableDiffusionProcessing:
     outpath_samples: str = None
     outpath_grids: str = None
     prompt: str = ""
-    prompt_for_display: str = None
     negative_prompt: str = ""
     styles: list[str] = None
     seed: int = -1
@@ -144,7 +143,6 @@ class StableDiffusionProcessing:
     ddim_discretize: str = None
     override_settings: dict[str, Any] = None
     override_settings_restore_afterwards: bool = True
-    sampler_index: int = None
     refiner_checkpoint: str = None
     refiner_switch_at: float = None
     disable_extra_networks: bool = False
@@ -195,9 +193,6 @@ class StableDiffusionProcessing:
         self.cond_cache = []
 
     def __post_init__(self):
-        if self.sampler_index is not None:
-            print("sampler_index argument for StableDiffusionProcessing does not do anything; use sampler_name", file=sys.stderr)
-
         self.comments = {}
 
         if self.styles is None:

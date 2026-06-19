@@ -66,7 +66,6 @@ class Script(scripts.Script):
 
         prompt = p.prompt if prompt_type == "positive" else p.negative_prompt
         original_prompt = prompt[0] if isinstance(prompt, list) else prompt
-        positive_prompt = p.prompt[0] if isinstance(p.prompt, list) else p.prompt
 
         delimiter = ", " if variations_delimiter == "comma" else " "
 
@@ -93,7 +92,6 @@ class Script(scripts.Script):
         else:
             p.negative_prompt = all_prompts
         p.seed = [p.seed + (i if different_seeds else 0) for i in range(len(all_prompts))]
-        p.prompt_for_display = positive_prompt
         processed = process_images(p)
 
         grid = images.image_grid(processed.images, p.batch_size, rows=1 << ((len(prompt_matrix_parts) - 1) // 2))

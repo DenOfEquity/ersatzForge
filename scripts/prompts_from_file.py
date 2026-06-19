@@ -50,7 +50,6 @@ prompt_tags = {
     "sd_model": process_model_tag,
     "outpath_samples": process_string_tag,
     "outpath_grids": process_string_tag,
-    "prompt_for_display": process_string_tag,
     "styles": process_string_tag,
     "seed": process_int_tag,
     "subseed_strength": process_float_tag,
@@ -236,4 +235,3 @@ class Script(scripts.Script):
             infotexts.insert(0, full_infotext)
 
         return Processed(p, images, p.seed, "", all_prompts=all_prompts, infotexts=infotexts)
-

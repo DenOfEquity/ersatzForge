@@ -454,8 +454,6 @@ class Api:
             "do_not_save_samples": not txt2imgreq.save_images,
             "do_not_save_grid": not txt2imgreq.save_images,
         })
-        if populate.sampler_name:
-            populate.sampler_index = None  # prevent a warning later on
 
         if not populate.scheduler and scheduler != "Automatic":
             populate.scheduler = scheduler
@@ -524,8 +522,6 @@ class Api:
             "do_not_save_grid": not img2imgreq.save_images,
             "mask": mask,
         })
-        if populate.sampler_name:
-            populate.sampler_index = None  # prevent a warning later on
 
         if not populate.scheduler and scheduler != "Automatic":
             populate.scheduler = scheduler
