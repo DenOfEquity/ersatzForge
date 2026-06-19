@@ -62,13 +62,13 @@ class KModel(torch.nn.Module):
             case "Lumina2DiT":
                 scaler = 1.7
             case "IntegratedFlux2Transformer2DModel":
-                scaler = 1.2
+                scaler = 1.45
             case "IntegratedFluxTransformer2DModel":
                 scaler = 2.3 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.75)
             case "ERNIEImageModel":
-                scaler = 0.95
+                scaler = 0.95 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.55)
             case "MiniTrainDIT":
-                scaler = 1.65
+                scaler = 1.6 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.75)
             case "IntegratedUNet2DConditionModel": # under estimates for sd1.5, but that seems a fair tradeoff
                 scaler = 5.8 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.6)
                 if input_shape[1] == 32: # mugen SDXL
