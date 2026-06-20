@@ -1284,7 +1284,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
             def get_hr_negative_prompt(p, index, negative_prompt, **kwargs):
                 hr_negative_prompt = p.all_hr_negative_prompts[index]
-                return hr_negative_prompt if hr_negative_prompt != negative_prompt or p.cfg_scale == 1 else None
+                return hr_negative_prompt if hr_negative_prompt != negative_prompt else None
 
             self.extra_generation_params["HiRes prompt"] = get_hr_prompt
             if self.hr_cfg > 1:
