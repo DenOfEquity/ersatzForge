@@ -1279,11 +1279,11 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 self.extra_generation_params["HiRes sampler"] = self.hr_sampler_name
 
             def get_hr_prompt(p, index, prompt_text, **kwargs):
-                hr_prompt = p.hr_prompts[index]
+                hr_prompt = p.all_hr_prompts[index]
                 return hr_prompt if hr_prompt != prompt_text else None
 
             def get_hr_negative_prompt(p, index, negative_prompt, **kwargs):
-                hr_negative_prompt = p.hr_negative_prompts[index] # alternative: p.all_hr_negative_prompts[index + self.batch_size*self.iteration]
+                hr_negative_prompt = p.all_hr_negative_prompts[index]
                 return hr_negative_prompt if hr_negative_prompt != negative_prompt or p.cfg_scale == 1 else None
 
             self.extra_generation_params["HiRes prompt"] = get_hr_prompt
@@ -1470,6 +1470,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                     samples = latent_upscale_nn.upscale_f2(samples)
 
                 else: # fall-back to basic
+                    self.comment("Unsupported Latent (NNet) upscale factor, used Latent (antialiased) instead. Use [1.25, 1.5, 2.0, 2.25, 2.5, 3.0, 4.0] for SD1/2/XL. Or [2.0, 4.0] for models using Flux.2 VAE.")
                     self.hr_upscaler = "Latent (antialiased)"
                     self.latent_scale_mode = shared.latent_upscale_modes[self.hr_upscaler]
                     self.extra_generation_params["HiRes upscaler"] = self.hr_upscaler
