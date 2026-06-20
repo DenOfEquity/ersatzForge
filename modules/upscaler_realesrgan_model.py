@@ -10,7 +10,7 @@ from modules_forge.utils import prepare_free_memory
 class UpscalerRealESRGAN(Upscaler):
     def __init__(self):
         self.name = "RealESRGAN"
-        super().__init__()
+        super().__init__(create_dirs=True)
         self.enable = True
         self.scalers = []
         scalers = get_realesrgan_models(self)

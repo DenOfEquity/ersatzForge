@@ -1,16 +1,14 @@
 import os
-
 import torch
 import numpy
-
 from PIL import Image
 
 from modules import modelloader, shared
-
 from backend.misc.image_resize import contrast_adaptive_sharpening
 
-LANCZOS = (Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS)
-NEAREST = (Image.Resampling.NEAREST if hasattr(Image, 'Resampling') else Image.NEAREST)
+
+LANCZOS = (Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS)
+NEAREST = (Image.Resampling.NEAREST if hasattr(Image, "Resampling") else Image.NEAREST)
 
 
 class Upscaler:
@@ -37,14 +35,16 @@ class Upscaler:
         self.model_download_path = None
 
         if self.model_path is None and self.name:
-            self.model_path = os.path.join(shared.models_path, self.name)   #make unified storage?
-        if self.model_path and create_dirs:
+            self.model_path = os.path.join(shared.models_path, self.name)   # make unified storage?
+        if self.model_path and not os.path.exists(self.model_path) and create_dirs:
+            # read-only filesystem can error with os.makedirs even if directory exists
+            # (if try to download+save a model, will still error then)
             os.makedirs(self.model_path, exist_ok=True)
 
     def do_upscale(self, img: Image, selected_model: str):
         return img
 
-    def upscale(self, img: Image, scale, selected_model: str = None):
+    def upscale(self, img: Image, scale, selected_model: str=None):
         if shared.state.interrupted:
             return img
 
@@ -73,7 +73,7 @@ class UpscalerData:
     scaler: Upscaler = None
     model: None
 
-    def __init__(self, name: str, path: str, upscaler: Upscaler = None, scale: int = 4, model=None, sha256: str = None):
+    def __init__(self, name: str, path: str, upscaler: Upscaler=None, scale: int=4, model=None, sha256: str=None):
         self.name = name
         self.data_path = path
         self.local_data_path = path
@@ -97,7 +97,7 @@ class UpscalerNone(Upscaler):
         return img
 
     def __init__(self, dirname=None):
-        super().__init__(False)
+        super().__init__()
         self.scalers = [UpscalerData("None", None, self)]
 
 
@@ -111,7 +111,7 @@ class UpscalerLanczos(Upscaler):
         pass
 
     def __init__(self, dirname=None):
-        super().__init__(False)
+        super().__init__()
         self.name = "Lanczos"
         self.scalers = [UpscalerData("Lanczos", None, self)]
 
@@ -122,7 +122,7 @@ class UpscalerLanczosCAS(Upscaler):
     def do_upscale(self, img, selected_model=None):
         img =  img.resize((int(img.width * self.scale), int(img.height * self.scale)), resample=LANCZOS)
 
-        image = torch.Tensor(numpy.array(img.convert('RGB')) / 255.0)
+        image = torch.Tensor(numpy.array(img.convert("RGB")) / 255.0)
         image = image ** 2.2
         image = contrast_adaptive_sharpening(image, 0.55)
         image = image ** (1/2.2)
@@ -134,7 +134,7 @@ class UpscalerLanczosCAS(Upscaler):
         pass
 
     def __init__(self, dirname=None):
-        super().__init__(False)
+        super().__init__()
         self.name = "Lanczos (Contrast Adaptive Sharpening)"
         self.scalers = [UpscalerData("Lanczos (Contrast Adaptive Sharpening)", None, self)]
 
@@ -149,6 +149,6 @@ class UpscalerNearest(Upscaler):
         pass
 
     def __init__(self, dirname=None):
-        super().__init__(False)
+        super().__init__()
         self.name = "Nearest"
         self.scalers = [UpscalerData("Nearest", None, self)]

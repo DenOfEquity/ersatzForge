@@ -12,7 +12,7 @@ class UpscalerGeneric(Upscaler):
     def __init__(self):
         self.name = "upscaler"
         self.scalers = []
-        super().__init__()
+        super().__init__(create_dirs=True)
         for file in self.find_models():
             name = modelloader.friendly_name(file)
             scale = 4  # TODO: scale might not be 4, but we can't know without loading the model

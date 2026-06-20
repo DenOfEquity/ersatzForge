@@ -11,7 +11,7 @@ class UpscalerDAT(Upscaler):
     def __init__(self):
         self.name = "DAT"
         self.scalers = []
-        super().__init__()
+        super().__init__(create_dirs=True)
 
         gotDAT2 = False
         gotDAT3 = False

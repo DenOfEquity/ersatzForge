@@ -16,7 +16,7 @@ class UpscalerSwinIR(Upscaler):
         self.name = "SwinIR"
         self.model_url = SWINIR_MODEL_URL
         self.model_name = "SwinIR 4x"
-        super().__init__()
+        super().__init__(create_dirs=True)
         scalers = []
         model_files = self.find_models()
         for model in model_files:
