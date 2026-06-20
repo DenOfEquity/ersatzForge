@@ -1,7 +1,7 @@
 import os
 import subprocess
 import datetime
-
+import gradio
 from PIL import Image
 import cv2
 
@@ -268,7 +268,7 @@ def run_postprocessing(extras_mode, image, image_folder, input_dir, output_dir, 
 
     devices.torch_gc()
     shared.state.end()
-    return outputs, ui_common.plaintext_to_html(infotext), ''
+    return gradio.update(value=outputs, selected_index=0), ui_common.plaintext_to_html(infotext), ''
 
 
 def run_postprocessing_webui(id_task, *args, **kwargs):

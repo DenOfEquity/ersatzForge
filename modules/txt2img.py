@@ -34,10 +34,10 @@ def txt2img_create_processing(id_task: str, prompt: str, negative_prompt: str, p
         hr_second_pass_steps=hr_second_pass_steps,
         hr_resize_x=hr_resize_x,
         hr_resize_y=hr_resize_y,
-        hr_checkpoint_name=None if hr_checkpoint_name == 'Use same checkpoint' else hr_checkpoint_name,
+        hr_checkpoint_name=None if hr_checkpoint_name == "Use same checkpoint" else hr_checkpoint_name,
         hr_additional_modules=hr_additional_modules,
-        hr_sampler_name=None if hr_sampler_name == 'Use same sampler' else hr_sampler_name,
-        hr_scheduler=None if hr_scheduler == 'Use same scheduler' else hr_scheduler,
+        hr_sampler_name=None if hr_sampler_name == "Use same sampler" else hr_sampler_name,
+        hr_scheduler=None if hr_scheduler == "Use same scheduler" else hr_scheduler,
         hr_prompt=hr_prompt,
         hr_negative_prompt=hr_negative_prompt,
         hr_cfg=hr_cfg,
@@ -52,19 +52,19 @@ def txt2img_create_processing(id_task: str, prompt: str, negative_prompt: str, p
 
 
 def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_info, *args):
-    assert len(gallery) > 0, 'No image to upscale'
+    assert len(gallery) > 0, "No image to upscale"
 
     if gallery_index < 0 or gallery_index >= len(gallery):
-        return gradio.skip(), gradio.skip(), f'Bad image index: {gallery_index}', ''
+        return gradio.skip(), gradio.skip(), f"Bad image index: {gallery_index}", ""
 
     geninfo = json.loads(generation_info)
 
     #   catch situation where user tries to hires-fix the grid: probably a mistake, results can be bad aspect ratio - just don't do it
-    first_image_index = geninfo.get('index_of_first_image', 0)
+    first_image_index = geninfo.get("index_of_first_image", 0)
     #   catch if user tries to upscale a control image, this function will fail later trying to get infotext that doesn't exist
-    count_images = len(geninfo.get('infotexts'))        #   note: we have batch_size in geninfo, but not batch_count
+    count_images = len(geninfo.get("infotexts"))        #   note: we have batch_size in geninfo, but not batch_count
     if len(gallery) > 1 and (gallery_index < first_image_index or gallery_index >= count_images):
-        return gradio.skip(), gradio.skip(), 'Unable to upscale grid or control images.', ''
+        return gradio.skip(), gradio.skip(), "Unable to upscale grid or control images.", ""
 
     p = txt2img_create_processing(id_task, *args, force_enable_hr=True)
     p.batch_size = 1
@@ -76,20 +76,20 @@ def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_in
     image_info = gallery[gallery_index]
     p.firstpass_image = infotext_utils.image_from_url_text(image_info)
 
-    parameters = parse_generation_parameters(geninfo.get('infotexts')[gallery_index], [])
-    p.seed = parameters.get('Seed', -1)
-    p.subseed = parameters.get('Variation seed', -1)
+    parameters = parse_generation_parameters(geninfo.get("infotexts")[gallery_index], [])
+    p.seed = parameters.get("Seed", -1)
+    p.subseed = parameters.get("Variation seed", -1)
 
     #   update processing width/height based on actual dimensions of source image
     p.width = gallery[gallery_index][0].size[0]
     p.height = gallery[gallery_index][0].size[1]
-    p.extra_generation_params['Original Size'] = f'{args[8]}x{args[7]}'
+    p.extra_generation_params["Original Size"] = f"{args[8]}x{args[7]}"
 
-    p.override_settings['save_images_before_highres_fix'] = False
-    p.override_settings['samples_save'] = False
-    p.override_settings['multiple_tqdm'] = False
+    p.override_settings["save_images_before_highres_fix"] = False
+    p.override_settings["samples_save"] = False
+    p.override_settings["multiple_tqdm"] = False
 
-    iterate = getattr(shared.opts, 'hires_button_iterate', "Disabled")
+    iterate = getattr(shared.opts, "hires_button_iterate", "Disabled")
     if "Enabled" in iterate:
         iterations = p.n_iter
         p.n_iter = 1
@@ -99,7 +99,7 @@ def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_in
         for iteration in range(iterations):
             with closing(p):
                 if iteration == iterations-1:
-                    del p.override_settings['samples_save']
+                    del p.override_settings["samples_save"]
 
                 if processed := scripts.scripts_txt2img.run(p, *p.script_args) is None:
                     processed = processing.process_images(p)
@@ -123,11 +123,11 @@ def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_in
 
     shared.total_tqdm.clear()
 
-    insert = getattr(shared.opts, 'hires_button_gallery_insert', False)
+    insert = getattr(shared.opts, "hires_button_gallery_insert", False)
     new_gallery = []
     for i, image in enumerate(gallery):
         if insert or i != gallery_index:
-            image[0].already_saved_as = image[0].filename.rsplit('?', 1)[0]
+            image[0].already_saved_as = image[0].filename.rsplit("?", 1)[0]
             new_gallery.append(image)
         if i == gallery_index:
             new_gallery.extend(processed.images)
@@ -159,7 +159,7 @@ def txt2img_function(id_task: str, *args):
     if shared.opts.do_not_show_images:
         processed.images = []
 
-    return processed.images + processed.extra_images, generation_info_js, plaintext_to_html(processed.info), plaintext_to_html(processed.comments, classname="comments")
+    return gradio.update(value=processed.images + processed.extra_images, selected_index=0), generation_info_js, plaintext_to_html(processed.info), plaintext_to_html(processed.comments, classname="comments")
 
 
 def txt2img_upscale(id_task: str, gallery, gallery_index, generation_info, *args):

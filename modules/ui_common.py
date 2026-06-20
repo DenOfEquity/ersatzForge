@@ -10,8 +10,8 @@ import modules.images
 from modules.ui_components import ToolButton
 import modules.infotext_utils as parameters_copypaste
 
-folder_symbol = '\U0001f4c2'  # 📂
-refresh_symbol = '\U0001f504'  # 🔄
+folder_symbol = "\U0001f4c2"  # 📂
+refresh_symbol = "\U0001f504"  # 🔄
 
 
 def select_gallery_and_update_gen_info(generation_info, html_info, index):
@@ -31,13 +31,6 @@ def update_generation_info(generation_info, html_info, index):
         pass
 
     return gen_info
-
-
-def select_gallery_0(index):
-    if index < 0:
-        return gr.update(selected_index=0)
-
-    return gr.skip()
 
 
 def plaintext_to_html(text, classname=None):
@@ -67,10 +60,10 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
         if filename.startswith("http://") and "/file=" in filename:
             filename = filename.split("/file=", 1)[1]
             if os.path.exists(filename):
-                if 'Subdirectory' in shared.opts.open_dir_button_choice:
+                if "Subdirectory" in shared.opts.open_dir_button_choice:
                     image_dir = os.path.split(filename)[0]
 
-                    if 'temp' in shared.opts.open_dir_button_choice or not ui_tempdir.is_gradio_temp_path(image_dir):
+                    if "temp" in shared.opts.open_dir_button_choice or not ui_tempdir.is_gradio_temp_path(image_dir):
                         f = image_dir
 
         util.open_folder(f)
@@ -82,19 +75,19 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
         with gr.Group(elem_id=f"{tabname}_gallery_container"):
             dummy = gr.Number(value=0, visible=False)
 
-            res.gallery = gr.Gallery(label='Output', show_label=False, elem_id=f"{tabname}_gallery", columns=4, preview=True, height=shared.opts.gallery_height or None, interactive=False, type="pil", object_fit="contain")
+            res.gallery = gr.Gallery(label="Output", show_label=False, elem_id=f"{tabname}_gallery", columns=4, preview=True, height=shared.opts.gallery_height or None, interactive=False, type="pil", object_fit="contain")
 
 
         with gr.Row(elem_id=f"image_buttons_{tabname}", elem_classes="image-buttons"):
-            open_folder_button = ToolButton(folder_symbol, elem_id=f'{tabname}_open_folder', visible=not shared.cmd_opts.hide_ui_dir_config, tooltip="Open images output directory.")
+            open_folder_button = ToolButton(folder_symbol, elem_id=f"{tabname}_open_folder", visible=not shared.cmd_opts.hide_ui_dir_config, tooltip="Open images output directory.")
 
             buttons = {
-                'img2img': ToolButton('🖼️', elem_id=f'{tabname}_send_to_img2img', tooltip="Send image and generation parameters to img2img tab."),
-                'extras': ToolButton('📐', elem_id=f'{tabname}_send_to_extras', tooltip="Send image and generation parameters to extras tab.")
+                "img2img": ToolButton("🖼️", elem_id=f"{tabname}_send_to_img2img", tooltip="Send image and generation parameters to img2img tab."),
+                "extras": ToolButton("📐", elem_id=f"{tabname}_send_to_extras", tooltip="Send image and generation parameters to extras tab.")
             }
 
-            if tabname == 'txt2img':
-                res.button_upscale = ToolButton('✨', elem_id=f'{tabname}_upscale', tooltip="Create an upscaled version of the current image using HiRes fix settings.")
+            if tabname == "txt2img":
+                res.button_upscale = ToolButton("✨", elem_id=f"{tabname}_upscale", tooltip="Create an upscaled version of the current image using HiRes fix settings.")
 
         open_folder_button.click(
             fn=open_folder,
@@ -104,17 +97,15 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
         )
 
         if tabname == "extras":
-            res.generation_info = gr.HTML(elem_id=f'html_info_{tabname}')
-            # no gen info update in extras
-            res.gallery.change(fn=select_gallery_0, js="selected_gallery_index", inputs=[dummy], outputs=[res.gallery], show_progress="hidden").then(fn=None, js="setup_gallery_lightbox", inputs=None, outputs=None)
+            res.generation_info = gr.HTML(elem_id=f"html_info_{tabname}")
         else:
-            res.generation_info = gr.Textbox(visible=False, elem_id=f'generation_info_{tabname}')
-            res.infotext = gr.HTML(elem_id=f'html_info_{tabname}', elem_classes="infotext")
+            res.generation_info = gr.Textbox(visible=False, elem_id=f"generation_info_{tabname}")
+            res.infotext = gr.HTML(elem_id=f"html_info_{tabname}", elem_classes="infotext")
             res.gallery.select(fn=update_generation_info, js="function(x, y, z){ return [x, y, selected_gallery_index()] }", inputs=[res.generation_info, res.infotext, dummy], outputs=[res.infotext], show_progress="hidden")
 
-            res.gallery.change(fn=select_gallery_and_update_gen_info, js="function(x, y, z){ return [x, y, selected_gallery_index()] }", inputs=[res.generation_info, res.infotext, dummy], outputs=[res.gallery, res.infotext], show_progress="hidden").then(fn=None, js="setup_gallery_lightbox", inputs=None, outputs=None)
+        res.gallery.change(fn=None, js="setup_gallery_lightbox", inputs=None, outputs=None)
 
-        res.html_log = gr.HTML(elem_id=f'html_log_{tabname}', elem_classes="html-log")
+        res.html_log = gr.HTML(elem_id=f"html_log_{tabname}", elem_classes="html-log")
 
         paste_field_names = []
         if tabname == "txt2img":
@@ -136,7 +127,7 @@ def create_refresh_button(refresh_component, refresh_method, refreshed_args, ele
 
     label = None
     for comp in refresh_components:
-        label = getattr(comp, 'label', None)
+        label = getattr(comp, "label", None)
         if label is not None:
             break
 
