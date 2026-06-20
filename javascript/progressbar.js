@@ -24,7 +24,7 @@ function request(url, data, handler, errorHandler) {
 }
 
 function pad2(x) {
-    return x < 10 ? '0' + x : x;
+    return x < 10 ? "0" + x : x;
 }
 
 function formatTime(secs) {
@@ -48,10 +48,10 @@ function setTitle(progress) {
     var title = originalAppTitle;
 
     if (opts.show_progress_in_title && progress) {
-        title = '[' + progress.trim() + '] ' + title;
+        title = "[" + progress.trim() + "] " + title;
     }
 
-    if (document.title != title) {
+    if (document.title !== title) {
         document.title = title;
     }
 }
@@ -61,18 +61,20 @@ function randomId() {
     return "task(" + Math.random().toString(36).slice(2, 7) + Math.random().toString(36).slice(2, 7) + Math.random().toString(36).slice(2, 7) + ")";
 }
 
-var livePreview = document.createElement('div');
-livePreview.className = 'livePreview';
-livePreview.style.cursor = 'pointer';
-livePreview.style.userSelect = 'none';
-livePreview.addEventListener('click', function(evt) {
-    if (evt.button != 0) return;
+var livePreview = document.createElement("div");
+livePreview.className = "livePreview";
+livePreview.style.cursor = "pointer";
+livePreview.style.userSelect = "none";
+livePreview.addEventListener("click", function(evt) {
+    if (evt.button !== 0) {
+        return;
+    }
 
     modalZoomSet(opts.js_modal_lightbox_initially_zoomed);
     evt.preventDefault();
     showModal(evt);
 }, true);
-livePreview.appendChild(document.createElement('p'));	// dummy element, will be replaced by img
+livePreview.appendChild(document.createElement("p"));   // dummy element, will be replaced by img
 
 
 // starts sending progress requests to "/internal/progress" uri, creating progressbar above progressbarContainer element and
@@ -85,62 +87,72 @@ function requestProgress(id_task, progressbarContainer, gallery, atEnd, onProgre
     var wakeLock = null;
 
     var requestWakeLock = async function() {
-        if (!opts.prevent_screen_sleep_during_generation || wakeLock !== null) return;
+        if (!opts.prevent_screen_sleep_during_generation || wakeLock !== null) {
+            return;
+        }
         try {
-            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock = await navigator.wakeLock.request("screen");
         } catch (err) {
-            console.error('Wake Lock is not supported.');
+            console.error("Wake Lock is not supported.");
             wakeLock = false;
         }
     };
 
     var releaseWakeLock = async function() {
-        if (!opts.prevent_screen_sleep_during_generation || !wakeLock) return;
+        if (!opts.prevent_screen_sleep_during_generation || !wakeLock) {
+            return;
+        }
         try {
             await wakeLock.release();
             wakeLock = null;
         } catch (err) {
-            console.error('Wake Lock release failed', err);
+            console.error("Wake Lock release failed", err);
         }
     };
 
-    var divProgress = document.createElement('div');
-    divProgress.className = 'progressDiv';
+    var divProgress = document.createElement("div");
+    divProgress.className = "progressDiv";
     divProgress.style.display = opts.show_progressbar ? "block" : "none";
-    var divInner = document.createElement('div');
-    divInner.className = 'progress';
+    var divInner = document.createElement("div");
+    divInner.className = "progress";
 
     divProgress.appendChild(divInner);
     parentProgressbar.insertBefore(divProgress, progressbarContainer);
 
     var removeProgressBar = function() {
         releaseWakeLock();
-        if (!divProgress) return;
+        if (!divProgress) {
+            return;
+        }
 
         setTitle("");
-        if (parentProgressbar.contains(divProgress))     parentProgressbar.removeChild(divProgress);
-        if (gallery && gallery.contains(livePreview))    gallery.removeChild(livePreview);
+        if (parentProgressbar.contains(divProgress)) {
+            parentProgressbar.removeChild(divProgress);
+        }
+        if (gallery && gallery.contains(livePreview)) {
+            gallery.removeChild(livePreview);
+        }
 
         atEnd();
 
         divProgress = null;
     };
 
-    var funProgress = function(id_task) {
+    var funProgress = function(id_task, id_live_preview) {
         requestWakeLock();
-        request("./internal/progress", {id_task: id_task, live_preview: false}, function(res) {
+        request("./internal/progress", {id_task: id_task, id_live_preview: id_live_preview}, function(res) {
             if (res.completed) {
                 removeProgressBar();
                 return;
             }
 
-            let progressText = "";
+            var progressText = "";
 
-            divInner.style.width = ((res.progress || 0) * 100.0) + '%';
+            divInner.style.width = ((res.progress || 0) * 100.0) + "%";
             divInner.style.background = res.progress ? "" : "transparent";
 
             if (res.progress > 0) {
-                progressText = ((res.progress || 0) * 100.0).toFixed(0) + '%';
+                progressText = ((res.progress || 0) * 100.0).toFixed(0) + "%";
             }
 
             if (res.eta) {
@@ -149,7 +161,7 @@ function requestProgress(id_task, progressbarContainer, gallery, atEnd, onProgre
 
             setTitle(progressText);
 
-            if (res.textinfo && res.textinfo.indexOf("\n") == -1) {
+            if (res.textinfo && res.textinfo.indexOf("\n") === -1) {
                 progressText = res.textinfo + " " + progressText;
             }
 
@@ -157,7 +169,9 @@ function requestProgress(id_task, progressbarContainer, gallery, atEnd, onProgre
 
             var elapsedFromStart = (new Date() - dateStart) / 1000;
 
-            if (res.active) wasEverActive = true;
+            if (res.active) {
+                wasEverActive = true;
+            }
 
             if (!res.active && wasEverActive) {
                 removeProgressBar();
@@ -173,46 +187,38 @@ function requestProgress(id_task, progressbarContainer, gallery, atEnd, onProgre
                 onProgress(res);
             }
 
-            setTimeout(() => {
-                funProgress(id_task);
-            }, opts.live_preview_refresh_period || 500);
-        }, function() {
-            removeProgressBar();
-        });
-    };
-
-    var funLivePreview = function(id_task, id_live_preview) {
-        request("./internal/progress", {id_task: id_task, id_live_preview: id_live_preview}, function(res) {
-            if (!divProgress) {
-                return;
-            }
-
             if (res.live_preview && gallery) {
                 var img = new Image();
                 img.onload = function() {
-                    livePreview.replaceChild(img, livePreview.lastElementChild)
+                    livePreview.replaceChild(img, livePreview.lastElementChild);
                     gallery.insertBefore(livePreview, gallery.firstElementChild);
                 };
                 img.src = res.live_preview;
-				if (opts.js_live_preview_in_modal_lightbox) {
-				    lightBoxImage.src = img.src;
-					if (lightBoxImage.style.display === 'none') {
-						lightBoxModal.style.setProperty('background-image', `url(${lightBoxImage.src})`);
-					}
+                if (opts.js_live_preview_in_modal_lightbox) {
+                    lightBoxImage.src = img.src;
+                    if (lightBoxImage.style.display === "none") {
+                        lightBoxModal.style.setProperty("background-image", "url(${lightBoxImage.src})");
+                    }
                 }
-				else {
-					let currentButton = selected_gallery_button();
-					if (currentButton?.children?.length > 0) {
-						lightBoxImage.src = currentButton.children[0].src;
-					}
-					if (lightBoxImage.style.display === 'none') {
-						lightBoxModal.style.setProperty('background-image', `url(${lightBoxImage.src})`);
-					}
-				}
+                else {
+                    var currentButton = selected_gallery_button();
+                    if (currentButton?.children?.length > 0) {
+                        lightBoxImage.src = currentButton.children[0].src;
+                    }
+                    if (lightBoxImage.style.display === "none") {
+                        lightBoxModal.style.setProperty("background-image", "url(${lightBoxImage.src})");
+                    }
+                }
             }
 
             setTimeout(() => {
-                funLivePreview(id_task, res.id_live_preview);
+                if (gallery) {
+                    preview = res.id_live_preview;
+                }
+                else {
+                    preview = false;
+                }
+                funProgress(id_task, preview);
             }, opts.live_preview_refresh_period || 500);
         }, function() {
             removeProgressBar();
@@ -220,9 +226,4 @@ function requestProgress(id_task, progressbarContainer, gallery, atEnd, onProgre
     };
 
     funProgress(id_task, 0);
-
-    if (gallery) {
-        funLivePreview(id_task, 0);
-    }
-
 }
