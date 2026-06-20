@@ -131,7 +131,7 @@ function modalTileImageToggle(event) {
 }
 
 function setup_gallery_lightbox() {
-    var fullImg_preview = gradioApp().querySelectorAll('.gradio-gallery > button > button > img');
+    var fullImg_preview = get_uiCurrentTabContent().querySelectorAll('div[id$=_gallery].gradio-gallery > button > button > img');
     if (fullImg_preview != null) {
         fullImg_preview.forEach(setupImageForLightbox);
     }
