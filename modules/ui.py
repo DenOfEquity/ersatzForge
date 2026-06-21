@@ -418,7 +418,7 @@ def create_ui():
             toprow.submit.click(**txt2img_args)
 
             txt2img_upscale_inputs = txt2img_inputs[0:1] + [output_panel.gallery, dummy_component_number, output_panel.generation_info] + txt2img_inputs[1:]
-            output_panel.button_upscale.click(
+            toprow.button_upscale.click(
                 fn=wrap_gradio_gpu_call(modules.txt2img.txt2img_upscale, extra_outputs=[None, '', '']),
                 js="submit_txt2img_upscale",
                 inputs=txt2img_upscale_inputs,

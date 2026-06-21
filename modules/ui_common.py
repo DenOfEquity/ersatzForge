@@ -87,7 +87,7 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
             }
 
             if tabname == "txt2img":
-                res.button_upscale = ToolButton("✨", elem_id=f"{tabname}_upscale", tooltip="Create an upscaled version of the current image using HiRes fix settings.")
+                toprow.button_upscale.render()
 
         open_folder_button.click(
             fn=open_folder,

@@ -77,6 +77,9 @@ class Toprow:
             self.skip = gr.Button('Skip', elem_id=f"{self.id_part}_skip", elem_classes="generate-box-skip", tooltip="Stop generation of current batch and continues onto next batch")
             self.submit = gr.Button('Generate', elem_id=f"{self.id_part}_generate", variant='primary', tooltip="Right click generate forever menu" if self.id_part != "extras" else None)
 
+            if self.id_part == "txt2img":
+                self.button_upscale = ToolButton("✨", elem_id="txt2img_upscale", tooltip="Create an upscaled version of the current image using HiRes fix settings.", render=False) # alternatively, seems reasonable to display it here
+
             self.skip.click(fn=shared.state.skip)
             self.interrupt.click(fn=shared.state.interrupt, js='function(){ showSubmitInterruptingPlaceholder("' + self.id_part + '"); }')
 
