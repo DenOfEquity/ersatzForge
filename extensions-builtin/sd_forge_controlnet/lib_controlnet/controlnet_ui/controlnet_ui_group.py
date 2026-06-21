@@ -30,6 +30,7 @@ class A1111Context:
     img2img_batch_input_dir = None
     img2img_batch_output_dir = None
     txt2img_submit_button = None
+    txt2img_upscale_button = None
     img2img_submit_button = None
 
     # Slider controls from A1111 WebUI.
@@ -54,6 +55,7 @@ class A1111Context:
             "img2img_batch_input_dir": "img2img_batch_input_dir",
             "img2img_batch_output_dir": "img2img_batch_output_dir",
             "txt2img_generate": "txt2img_submit_button",
+            "txt2img_upscale": "txt2img_upscale_button",
             "img2img_generate": "img2img_submit_button",
             "txt2img_width": "txt2img_w_slider",
             "txt2img_height": "txt2img_h_slider",
@@ -496,6 +498,14 @@ class ControlNetUiGroup(object):
             outputs=unit,
             queue=False,
         )
+        if not self.is_img2img:
+            ControlNetUiGroup.a1111_context.txt2img_upscale_button.click(
+            fn=UiControlNetUnit,
+            inputs=list(unit_args) + [self.type_filter],
+            outputs=unit,
+            queue=False,
+        )
+
         self.register_core_callbacks()
         self.ui_initialized = True
         return unit
