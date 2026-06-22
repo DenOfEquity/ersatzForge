@@ -14,12 +14,10 @@ import modules_forge.colour_code as cc
 
 
 def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filename='default', online_mode=False):
-    model_flag = type(model.model).__name__ if model is not None else 'default'
-
     unet_keys = model_lora_keys_unet(model.model) if model is not None else {}
     clip_keys = model_lora_keys_clip(clip.cond_stage_model) if clip is not None else {}
 
-    if model.model.diffusion_model.__class__.__name__ == "MiniTrainDIT":
+    if model is not None and model.model.diffusion_model.__class__.__name__ == "MiniTrainDIT":
         # Anima LLMAdapter was moved from transformer to text_encoder
         keys = list(lora.keys())
         for k in keys:
@@ -32,33 +30,32 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
     lora_unet, lora_unmatch = load_lora(lora_unmatch, unet_keys)
     lora_clip, lora_unmatch = load_lora(lora_unmatch, clip_keys)
 
-    if len(lora_unmatch) > 12:
-        print(f"{cc.WARNING}[LORA] apparent version mismatch{cc.RESET} ({cc.MINOR}{len(lora_unmatch)} keys{cc.RESET}) for {model_flag}: {filename}")
+    if len(lora_unmatch) == 0:
+        print(f"{cc.LOAD2}[LORA] Loaded {filename}{cc.RESET}")
+    else:
+        print(f"{cc.LOAD2}[LORA] {cc.WARNING}apparent version mismatch {cc.LOAD2}{filename} {cc.MINOR}ignoring {len(lora_unmatch)} keys{cc.RESET}")
     del lora, lora_unmatch
 
-    new_model = model.clone() if model is not None else None
-    new_clip = clip.clone() if clip is not None else None
-
-    if new_model is not None and len(lora_unet) > 0:
+    if model is not None and len(lora_unet) > 0:
+        new_model = model.clone()
         loaded_keys = new_model.add_patches(filename=filename, patches=lora_unet, strength_patch=strength_model, online_mode=online_mode)
-        skipped_keys = [item for item in lora_unet if item not in loaded_keys]
-        if len(skipped_keys) > 12:
-            print(f"{cc.WARNING}[LORA] Mismatch{cc.RESET} {filename} for {model_flag}-{cc.LOAD2}UNet{cc.RESET} with {cc.MINOR}{len(skipped_keys)} keys mismatched{cc.RESET} and {len(loaded_keys)} loaded keys")
-        else:
-            print(f"{cc.LOAD2}[LORA] Loaded{cc.RESET} {filename} for {model_flag}-{cc.LOAD2}UNet{cc.RESET} with {len(loaded_keys)} keys at weight {strength_model} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
+        loaded = len(loaded_keys)
+        skipped_keys = len(lora_unet) - loaded
+        skipped_message = f"; {cc.MINOR}{skipped_keys} keys mismatched{cc.RESET}" if skipped_keys else ""
+        print(f"    loaded {loaded} keys for {cc.LOAD2}UNet{cc.RESET} at weight {strength_model} with on_the_fly={online_mode}{skipped_message}")
 
-        if len(loaded_keys) > 0:
+        if loaded > 0:
             model = new_model
 
-    if new_clip is not None and len(lora_clip) > 0:
+    if clip is not None and len(lora_clip) > 0:
+        new_clip = clip.clone()
         loaded_keys = new_clip.add_patches(filename=filename, patches=lora_clip, strength_patch=strength_clip, online_mode=online_mode)
-        skipped_keys = [item for item in lora_clip if item not in loaded_keys]
-        if len(skipped_keys) > 12:
-            print(f"{cc.WARNING}[LORA] Mismatch{cc.RESET} {filename} for {model_flag}-{cc.LOAD2}CLIP{cc.RESET} with {cc.MINOR}{len(skipped_keys)} keys mismatched{cc.RESET} and {len(loaded_keys)} loaded keys")
-        else:
-            print(f"{cc.LOAD2}[LORA] Loaded{cc.RESET} {filename} for {model_flag}-{cc.LOAD2}CLIP{cc.RESET} with {len(loaded_keys)} keys at weight {strength_clip} (skipped {len(skipped_keys)} keys) with on_the_fly = {online_mode}")
+        loaded = len(loaded_keys)
+        skipped_keys = len(lora_clip) - loaded
+        skipped_message = f"; {cc.MINOR}{skipped_keys} keys mismatched{cc.RESET}" if skipped_keys else ""
+        print(f"    loaded {loaded} keys for {cc.LOAD2}CLIP{cc.RESET} at weight {strength_model} with on_the_fly={online_mode}{skipped_message}")
 
-        if len(loaded_keys) > 0:
+        if loaded > 0:
             clip = new_clip
 
     return model, clip
