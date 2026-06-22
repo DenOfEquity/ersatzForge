@@ -3,7 +3,8 @@ import torch
 import gradio as gr
 
 from gradio.context import Context
-from modules import shared, ui_common, sd_models, processing, infotext_utils, paths, ui_loadsave
+from modules import infotext_utils, sd_models, shared, ui_common, ui_loadsave
+from modules.paths import models_path
 from backend import memory_management, stream
 from backend.args import dynamic_args
 
@@ -80,7 +81,7 @@ def refresh_vaete():
     module_te_list.clear()
 
     # VAE
-    vae_files = find_files_with_extensions(os.path.abspath(os.path.join(paths.models_path, "VAE")), file_extensions)
+    vae_files = find_files_with_extensions(os.path.abspath(os.path.join(models_path, "VAE")), file_extensions)
     module_vae_list.update(vae_files)
     if isinstance(shared.cmd_opts.vae_dir, str):
         vae_files = find_files_with_extensions(os.path.abspath(shared.cmd_opts.vae_dir), file_extensions)
@@ -88,7 +89,7 @@ def refresh_vaete():
     module_list.update(module_vae_list)
 
     # TE
-    te_files = find_files_with_extensions(os.path.abspath(os.path.join(paths.models_path, "text_encoder")), file_extensions)
+    te_files = find_files_with_extensions(os.path.abspath(os.path.join(models_path, "text_encoder")), file_extensions)
     module_te_list.update(te_files)
     if isinstance(shared.cmd_opts.text_encoder_dir, str):
         te_files = find_files_with_extensions(os.path.abspath(shared.cmd_opts.text_encoder_dir), file_extensions)
@@ -96,7 +97,7 @@ def refresh_vaete():
     module_list.update(module_te_list)
 
     # other
-    other_list = find_files_with_extensions(os.path.abspath(os.path.join(paths.models_path, "other_module")), file_extensions)
+    other_list = find_files_with_extensions(os.path.abspath(os.path.join(models_path, "other_module")), file_extensions)
     module_list.update(other_list)
 
     return module_list.keys()
@@ -159,7 +160,7 @@ def make_checkpoint_manager_ui():
 
 
     ui_forge_swap = gr.Dropdown(label="Swap Location + Method", value=lambda: shared.opts.forge_swap, choices=["CPU + Async", "CPU + Queue", "Shared + Async", "Shared + Queue"], filterable=False)
-    ui_forge_inference_memory = gr.Number(label="Reserve VRAM (MB)", value=lambda: shared.opts.forge_inference_memory, minimum=0, maximum=int(memory_management.total_vram), step=1, scale=0)
+    ui_forge_inference_memory = gr.Number(label="Reserve VRAM (MB)", value=lambda: shared.opts.forge_inference_memory, minimum=0, maximum=total_vram, step=1, scale=0)
 
     mem_comps = [ui_forge_inference_memory, ui_forge_swap]
 
@@ -171,7 +172,7 @@ def make_checkpoint_manager_ui():
     ui_clip_skip = gr.Number(label="Clip skip", value=lambda: shared.opts.CLIP_stop_at_last_layers, minimum=1, maximum=12, step=1, scale=0)
     bind_to_opts(ui_clip_skip, 'CLIP_stop_at_last_layers', save=True)
 
-    ui_checkpoint.change(checkpoint_change_ui, inputs=[ui_checkpoint, ui_vae], outputs=[ui_vae], show_progress="hidden")
+    ui_checkpoint.change(checkpoint_change_ui, inputs=[ui_checkpoint], outputs=[ui_vae], show_progress="hidden")
     ui_vae.change(modules_change, inputs=[ui_vae], show_progress="hidden")
 
     return
@@ -184,7 +185,11 @@ def ui_refresh_memory_management_settings(inference_extra, swap):
         inference_memory=inference_extra
     )
 
+
+need_global_unload = False
 def refresh_memory_management_settings(async_loading="Queue", pin_shared_memory="CPU", inference_memory=None):
+    global need_global_unload
+
     # Fallback to defaults if values are not passed
     if inference_memory is None:
         inference_memory = shared.opts.forge_inference_memory
@@ -196,7 +201,7 @@ def refresh_memory_management_settings(async_loading="Queue", pin_shared_memory=
     memory_management.extra_inference_memory = inference_memory * 1024 * 1024  # Convert MB to bytes
     memory_management.PIN_SHARED_MEMORY = pin_shared_memory == 'Shared'
 
-    processing.need_global_unload = True
+    need_global_unload = True
     return
 
 
@@ -216,8 +221,8 @@ def refresh_model_loading_parameters():
     return
 
 
-def checkpoint_change_ui(ckpt_name:str, vae_te:list):
-    result = vae_te
+def checkpoint_change_ui(ckpt_name:str):
+    result = gr.skip()
 
     new_ckpt_info = sd_models.get_closet_checkpoint_match(ckpt_name)
     current_ckpt_info = sd_models.get_closet_checkpoint_match(shared.opts.data.get('sd_model_checkpoint', ''))
