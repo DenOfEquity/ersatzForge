@@ -52,10 +52,11 @@ def txt2img_create_processing(id_task: str, prompt: str, negative_prompt: str, p
 
 
 def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_info, *args):
-    assert len(gallery) > 0, "No image to upscale"
+    if gallery is None or len(gallery) == 0:
+        return gradio.skip(), gradio.skip(), gradio.skip(), "No image to upscale"
 
     if gallery_index < 0 or gallery_index >= len(gallery):
-        return gradio.skip(), gradio.skip(), f"Bad image index: {gallery_index}", ""
+        return gradio.skip(), gradio.skip(), gradio.skip(), f"Invalid image index: {gallery_index}"
 
     geninfo = json.loads(generation_info)
 
@@ -64,7 +65,7 @@ def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_in
     #   catch if user tries to upscale a control image, this function will fail later trying to get infotext that doesn't exist
     count_images = len(geninfo.get("infotexts"))        #   note: we have batch_size in geninfo, but not batch_count
     if len(gallery) > 1 and (gallery_index < first_image_index or gallery_index >= count_images):
-        return gradio.skip(), gradio.skip(), "Unable to upscale grid or control images.", ""
+        return gradio.skip(), gradio.skip(), gradio.skip(), "Unable to upscale grid or control images."
 
     p = txt2img_create_processing(id_task, *args, force_enable_hr=True)
     p.batch_size = 1
@@ -122,6 +123,9 @@ def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_in
                 processed = processing.process_images(p)
 
     shared.total_tqdm.clear()
+
+    if shared.state.interrupted:
+        return gradio.skip(), gradio.skip(), gradio.skip(), "Generation interrupted."
 
     insert = getattr(shared.opts, "hires_button_gallery_insert", False)
     new_gallery = []
