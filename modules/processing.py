@@ -1,6 +1,5 @@
 from __future__ import annotations
 import json
-import math
 import os
 import gc
 import sys
@@ -14,26 +13,18 @@ import cv2
 from skimage import exposure
 from typing import Any
 
-from modules import devices, prompt_parser, masking, sd_samplers, infotext_utils, extra_networks, sd_vae_approx, scripts, sd_models, sd_samplers_common, errors, rng, profiling
-from modules.sd_samplers_common import images_tensor_to_samples, decode_first_stage, approximation_indexes
+from modules import devices, errors, extra_networks, face_restoration, images, infotext_utils, masking, paths, profiling, prompt_parser, rng, scripts, sd_models, sd_samplers, sd_samplers_common, sd_vae_approx, shared
 from modules.shared import opts, state
 from modules.sysinfo import set_config
-import modules.shared as shared
-import modules.paths as paths
-import modules.face_restoration
-import modules.images as images
 
 from blendmodes.blend import blendLayers, BlendType
 from modules_forge.utils import apply_circular_forge
 from modules_forge import main_entry
-from backend import memory_management
 from backend.modules.k_prediction import rescale_zero_terminal_snr_sigmas
 from backend.args import dynamic_args
 
 from modules import latent_upscale_nn
 
-# some of those options should not be changed at all because they would break the model, so I removed them from options.
-# opt_C = 4
 opt_f = 8
 
 
@@ -95,7 +86,7 @@ def txt2img_image_conditioning(sd_model, x, width, height):
 
         # The "masked-image" in this case will just be all 0.5 since the entire image is masked.
         image_conditioning = torch.ones(x.shape[0], 3, height, width, device=x.device) * 0.5
-        image_conditioning = images_tensor_to_samples(image_conditioning, approximation_indexes.get(opts.sd_vae_encode_method))
+        image_conditioning = sd_samplers_common.images_tensor_to_samples(image_conditioning, sd_samplers_common.approximation_indexes.get(opts.sd_vae_encode_method))
 
         # Add the fake full 1s mask to the first dimension.
         image_conditioning = torch.nn.functional.pad(image_conditioning, (0, 0, 0, 0, 1, 0), value=1.0)
@@ -570,7 +561,7 @@ class DecodedSamples(list):
 
 def decode_latent_batch(model, batch, target_device=None):
     samples = DecodedSamples()
-    samples_pytorch = decode_first_stage(model, batch).to(target_device)
+    samples_pytorch = sd_samplers_common.decode_first_stage(model, batch).to(target_device)
 
     for x in samples_pytorch:
         samples.append(x)
@@ -791,11 +782,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
     return f"{prompt_text}{negative_prompt_text}\n{generation_params_text}".strip()
 
 
-need_global_unload = False
-
 def manage_model(p: StableDiffusionProcessing):
-    global need_global_unload
-
     p.sd_model = None # will be re-set by loader
     p.sd_model, just_reloaded = sd_models.forge_model_reload()
 
@@ -815,9 +802,9 @@ def manage_model(p: StableDiffusionProcessing):
     p.width  = factor * ((p.width  + (factor // 2)) // factor)
     p.height = factor * ((p.height + (factor // 2)) // factor)
 
-    if need_global_unload and not just_reloaded:
-        memory_management.unload_all_models()
-    need_global_unload = False
+    if main_entry.need_global_unload and not just_reloaded:
+        sd_models.unload_model_weights()
+    main_entry.need_global_unload = False
 
 
 def process_images(p: StableDiffusionProcessing) -> Processed:
@@ -1034,7 +1021,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
                     if opts.face_restoration_model != "None" and opts.face_restoration_before_scripts and not (state.interrupted or state.stopping_generation):
                         devices.torch_gc()
-                        x_sample = modules.face_restoration.restore_faces(x_sample)
+                        x_sample = face_restoration.restore_faces(x_sample)
                         devices.torch_gc()
 
                     image = Image.fromarray(x_sample)
@@ -1046,7 +1033,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
                     if opts.face_restoration_model != "None" and not opts.face_restoration_before_scripts:
                         devices.torch_gc()
-                        image = Image.fromarray(modules.face_restoration.restore_faces(np.array(image)))
+                        image = Image.fromarray(face_restoration.restore_faces(np.array(image)))
                         devices.torch_gc()
 
                     if not opts.overlay_inpaint:
@@ -1154,17 +1141,6 @@ def process_extra_images(processed:Processed):
             continue
         extra_images.append(img)
     processed.extra_images = extra_images
-
-
-def old_hires_fix_first_pass_dimensions(width, height):
-    """old algorithm for auto-calculating first pass size"""
-    desired_pixel_count = 512 * 512
-    actual_pixel_count = width * height
-    scale = math.sqrt(desired_pixel_count / actual_pixel_count)
-    width = math.ceil(scale * width / 64) * 64
-    height = math.ceil(scale * height / 64) * 64
-
-    return width, height
 
 
 @dataclass(repr=False)
@@ -1341,7 +1317,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 image = torch.from_numpy(np.expand_dims(image, axis=0))
                 image = image.to(shared.device, dtype=torch.float32)
 
-                samples = images_tensor_to_samples(image, approximation_indexes.get(opts.sd_vae_encode_method), self.sd_model)
+                samples = sd_samplers_common.images_tensor_to_samples(image, sd_samplers_common.approximation_indexes.get(opts.sd_vae_encode_method), self.sd_model)
                 decoded_samples = None
                 devices.torch_gc()
 
@@ -1482,7 +1458,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             # Avoid making the inpainting conditioning unless necessary as
             # this does need some extra compute to decode / encode the image again.
             if getattr(self, "inpainting_mask_weight", opts.inpainting_mask_weight) < 1.0:
-                image_conditioning = self.img2img_image_conditioning(decode_first_stage(self.sd_model, samples), samples)
+                image_conditioning = self.img2img_image_conditioning(sd_samplers_common.decode_first_stage(self.sd_model, samples), samples)
             else:
                 image_conditioning = self.txt2img_image_conditioning(samples)
         else:
@@ -1504,7 +1480,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             decoded_samples = torch.from_numpy(np.array(batch_images))
             decoded_samples = decoded_samples.to(shared.device, dtype=torch.float32)
 
-            samples = images_tensor_to_samples(decoded_samples, approximation_indexes.get(opts.sd_vae_encode_method))
+            samples = sd_samplers_common.images_tensor_to_samples(decoded_samples, sd_samplers_common.approximation_indexes.get(opts.sd_vae_encode_method))
 
             image_conditioning = self.img2img_image_conditioning(decoded_samples, samples)
 
@@ -1831,7 +1807,7 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
         if opts.sd_vae_encode_method != 'Full':
             self.extra_generation_params['VAE Encoder'] = opts.sd_vae_encode_method
 
-        self.init_latent = images_tensor_to_samples(image, approximation_indexes.get(opts.sd_vae_encode_method), self.sd_model)
+        self.init_latent = sd_samplers_common.images_tensor_to_samples(image, sd_samplers_common.approximation_indexes.get(opts.sd_vae_encode_method), self.sd_model)
         devices.torch_gc()
 
         if self.resize_mode == 3:
