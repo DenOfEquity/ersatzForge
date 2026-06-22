@@ -2,13 +2,14 @@ from __future__ import annotations
 import base64
 import io
 import json
+import math
 import os
 import re
 import sys
 
 import gradio as gr
 from modules.paths import data_path
-from modules import shared, ui_tempdir, script_callbacks, processing, images, prompt_parser, errors, sd_models, sd_samplers, sd_schedulers
+from modules import errors, images, prompt_parser, script_callbacks, sd_models, sd_samplers, sd_schedulers, shared, ui_tempdir
 from PIL import Image
 
 from modules_forge import main_entry
@@ -232,10 +233,14 @@ def restore_old_hires_fix_params(res):
     height = int(res.get("Size-2", 512))
 
     if firstpass_width == 0 or firstpass_height == 0:
-        firstpass_width, firstpass_height = processing.old_hires_fix_first_pass_dimensions(width, height)
+        desired_pixel_count = 512 * 512
+        actual_pixel_count = width * height
+        scale = math.sqrt(desired_pixel_count / actual_pixel_count)
+        firstpass_width = math.ceil(scale * width / 64) * 64
+        firstpass_height = math.ceil(scale * height / 64) * 64
 
-    res['Size-1'] = firstpass_width
-    res['Size-2'] = firstpass_height
+    res['Size-1'] = int(firstpass_width)
+    res['Size-2'] = int(firstpass_height)
     res['HiRes resize-1'] = width
     res['HiRes resize-2'] = height
 
