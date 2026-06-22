@@ -648,6 +648,9 @@ def unload_model_clones(model):
     for i in to_unload:
         current_loaded_models.pop(i).model_unload(avoid_model_moving=True)
 
+    if len(to_unload) > 0:
+        soft_empty_cache()
+
 
 def free_memory(memory_required, device, keep_loaded=[]):
     free_memory = get_free_memory(device)
@@ -746,7 +749,6 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
         if not matched:
             models_to_load.append(loaded_model)
 
-    done_partial_load = False
     just_unloaded_models = []
 
     ## potential partial unload : not if trying to load now; only for allowed model types
@@ -766,7 +768,6 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
                 if inclusive_memory > 0 and available_memory < total_memory_needed:
                     print(f"{cc.INFO}[Memory Management] {cc.INFO2}[UNLOAD (partial)] {cc.LOAD}{m.model.model.__class__.__name__}{cc.RESET}", end="")
                     m.model_load(total_memory_needed, current_loaded_models, partial=Partial.UNLOAD)
-                    done_partial_load = True
                     just_unloaded_models.append(m)
                     inclusive_memory = module_size(m.model.model, include_device=m.device)[0]
                     if inclusive_memory == 0:
@@ -774,9 +775,11 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
                         current_loaded_models.pop(i).model_unload()
                     else:
                         print(", ", end="")
+                    soft_empty_cache() # automatic memory management only works if you do it manually
         i -= 1
 
     ## potential partial load/reload
+    # done_partial_load = False
     for m in models_already_loaded:
         if m.device != torch.device("cpu"):
             if m.model.model.__class__.__name__ in allowed_partial_models and m not in just_unloaded_models:
@@ -785,16 +788,15 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
                 if exclusive_memory > 0 and available_memory > total_memory_needed:
                     print(f"{cc.INFO}[Memory Management] {cc.INFO2}[LOAD (partial)] {cc.LOAD}{m.model.model.__class__.__name__}{cc.RESET}, ", end="")
                     m.model_load(memory_for_inference, models_already_loaded, partial=Partial.LOAD)
-                    done_partial_load = True
+                    # done_partial_load = True
 
 
-    if done_partial_load and len(models_to_load) == 0:
-        soft_empty_cache()
+    # if done_partial_load and len(models_to_load) == 0:
+        # soft_empty_cache() # cleanup necessary only after unload
 
     ## load new, will fully unload other models if necessary
     for load_model in models_to_load:
         unload_model_clones(load_model.model)
-        soft_empty_cache()
 
         load_model.model_load(memory_for_inference, models_to_load+models_already_loaded)
         current_loaded_models.append(load_model)
