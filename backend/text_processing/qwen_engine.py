@@ -19,18 +19,25 @@ class PromptChunk:
 
 
 class Qwen3TextProcessingEngine:
-    def __init__(self, text_encoder, tokenizer, is_flux2=False, is_ernie=False):
+    def __init__(self, text_encoder, tokenizer, is_flux2=False, is_ernie=False, is_krea2=False):
         super().__init__()
 
         self.text_encoder = text_encoder
         self.tokenizer = tokenizer
         self.is_flux2 = is_flux2
         self.is_ERNIE = is_ernie
+        self.is_krea2 = is_krea2
 
         self.id_pad = 0 if is_ernie else 151643
         # self.min_length = 512 if is_flux2 else 1 #flux min 512? or pow2
         # self.llama_template = "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
-        self.intermediate_output = [9, 18, 27] if is_flux2 else -2
+        
+        if is_flux2:
+            self.intermediate_output = [9, 18, 27]
+        elif is_krea2:
+            self.intermediate_output = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
+        else:
+            self.intermediate_output = -2
         self.layer_norm_hidden_state = False
 
     def tokenize(self, texts):
@@ -48,6 +55,11 @@ class Qwen3TextProcessingEngine:
             nonlocal chunk
 
             if self.is_flux2:
+                #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
+                chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198, 151667, 198, 198, 151668, 198, 198]
+                chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            elif self.is_krea2:
+                #"<|im_start|>system\nDescribe the image by detailing the color, shape, size, texture, quantity, text, spatial relationships of the objects and background:<|im_end|\n    <|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
                 #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
                 chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198, 151667, 198, 198, 151668, 198, 198]
                 chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
@@ -97,6 +109,9 @@ class Qwen3TextProcessingEngine:
 
                 # remove start/end tokens
                 if self.is_flux2:
+                    s = 3
+                    e = -11
+                elif self.is_krea2: # update based on template
                     s = 3
                     e = -11
                 elif self.is_ERNIE:
@@ -171,6 +186,10 @@ class Qwen3TextProcessingEngine:
 
         if self.is_flux2:
             z = torch.stack((z[:, 0], z[:, 1], z[:, 2]), dim=1)
+            z = z.movedim(1, 2)
+            z = z.reshape(z.shape[0], z.shape[1], -1)
+        elif self.is_krea2:
+            z = torch.stack((z[:, 0], z[:, 1], z[:, 2], z[:, 3], z[:, 4], z[:, 5], z[:, 6], z[:, 7], z[:, 8], z[:, 9], z[:, 10], z[:, 11]), dim=1)
             z = z.movedim(1, 2)
             z = z.reshape(z.shape[0], z.shape[1], -1)
         return z

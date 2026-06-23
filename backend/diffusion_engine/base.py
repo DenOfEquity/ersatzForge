@@ -70,6 +70,7 @@ class ForgeDiffusionEngine:
         self.is_chromaDCT = False
         self.is_lumina2 = False
         self.is_ernie = False
+        self.is_krea2 = False
 
         return
 

@@ -31,11 +31,12 @@ from backend.diffusion_engine.wan import Wan
 from backend.diffusion_engine.lumina2 import Lumina2, Zimage
 from backend.diffusion_engine.anima import Anima
 from backend.diffusion_engine.ernie import ERNIE
+from backend.diffusion_engine.krea2 import Krea2
 
 import modules_forge.colour_code as cc
 
 
-possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux2, Flux, Cosmos, Wan, Zimage, Lumina2, Anima, ERNIE]
+possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux2, Flux, Cosmos, Wan, Zimage, Lumina2, Anima, ERNIE, Krea2]
 
 
 logging.getLogger("diffusers").setLevel(logging.ERROR)
@@ -225,7 +226,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             return model
 
-        if cls_name in ["Qwen3Model", "Qwen3ForCausalLM"]:
+        if cls_name in ["Qwen3Model", "Qwen3VLModel", "Qwen3ForCausalLM"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Qwen3 text encoder!"
 
             config = read_arbitrary_config(config_path)
@@ -233,7 +234,10 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             if config["hidden_size"] == 4096:
                 from backend.nn.llm.llama import Qwen3_8B as Qwen3
             elif config["hidden_size"] == 2560:
-                from backend.nn.llm.llama import Qwen3_4B as Qwen3
+                if cls_name == "Qwen3VLModel":
+                    from backend.nn.llm.llama import Qwen3VL_4B as Qwen3
+                else:
+                    from backend.nn.llm.llama import Qwen3_4B as Qwen3
             else:
                 from backend.nn.llm.llama import Qwen3_06B as Qwen3
 
@@ -336,7 +340,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             return model
 
-        if cls_name in ["UNet2DConditionModel", "FluxTransformer2DModel", "Flux2Transformer2DModel", "SD3Transformer2DModel", "ChromaTransformer2DModel", "ChromaDCT", "CosmosTransformer3DModel", "WanTransformer3DModel", "Lumina2Transformer2DModel", "ERNIEImageModel"]:
+        if cls_name in ["UNet2DConditionModel", "FluxTransformer2DModel", "Flux2Transformer2DModel", "SD3Transformer2DModel", "ChromaTransformer2DModel", "ChromaDCT", "CosmosTransformer3DModel", "WanTransformer3DModel", "Lumina2Transformer2DModel", "ERNIEImageModel", "Krea2Transformer2DModel"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have model state dict!'
 
             model_loader = None
@@ -366,6 +370,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             elif cls_name == "WanTransformer3DModel":
                 from backend.nn.wan import WanModel
                 model_loader = lambda c: WanModel(**c)
+            elif cls_name == "Krea2Transformer2DModel":
+                from backend.nn.krea2 import SingleStreamDiT
+                model_loader = lambda c: SingleStreamDiT(**c)
             elif cls_name == "Lumina2Transformer2DModel":
                 from backend.nn.lumina2 import Lumina2DiT
                 
@@ -853,6 +860,8 @@ def replace_state_dict(sd, asd, guess):
 
         if size_str:
             for k, v in asd.items():
+                if k.startswith("model.visual."):
+                    continue
                 if k.startswith("vision_tower."):
                     continue
                 if k.startswith("multi_modal_projector."):

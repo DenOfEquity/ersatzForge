@@ -766,4 +766,31 @@ class ERNIEImage(BASE):
         return {"ministral3_3b": "text_encoder"}
 
 
-models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, Mugen, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima, Klein4B, Klein9B, ERNIEImage]#, WAN21_I2V]
+class Krea2(BASE):
+    huggingface_repo = "krea/Krea2"
+
+    unet_config = {
+        "image_model": "krea2",
+        "in_channels": 16,
+    }
+
+    sampling_settings = {
+        "multiplier": 1.0,
+        "shift": 1.15,
+    }
+
+    memory_usage_factor = 3.0 #TODO
+
+    latent_format = latent.Wan21
+
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
+
+    vae_key_prefix = ["vae."]
+    text_encoder_key_prefix = ["text_encoders."]
+    unet_target = "transformer"
+
+    def clip_target(self, state_dict={}):
+        return {"qwen3_4b": "text_encoder"}
+
+
+models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, Mugen, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima, Klein4B, Klein9B, ERNIEImage, Krea2]#, WAN21_I2V]

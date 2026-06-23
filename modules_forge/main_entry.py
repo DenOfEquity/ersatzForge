@@ -123,7 +123,7 @@ def make_checkpoint_manager_ui():
             shared.opts.set('sd_model_checkpoint', next(iter(sd_models.checkpoints_list.values())).name)
 
     ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value='-', 
-                                  choices=['all', 'anima', 'chroma', 'ernie', 'flux', 'klein', 'sd', 'sd3', 'xl', 'zimage'], scale=0, filterable=False)
+                                  choices=['all', 'anima', 'chroma', 'ernie', 'flux', 'klein', 'krea2', 'sd', 'sd3', 'xl', 'zimage'], scale=0, filterable=False)
 
     ui_checkpoint = gr.Dropdown(
         value=lambda: shared.opts.sd_model_checkpoint,
@@ -486,11 +486,12 @@ Code order is: (all must be present)<br/>
 <li>additional modules 1, 2, ...: <em>optional</em> <sub>note: copy names as they appear in the dropdown menu; comma-separated</sub></li>
 </ol>
 """),
-    "preset_code_chroma": shared.OptionInfo("", "Chroma preset code", gr.Textbox, {"max_lines": 1, "placeholder": "see UI defaults 'flux'"}),
-    "preset_code_klein": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 4", "Flux2 Klein preset code", gr.Textbox, {"max_lines": 1}),
-    "preset_code_zimage": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Z-Image preset code", gr.Textbox, {"max_lines": 1}),
     "preset_code_anima": shared.OptionInfo("None, 0, 1024, 1024, 4.0, None, Extended Reverse-Time SDE, Beta, 30", "Anima preset code", gr.Textbox, {"max_lines": 1}),
+    "preset_code_chroma": shared.OptionInfo("", "Chroma preset code", gr.Textbox, {"max_lines": 1, "placeholder": "see UI defaults 'flux'"}),
     "preset_code_ernie": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Beta, 8", "ERNIE preset code", gr.Textbox, {"max_lines": 1}),
+    "preset_code_klein": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 4", "Flux2 Klein preset code", gr.Textbox, {"max_lines": 1}),
+    "preset_code_krea2": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Krea2 preset code", gr.Textbox, {"max_lines": 1}),
+    "preset_code_zimage": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Z-Image preset code", gr.Textbox, {"max_lines": 1}),
 
 }))
 

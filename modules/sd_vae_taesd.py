@@ -278,7 +278,7 @@ def decoder_model():
             model_name = "taesdxl_decoder.pth"
     elif shared.sd_model.is_sd1 or shared.sd_model.is_sd2:
         model_name = "taesd_decoder.pth"
-    elif shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_wan:
+    elif shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_wan or shared.sd_model.is_krea2:
         v = True
         model_name = "taew2_2.pth" if shared.sd_model.forge_objects.vae.latent_channels == 48 else "taew2_1.pth"
         
@@ -321,7 +321,7 @@ def encoder_model():
             model_name = "taesdxl_encoder.pth"
     elif shared.sd_model.is_sd1 or shared.sd_model.is_sd2:
         model_name = "taesd_encoder.pth"
-    elif shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_wan:
+    elif shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_wan or shared.sd_model.is_krea2:
         v = True
         model_name = "taew2_2.pth" if shared.sd_model.forge_objects.vae.latent_channels == 48 else "taew2_1.pth"
     else:
