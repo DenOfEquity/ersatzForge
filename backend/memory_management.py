@@ -749,6 +749,9 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
         if not matched:
             models_to_load.append(loaded_model)
 
+    for load_model in models_to_load:
+        unload_model_clones(load_model.model)
+
     just_unloaded_models = []
 
     ## potential partial unload : not if trying to load now; only for allowed model types
@@ -779,25 +782,17 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
         i -= 1
 
     ## potential partial load/reload
-    # done_partial_load = False
-    for m in models_already_loaded:
-        if m.device != torch.device("cpu"):
-            if m.model.model.__class__.__name__ in allowed_partial_models and m not in just_unloaded_models:
+    if vram_state not in [VRAMState.DISABLED, VRAMState.NO_VRAM, VRAMState.VERY_LOW_VRAM]:
+        for m in models_already_loaded:
+            if m.device != torch.device("cpu") and m.model.model.__class__.__name__ in allowed_partial_models and m not in just_unloaded_models:
                 available_memory = get_free_memory(m.device)
                 exclusive_memory = module_size(m.model.model, exclude_device=m.device)[0]
                 if exclusive_memory > 0 and available_memory > total_memory_needed:
                     print(f"{cc.INFO}[Memory Management] {cc.INFO2}[LOAD (partial)] {cc.LOAD}{m.model.model.__class__.__name__}{cc.RESET}, ", end="")
                     m.model_load(memory_for_inference, models_already_loaded, partial=Partial.LOAD)
-                    # done_partial_load = True
-
-
-    # if done_partial_load and len(models_to_load) == 0:
-        # soft_empty_cache() # cleanup necessary only after unload
 
     ## load new, will fully unload other models if necessary
     for load_model in models_to_load:
-        unload_model_clones(load_model.model)
-
         load_model.model_load(memory_for_inference, models_to_load+models_already_loaded)
         current_loaded_models.append(load_model)
 
