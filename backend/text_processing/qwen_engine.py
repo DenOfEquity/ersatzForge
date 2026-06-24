@@ -138,7 +138,8 @@ class Qwen3TextProcessingEngine:
         return zs
 
     def process_embeds(self, batch_tokens):
-        device = memory_management.get_torch_device()
+        torch_device = memory_management.get_torch_device()
+        device = memory_management.text_encoder_device()
 
         embeds_out = []
         attention_masks = []
@@ -160,7 +161,7 @@ class Qwen3TextProcessingEngine:
             attention_masks.append(attention_mask)
             num_tokens.append(sum(attention_mask))
 
-        return torch.cat(embeds_out), torch.tensor(attention_masks, device=device, dtype=torch.long), num_tokens
+        return torch.cat(embeds_out).to(device=torch_device), torch.tensor(attention_masks, device=torch_device, dtype=torch.long), num_tokens
 
     def process_tokens(self, batch_tokens, batch_multipliers):
         embeds, mask, count = self.process_embeds([batch_tokens])
@@ -184,12 +185,7 @@ class Qwen3TextProcessingEngine:
 
         memory_management.soft_empty_cache()
 
-        if self.is_flux2:
-            z = torch.stack((z[:, 0], z[:, 1], z[:, 2]), dim=1)
-            z = z.movedim(1, 2)
-            z = z.reshape(z.shape[0], z.shape[1], -1)
-        elif self.is_krea2:
-            z = torch.stack((z[:, 0], z[:, 1], z[:, 2], z[:, 3], z[:, 4], z[:, 5], z[:, 6], z[:, 7], z[:, 8], z[:, 9], z[:, 10], z[:, 11]), dim=1)
+        if self.is_flux2 or self.is_krea2:
             z = z.movedim(1, 2)
             z = z.reshape(z.shape[0], z.shape[1], -1)
         return z
