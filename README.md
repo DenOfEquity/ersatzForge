@@ -4,11 +4,12 @@ a backup of my local (experimental, opinionated) changes to Forge2 webUI
 * Chroma (based on https://github.com/croquelois/forgeChroma) and Chroma Radiance (based on https://github.com/maybleMyers/chromaforge)
 * extended Checkpoint Merger, including UI for nArn0's embedding convertor (based on https://github.com/nArn0/sdxl-embedding-converter)
 * Hypernetworks
-* various other tweaks: UI, embedding filtering, code consolidation and tidying, dead code removal, performance improvements (for me)
+* various and multitudinous other tweaks and modifications: UI, embedding filtering, code consolidation and tidying, dead code removal, performance improvements (for me), improved memory management
 * tiling (sd1, 2, xl) (based on https://github.com/spinagon/ComfyUI-seamless-tiling)
 * all embeddings everywhere all at once: SD1.5 embeddings (CLIP-L only) can be used with SDXL, SD3; SDXL embeddings can be used with SD1 (applies CLIP-L only, CLIP-G ignored), SD3
 * new preprocessors for IPAdapter, including tiling, noising (for uncond) and sharpening of inputs. And multi-input.
-* Latent NeuralNet upscaler by city96 (based on https://github.com/city96/SD-Latent-Upscaler) (1.25x, 1.5x and 2.0x)
+* Latent NeuralNet upscaler by city96 (based on https://github.com/city96/SD-Latent-Upscaler) (1.25x, 1.5x and 2.0x; for sd1.5, sd2, sdxl).
+* Flux2 latent NeuralNet upscaler by TensorForger (based on https://github.com/tensorforger/comfyui-flow-upscaler) (2.0x; for Flux.2, ERNIE, mugen).
 * support more upscaler models via updated Spandrel - place models in `models/upscaler`.
 * ResAdapter support: download models to `models/other_modules`, load via 'Additional modules' selector (as VAE, text encoder), LoRA as usual (https://huggingface.co/jiaxiangc/res-adapter)
 * long CLIP
@@ -27,3 +28,4 @@ a backup of my local (experimental, opinionated) changes to Forge2 webUI
 * Mugen
 * Flux2.Klein 4B and 9B
 * ERNIE
+* Krea2
