@@ -68,18 +68,20 @@ class Attention(nn.Module):
         self.wo = nn.Linear(dim, dim, bias=bias)
 
     def forward(self, x, freqs=None, mask=None, transformer_options={}):
-        q, k, v, gate = self.wq(x), self.wk(x), self.wv(x), self.gate(x)
-        q = rearrange(q, "B L (H D) -> B H L D", H=self.heads)
-        k = rearrange(k, "B L (H D) -> B H L D", H=self.kvheads)
-        v = rearrange(v, "B L (H D) -> B H L D", H=self.kvheads)
+        q = rearrange(self.wq(x), "B L (H D) -> B H L D", H=self.heads)
+        k = rearrange(self.wk(x), "B L (H D) -> B H L D", H=self.kvheads)
         q, k = self.qknorm(q, k)
         if freqs is not None:
             q, k = apply_rope(q, k, freqs)
+
+        v = rearrange(self.wv(x), "B L (H D) -> B H L D", H=self.kvheads)
         if self.kvheads != self.heads:
             rep = self.heads // self.kvheads
             k = k.repeat_interleave(rep, dim=1)
             v = v.repeat_interleave(rep, dim=1)
         out = attention_function(q, k, v, self.heads, mask=mask, skip_reshape=True)
+
+        gate = self.gate(x)
         return self.wo(out * F.sigmoid(gate))
 
 
@@ -113,8 +115,8 @@ class TextFusionBlock(nn.Module):
         self.mlp = SwiGLU(features, multiplier, bias)
 
     def forward(self, x, mask=None, transformer_options={}):
-        x = x + self.attn(self.prenorm(x), mask=mask, transformer_options=transformer_options)
-        x = x + self.mlp(self.postnorm(x))
+        x.add_(self.attn(self.prenorm(x), mask=mask, transformer_options=transformer_options))
+        x.add_(self.mlp(self.postnorm(x)))
         return x
 
 
@@ -214,10 +216,6 @@ class SingleStreamDiT(nn.Module):
         )
 
     def forward(self, x, timesteps, context, attention_mask=None, transformer_options={}, **kwargs):
-        temporal = x.ndim == 5
-        if temporal:
-            b5, c5, t5, h5, w5 = x.shape
-            x = x.reshape(b5 * t5, c5, h5, w5)
         bs, c, H_orig, W_orig = x.shape
 
         patch = self.patch
@@ -262,17 +260,9 @@ class SingleStreamDiT(nn.Module):
         out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)",
                         h=h_, w=w_, ph=patch, pw=patch, c=self.channels)
         out = out[:, :, :H_orig, :W_orig]  # crop padding back off
-        if temporal:
-            out = out.reshape(b5, t5, self.channels, H_orig, W_orig).movedim(1, 2)
         return out
 
     def _unpack_context(self, context):
         # context: (B, seq, txtlayers*txtdim) -> (B, seq, txtlayers, txtdim).
         b, seq, fused = context.shape
-        if fused != self.txtlayers * self.txtdim:
-            raise ValueError(
-                f"Krea2 expects conditioning with {self.txtlayers}x{self.txtdim}={self.txtlayers * self.txtdim} "
-                f"features (a {self.txtlayers}-layer Qwen3-VL stack) but got {fused}. "
-                f"Load the text encoder with CLIPLoader type 'krea2'."
-            )
         return context.reshape(b, seq, self.txtlayers, self.txtdim)
