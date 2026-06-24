@@ -52,7 +52,7 @@ class KModel(torch.nn.Module):
         if attention.get_attn_precision() == torch.float32:
             dtype_size = 4
 
-        # true memory requirements may not be so simply calculated, may be quadratic to image size
+        # memory requirements for different image sizes needs more than a linear scaling factor
         # also cond size is relevant, tested with 300+ token prompts
         match (self.diffusion_model.__class__.__name__):
             case "IntegratedChromaDCTTransformer2DModel": # untested
@@ -60,7 +60,7 @@ class KModel(torch.nn.Module):
             case "IntegratedChromaTransformer2DModel": # assumed same as flux, untested
                 scaler = 2.3 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.75)
             case "Lumina2DiT":
-                scaler = 1.7
+                scaler = 1.95 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.4)
             case "IntegratedFlux2Transformer2DModel":
                 scaler = 1.45
             case "IntegratedFluxTransformer2DModel":
@@ -73,6 +73,8 @@ class KModel(torch.nn.Module):
                 scaler = 5.8 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.6)
                 if input_shape[1] == 32: # mugen SDXL
                     scaler /= 4 # retest
+            case "SingleStreamDiT":
+                scaler = 2.95 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.6)
             case _:
                 scaler = 1.65
 
