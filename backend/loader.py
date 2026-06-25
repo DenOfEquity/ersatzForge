@@ -46,21 +46,21 @@ dir_path = os.path.dirname(__file__)
 def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_path, state_dict):
     config_path = os.path.join(repo_path, component_name)
 
-    if component_name in ['feature_extractor', 'safety_checker']:
+    if component_name in ["feature_extractor", "safety_checker"]:
         return None
 
-    if lib_name in ['transformers', 'diffusers']:
-        if component_name in ['scheduler']:
+    if lib_name in ["transformers", "diffusers"]:
+        if component_name in ["scheduler"]:
             cls = getattr(importlib.import_module(lib_name), cls_name)
             return cls.from_pretrained(os.path.join(repo_path, component_name))
-        if component_name.startswith('tokenizer'):
+        if component_name.startswith("tokenizer"):
             cls = getattr(importlib.import_module(lib_name), cls_name)
             comp = cls.from_pretrained(os.path.join(repo_path, component_name))
             comp._eventual_warn_about_too_long_sequence = lambda *args, **kwargs: None
             return comp
 
-        if cls_name == 'AutoencoderKL':
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'Missing VAE!'
+        if cls_name == "AutoencoderKL":
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing VAE!"
 
             config = IntegratedAutoencoderKL.load_config(config_path)
 
@@ -68,10 +68,10 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
                     model = IntegratedAutoencoderKL.from_config(config)
 
-            load_state_dict(model, state_dict, ignore_start='loss.')
+            load_state_dict(model, state_dict, ignore_start="loss.")
             return model
 
-        if cls_name == 'AutoencoderKLFlux2':
+        if cls_name == "AutoencoderKLFlux2":
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Flux2 VAE!"
 
             config = AutoencoderKLFlux2.load_config(config_path)
@@ -86,8 +86,8 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             load_state_dict(model, state_dict, ignore_start="loss.")
             return model
 
-        if cls_name == 'AutoencoderKLWan':
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'Missing Wan2.1 VAE!'
+        if cls_name == "AutoencoderKLWan":
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Wan2.1 VAE!"
 
             # check name+shape of key to optionally use Anzhc's 2D (single frame) model - quick test decoding 1024x1536, saved ~2GB peak VRAM
             key2 = "decoder.mid_block.resnets.0.norm1.gamma"
@@ -104,8 +104,8 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             load_state_dict(model, state_dict)
             return model
 
-        if cls_name == 'AutoencoderKLWan22':
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'Missing Wan2.2 VAE!'
+        if cls_name == "AutoencoderKLWan22":
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Wan2.2 VAE!"
 
             config = AutoencoderKLWan22.load_config(config_path)
 
@@ -117,13 +117,13 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             return model
 
 
-        if component_name.startswith('text_encoder') and cls_name in ['CLIPTextModel', 'CLIPTextModelWithProjection']:
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'Missing CLIP text encoder!'
+        if component_name.startswith("text_encoder") and cls_name in ["CLIPTextModel", "CLIPTextModelWithProjection"]:
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing CLIP text encoder!"
 
             from transformers import CLIPTextConfig, CLIPTextModel
             config = CLIPTextConfig.from_pretrained(config_path)
 
-            config.max_position_embeddings = state_dict['transformer.text_model.embeddings.position_embedding.weight'].shape[0]
+            config.max_position_embeddings = state_dict["transformer.text_model.embeddings.position_embedding.weight"].shape[0]
 
             storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
@@ -153,10 +153,10 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                     # model = IntegratedCLIP(CLIPTextModel, config, add_text_projection=True).to(**to_args)
 
             load_state_dict(model, state_dict, ignore_errors=[
-                'transformer.text_projection.weight',
-                'transformer.text_model.embeddings.position_ids',
-                'logit_scale',
-            ], ignore_end='scaled_fp8', log_name=cls_name)
+                "transformer.text_projection.weight",
+                "transformer.text_model.embeddings.position_ids",
+                "logit_scale",
+            ], ignore_end="scaled_fp8", log_name=cls_name)
 
             return model
 
@@ -189,7 +189,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                     with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
                         model = Gemma2_2B(config)
 
-            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end='scaled_fp8')
+            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end="scaled_fp8")
 
             return model
 
@@ -222,7 +222,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                     with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
                         model = Ministral3_3B(config)
 
-            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end='scaled_fp8')
+            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end="scaled_fp8")
 
             return model
 
@@ -263,61 +263,61 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                     with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
                         model = Qwen3(config)
 
-            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end='scaled_fp8')
+            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end="scaled_fp8")
 
             return model
 
         if cls_name in ["T5EncoderModel", "UMT5EncoderModel"]:
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'Missing T5 text encoder!'
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing T5 text encoder!"
 
             from backend.nn.t5 import IntegratedT5
             config = read_arbitrary_config(config_path)
 
             # detect distilled T5 by LifuWang
-            match state_dict['transformer.encoder.block.0.layer.0.SelfAttention.k.weight'].shape[0]:
+            match state_dict["transformer.encoder.block.0.layer.0.SelfAttention.k.weight"].shape[0]:
                 case 384:   #   small (shape is [384,512])
-                    config['d_ff'] = 1024
-                    config['d_model'] = 512
-                    config['num_heads'] = 6
-                    config['num_layers'] = 8
-                    config['num_decoder_layers'] = 8
-                    # config['dense_act_fn'] = "gelu_new"
-                    config['project_in_dim'] = 512
-                    config['project_out_dim'] = 4096
+                    config["d_ff"] = 1024
+                    config["d_model"] = 512
+                    config["num_heads"] = 6
+                    config["num_layers"] = 8
+                    config["num_decoder_layers"] = 8
+                    # config["dense_act_fn"] = "gelu_new"
+                    config["project_in_dim"] = 512
+                    config["project_out_dim"] = 4096
                 case 768:   #   base
-                    config['d_ff'] = 2048
-                    config['d_model'] = 768
-                    config['num_heads'] = 12
-                    config['num_layers'] = 12
-                    config['num_decoder_layers'] = 12
-                    # config['dense_act_fn'] = "gelu_new"
-                    config['project_in_dim'] = 768
-                    config['project_out_dim'] = 4096
+                    config["d_ff"] = 2048
+                    config["d_model"] = 768
+                    config["num_heads"] = 12
+                    config["num_layers"] = 12
+                    config["num_decoder_layers"] = 12
+                    # config["dense_act_fn"] = "gelu_new"
+                    config["project_in_dim"] = 768
+                    config["project_out_dim"] = 4096
                 case 1024:   #   large
-                    config['d_ff'] = 2816
-                    config['d_model'] = 1024
-                    config['num_heads'] = 16
-                    config['num_layers'] = 24
-                    config['num_decoder_layers'] = 24
-                    # config['dense_act_fn'] = "gelu_new"
-                    config['project_in_dim'] = 1024
-                    config['project_out_dim'] = 4096
+                    config["d_ff"] = 2816
+                    config["d_model"] = 1024
+                    config["num_heads"] = 16
+                    config["num_layers"] = 24
+                    config["num_decoder_layers"] = 24
+                    # config["dense_act_fn"] = "gelu_new"
+                    config["project_in_dim"] = 1024
+                    config["project_out_dim"] = 4096
                 case 2048:   #   xl
-                    config['d_ff'] = 5120
-                    config['d_model'] = 2048
-                    config['num_heads'] = 32
-                    config['num_layers'] = 24
-                    config['num_decoder_layers'] = 24
-                    # config['dense_act_fn'] = "gelu_new"
-                    config['project_in_dim'] = 2048
-                    config['project_out_dim'] = 4096
+                    config["d_ff"] = 5120
+                    config["d_model"] = 2048
+                    config["num_heads"] = 32
+                    config["num_layers"] = 24
+                    config["num_decoder_layers"] = 24
+                    # config["dense_act_fn"] = "gelu_new"
+                    config["project_in_dim"] = 2048
+                    config["project_out_dim"] = 4096
                 case _:     # default xxl
                     pass
 
             storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
 
-            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, 'nf4', 'fp4', 'gguf']:
+            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
                 print(f"{cc.SETTING2}Using Detected T5 Data Type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
                 if state_dict_dtype == "gguf":
@@ -327,7 +327,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             else:
                 print(f"{cc.SETTING2}Using Default T5 Data Type: {storage_dtype}{cc.RESET}")
 
-            if storage_dtype in ['nf4', 'fp4', 'gguf']:
+            if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
                     with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
                         model = IntegratedT5(config)
@@ -336,12 +336,12 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                     with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
                         model = IntegratedT5(config)
 
-            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=['transformer.encoder.embed_tokens.weight', 'logit_scale'], ignore_end='scaled_fp8')
+            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=["transformer.encoder.embed_tokens.weight", "logit_scale"], ignore_end="scaled_fp8")
 
             return model
 
         if cls_name in ["UNet2DConditionModel", "FluxTransformer2DModel", "Flux2Transformer2DModel", "SD3Transformer2DModel", "ChromaTransformer2DModel", "ChromaDCT", "CosmosTransformer3DModel", "WanTransformer3DModel", "Lumina2Transformer2DModel", "ERNIEImageModel", "Krea2Transformer2DModel"]:
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, 'You do not have model state dict!'
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have model state dict!"
 
             model_loader = None
             if cls_name == "UNet2DConditionModel":
@@ -349,7 +349,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             elif cls_name == "FluxTransformer2DModel":
                 from backend.nn.flux import IntegratedFluxTransformer2DModel
                 model_loader = lambda c: IntegratedFluxTransformer2DModel(**c)
-            elif cls_name == 'Flux2Transformer2DModel':
+            elif cls_name == "Flux2Transformer2DModel":
                 from backend.nn.flux2 import IntegratedFlux2Transformer2DModel
                 model_loader = lambda c: IntegratedFlux2Transformer2DModel(**c)
             elif cls_name == "ERNIEImageModel":
@@ -425,11 +425,11 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             storage_dtype = memory_management.unet_dtype(model_params=state_dict_parameters, supported_dtypes=guess.supported_inference_dtypes)
 
-            unet_storage_dtype_overwrite = backend.args.dynamic_args.get('forge_unet_storage_dtype')
+            unet_storage_dtype_overwrite = backend.args.dynamic_args.get("forge_unet_storage_dtype")
 
             if unet_storage_dtype_overwrite is not None:
                 storage_dtype = unet_storage_dtype_overwrite
-            elif state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, 'nf4', 'fp4', 'gguf']:
+            elif state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
                 print(f"{cc.SETTING2}Using Detected UNet Type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
                 if state_dict_dtype == "gguf":
@@ -441,7 +441,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             computation_dtype = memory_management.get_computation_dtype(load_device, parameters=state_dict_parameters, supported_dtypes=guess.supported_inference_dtypes)
             offload_device = memory_management.unet_offload_device()
 
-            if storage_dtype in ['nf4', 'fp4', 'gguf']:
+            if storage_dtype in ["nf4", "fp4", "gguf"]:
                 initial_device = memory_management.unet_initial_load_device(parameters=state_dict_parameters, dtype=computation_dtype)
                 with modeling_utils.no_init_weights():
                     with using_forge_operations(device=initial_device, dtype=computation_dtype, manual_cast_enabled=False, bnb_dtype=storage_dtype):
@@ -455,9 +455,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                     with using_forge_operations(**to_args, manual_cast_enabled=need_manual_cast):
                         model = model_loader(unet_config).to(**to_args)
 
-            load_state_dict(model, state_dict, ignore_errors=['scaled_fp8'], ignore_end='_extra_state')
+            load_state_dict(model, state_dict, ignore_errors=["scaled_fp8"], ignore_end="_extra_state")
 
-            if hasattr(model, '_internal_dict'):
+            if hasattr(model, "_internal_dict"):
                 model._internal_dict = unet_config
             else:
                 model.config = unet_config
@@ -470,7 +470,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             return model
 
-    print(f'{cc.WARNING}Skipped: {component_name} = {lib_name}.{cls_name}{cc.RESET}')
+    print(f"{cc.WARNING}Skipped: {component_name} = {lib_name}.{cls_name}{cc.RESET}")
     return None
 
 
@@ -478,7 +478,7 @@ def replace_state_dict(sd, asd, guess):
     vae_key_prefix = guess.vae_key_prefix[0]
     text_encoder_key_prefix = guess.text_encoder_key_prefix[0]
 
-    if 'enc.blk.0.attn_k.weight' in asd:
+    if "enc.blk.0.attn_k.weight" in asd:
         wierd_t5_format_from_city96 = {
             "enc.": "encoder.",
             ".blk.": ".block.",
@@ -495,7 +495,7 @@ def replace_state_dict(sd, asd, guess):
             "ffn_gate": "layer.1.DenseReluDense.wi_0",
             "ffn_norm": "layer.1.layer_norm",
         }
-        wierd_t5_pre_quant_keys_from_city96 = ['shared.weight']
+        wierd_t5_pre_quant_keys_from_city96 = ["shared.weight"]
         asd_new = {}
         for k, v in asd.items():
             for s, d in wierd_t5_format_from_city96.items():
@@ -616,8 +616,8 @@ def replace_state_dict(sd, asd, guess):
 
     ##  CLIP-H
     CLIP_H = {     #   key to identify source model             old_prefix
-        'cond_stage_model.model.ln_final.weight'            : 'cond_stage_model.model.',
-#        'text_model.encoder.layers.0.layer_norm1.bias'      : 'text_model'.    # would need converting
+        "cond_stage_model.model.ln_final.weight"            : "cond_stage_model.model.",
+#        "text_model.encoder.layers.0.layer_norm1.bias"      : "text_model".    # would need converting
         }
     for CLIP_key in CLIP_H.keys():
         if CLIP_key in asd and asd[CLIP_key].shape[0] == 1024:
@@ -631,10 +631,10 @@ def replace_state_dict(sd, asd, guess):
 
     ##  CLIP-G
     CLIP_G = {     #   key to identify source model                                                old_prefix
-        'conditioner.embedders.1.model.transformer.resblocks.0.ln_1.bias'               : 'conditioner.embedders.1.model.transformer.',
-        'text_encoders.clip_g.transformer.text_model.encoder.layers.0.layer_norm1.bias' : 'text_encoders.clip_g.transformer.',
-        'text_model.encoder.layers.0.layer_norm1.bias'                                  : '',
-        'transformer.resblocks.0.ln_1.bias'                                             : 'transformer.',
+        "conditioner.embedders.1.model.transformer.resblocks.0.ln_1.bias"               : "conditioner.embedders.1.model.transformer.",
+        "text_encoders.clip_g.transformer.text_model.encoder.layers.0.layer_norm1.bias" : "text_encoders.clip_g.transformer.",
+        "text_model.encoder.layers.0.layer_norm1.bias"                                  : "",
+        "transformer.resblocks.0.ln_1.bias"                                             : "transformer.",
     }
     for CLIP_key in CLIP_G.keys():
         if CLIP_key in asd and asd[CLIP_key].shape[0] == 1280:
@@ -708,11 +708,11 @@ def replace_state_dict(sd, asd, guess):
 
     ##  CLIP-L
     CLIP_L = {     #   key to identify source model                                                    old_prefix
-        'cond_stage_model.transformer.text_model.encoder.layers.0.layer_norm1.bias'         : 'cond_stage_model.transformer.',
-        'conditioner.embedders.0.transformer.text_model.encoder.layers.0.layer_norm1.bias'  : 'conditioner.embedders.0.transformer.',
-        'text_encoders.clip_l.transformer.text_model.encoder.layers.0.layer_norm1.bias'     : 'text_encoders.clip_l.transformer.',
-        'text_model.encoder.layers.0.layer_norm1.bias'                                      : '',
-        'transformer.resblocks.0.ln_1.bias'                                                 : 'transformer.',
+        "cond_stage_model.transformer.text_model.encoder.layers.0.layer_norm1.bias"         : "cond_stage_model.transformer.",
+        "conditioner.embedders.0.transformer.text_model.encoder.layers.0.layer_norm1.bias"  : "conditioner.embedders.0.transformer.",
+        "text_encoders.clip_l.transformer.text_model.encoder.layers.0.layer_norm1.bias"     : "text_encoders.clip_l.transformer.",
+        "text_model.encoder.layers.0.layer_norm1.bias"                                      : "",
+        "transformer.resblocks.0.ln_1.bias"                                                 : "transformer.",
     }
 
     for CLIP_key in CLIP_L.keys():
@@ -785,9 +785,9 @@ def replace_state_dict(sd, asd, guess):
                             sd[new_k] = v
 
     # T5
-    if model_type in ['flux', 'sd3', 'csms', 'wan']:
-        if 'encoder.block.0.layer.0.SelfAttention.k.weight' in asd:
-            t5key = "umt5xxl" if asd['shared.weight'].shape[0] == 256384 else "t5xxl"
+    if model_type in ["flux", "sd3", "csms", "wan"]:
+        if "encoder.block.0.layer.0.SelfAttention.k.weight" in asd:
+            t5key = "umt5xxl" if asd["shared.weight"].shape[0] == 256384 else "t5xxl"
             keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}{t5key}.")]
             for k in keys_to_delete:
                 del sd[k]
@@ -796,8 +796,8 @@ def replace_state_dict(sd, asd, guess):
                     continue
                 sd[f"{text_encoder_key_prefix}{t5key}.transformer.{k}"] = v
 
-        if 'encoder.encoder.block.0.layer.0.SelfAttention.k.weight' in asd:
-            t5key = "umt5xxl" if asd['shared.weight'].shape[0] == 256384 else "t5xxl"
+        if "encoder.encoder.block.0.layer.0.SelfAttention.k.weight" in asd:
+            t5key = "umt5xxl" if asd["shared.weight"].shape[0] == 256384 else "t5xxl"
             keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}{t5key}.")]
             for k in keys_to_delete:
                 del sd[k]
@@ -830,7 +830,7 @@ def replace_state_dict(sd, asd, guess):
         for k, v in asd.items():
             sd[vae_key_prefix + k] = v
 
-    if "decoder.conv1.bias" in asd and model_type in ['csms', 'wan']:    # Wan VAE, used by Cosmos predict2
+    if "decoder.conv1.bias" in asd and model_type in ["csms", "wan"]:    # Wan VAE, used by Cosmos predict2
         keys_to_delete = [k for k in sd if k.startswith(vae_key_prefix)]
         for k in keys_to_delete:
             del sd[k]
@@ -844,7 +844,7 @@ def replace_state_dict(sd, asd, guess):
                 continue
             sd[f"{text_encoder_key_prefix}gemma2_2b.{k}"] = v
 
-    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 8B (Klein9B), 4B (Z Image, Klein4B), 06B (Anima), ministral3_3b (ERNIE)
+    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 8B (Klein9B), 4B[VL] (Z Image, Klein4B) [Krea2], 06B (Anima), ministral3_3b (ERNIE)
         size = asd["model.layers.0.post_attention_layernorm.weight"].shape[0]
         if size == 4096:
             size_str = "qwen3_8b"
@@ -871,8 +871,8 @@ def replace_state_dict(sd, asd, guess):
 
 
     # ResAdapter (bytedance) unet patch (sd1.5 or sdxl)
-    if 'down_blocks.0.resnets.0.norm1.bias' in asd:
-        if (len(asd) == 88 and model_type == 'sd1') or (len(asd) == 68 and model_type == 'sdxl'):
+    if "down_blocks.0.resnets.0.norm1.bias" in asd:
+        if (len(asd) == 88 and model_type == "sd1") or (len(asd) == 68 and model_type == "sdxl"):
             pk = {
                 ".norm1.weight": ".in_layers.0.weight",
                 ".norm1.bias":   ".in_layers.0.bias",
@@ -881,7 +881,7 @@ def replace_state_dict(sd, asd, guess):
                 }
 
             for k in pk:
-                for x in range(4 if model_type == 'sd1' else 3):
+                for x in range(4 if model_type == "sd1" else 3):
                     for y in range(2):
                         k_i = "down_blocks."  + str(x)           + ".resnets." + str(y) + k
                         k_o = "input_blocks." + str(3*x + y + 1) + ".0"                 + pk[k]
@@ -938,6 +938,10 @@ def replace_state_dict(sd, asd, guess):
 
 
 def preprocess_state_dict(sd):
+    for k in list(sd.keys()):
+        if k.endswith(".comfy_quant"):
+            sd.pop(k)
+
     if not any(k.startswith(("model.diffusion_model", "net.")) for k in sd.keys()):
         sd = {f"model.diffusion_model.{k}": v for k, v in sd.items()}
 
@@ -945,7 +949,7 @@ def preprocess_state_dict(sd):
 
 
 def split_state_dict(sd, additional_state_dicts: list = None):
-    print(f"{cc.LOAD}Loading model:{cc.RESET} {sd} ")
+    print(f"{cc.LOAD}Loading model:{cc.RESET} {sd}")
     sd = load_torch_file(sd)
     sd = preprocess_state_dict(sd)
     guess = huggingface_guess.guess(sd)
@@ -954,12 +958,17 @@ def split_state_dict(sd, additional_state_dicts: list = None):
         for asd in additional_state_dicts:
             print(f"{cc.LOAD}Loading module:{cc.RESET} {asd}")
             asd = load_torch_file(asd)
+
+            for k in list(asd.keys()):
+                if k.endswith(".comfy_quant"):
+                    asd.pop(k)
+
             sd = replace_state_dict(sd, asd, guess)
             del asd
 
     guess.clip_target = guess.clip_target(sd)
     guess.model_type = guess.model_type(sd)
-    guess.ztsnr = 'ztsnr' in sd
+    guess.ztsnr = "ztsnr" in sd
 
     sd = guess.process_vae_state_dict(sd)
 
@@ -971,9 +980,9 @@ def split_state_dict(sd, additional_state_dicts: list = None):
     sd = guess.process_clip_state_dict(sd)
 
     for k, v in guess.clip_target.items():
-        state_dict[v] = try_filter_state_dict(sd, [k + '.'])
+        state_dict[v] = try_filter_state_dict(sd, [k + "."])
 
-    state_dict['ignore'] = sd
+    state_dict["ignore"] = sd
 
     if "Anima" in guess.huggingface_repo:
         # move LLMAdapter from transformer to text_encoder
@@ -983,9 +992,9 @@ def split_state_dict(sd, additional_state_dicts: list = None):
                 state_dict["text_encoder"][k] = state_dict["transformer"].pop(k)
 
     print_dict = {k: len(v) for k, v in state_dict.items()}
-    print(f'StateDict Keys: {print_dict}')
+    print(f"StateDict Keys: {print_dict}")
 
-    del state_dict['ignore']
+    del state_dict["ignore"]
 
     return state_dict, guess
 
@@ -995,11 +1004,11 @@ def forge_loader(sd, additional_state_dicts=None):
     try:
         state_dicts, estimated_config = split_state_dict(sd, additional_state_dicts=additional_state_dicts)
     except:
-        raise ValueError('Failed to recognize model type!')
+        raise ValueError("Failed to recognize model type!")
 
     repo_name = estimated_config.huggingface_repo
 
-    local_path = os.path.join(dir_path, 'huggingface', repo_name)
+    local_path = os.path.join(dir_path, "huggingface", repo_name)
     config: dict = DiffusionPipeline.load_config(local_path)
     huggingface_components = {}
     for component_name, v in config.items():
@@ -1018,52 +1027,52 @@ def forge_loader(sd, additional_state_dicts=None):
     try:
         import yaml
         from pathlib import Path
-        config_filename = os.path.splitext(sd)[0] + '.yaml'
+        config_filename = os.path.splitext(sd)[0] + ".yaml"
         if Path(config_filename).is_file():
-            with open(config_filename, 'r') as stream:
+            with open(config_filename, "r") as stream:
                 yaml_config = yaml.safe_load(stream)
     except ImportError:
         pass
 
     # Fix Huggingface prediction type using .yaml config or estimated config detection
     prediction_types = {
-        'EPS': 'epsilon',
-        'V_PREDICTION': 'v_prediction',
-        'EDM': 'edm',
+        "EPS"         : "epsilon",
+        "V_PREDICTION": "v_prediction",
+        "EDM"         : "edm",
     }
 
-    has_prediction_type = 'scheduler' in huggingface_components and hasattr(huggingface_components['scheduler'], 'config') and 'prediction_type' in huggingface_components['scheduler'].config
+    has_prediction_type = "scheduler" in huggingface_components and hasattr(huggingface_components["scheduler"], "config") and "prediction_type" in huggingface_components["scheduler"].config
 
     if yaml_config is not None:
         yaml_config_prediction_type: str = (
-                yaml_config.get('model', {}).get('params', {}).get('parameterization', '')
-            or  yaml_config.get('model', {}).get('params', {}).get('denoiser_config', {}).get('params', {}).get('scaling_config', {}).get('target', '')
+                yaml_config.get("model", {}).get("params", {}).get("parameterization", "")
+            or  yaml_config.get("model", {}).get("params", {}).get("denoiser_config", {}).get("params", {}).get("scaling_config", {}).get("target", "")
         )
-        if yaml_config_prediction_type == 'v' or yaml_config_prediction_type.endswith(".VScaling"):
-            yaml_config_prediction_type = 'v_prediction'
+        if yaml_config_prediction_type == "v" or yaml_config_prediction_type.endswith(".VScaling"):
+            yaml_config_prediction_type = "v_prediction"
         else:
             # Use estimated prediction config if no suitable prediction type found
-            yaml_config_prediction_type = ''
+            yaml_config_prediction_type = ""
 
     if has_prediction_type:
         if yaml_config_prediction_type:
-            huggingface_components['scheduler'].config.prediction_type = yaml_config_prediction_type
+            huggingface_components["scheduler"].config.prediction_type = yaml_config_prediction_type
         else:
-            huggingface_components['scheduler'].config.prediction_type = prediction_types.get(estimated_config.model_type.name, huggingface_components['scheduler'].config.prediction_type)
+            huggingface_components["scheduler"].config.prediction_type = prediction_types.get(estimated_config.model_type.name, huggingface_components["scheduler"].config.prediction_type)
 
     # SDXL flow models
-    backend.args.dynamic_args.update({'SDXL_flow' : False})
+    backend.args.dynamic_args.update({"SDXL_flow" : False})
     model_filename = sd.lower()
     flow_names = backend.args.dynamic_args.get("sdxl_flow_models", "").split(",")
     for name in flow_names:
         n = name.strip()
         if len(n) >= 4 and n in model_filename:
-            backend.args.dynamic_args.update({'SDXL_flow' : True})
+            backend.args.dynamic_args.update({"SDXL_flow" : True})
             break
 
     for M in possible_models:
         if any(isinstance(estimated_config, x) for x in M.matched_guesses):
             return M(estimated_config=estimated_config, huggingface_components=huggingface_components)
 
-    print(f'{cc.ERROR}Failed to recognize model type!{cc.RESET}')
+    print(f"{cc.ERROR}Failed to recognize model type!{cc.RESET}")
     return None
