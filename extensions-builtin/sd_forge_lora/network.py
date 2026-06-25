@@ -23,7 +23,7 @@ class NetworkOnDisk:
 
         if self.is_safetensors:
             try:
-                self.metadata = cache.cached_data_for_file('safetensors-metadata', "lora/" + self.name, filename, read_metadata)
+                self.metadata = cache.cached_data_for_file("safetensors-metadata", "lora/" + self.name, filename, read_metadata)
             except Exception as e:
                 errors.display(e, f"reading lora {filename}")
 
@@ -34,76 +34,79 @@ class NetworkOnDisk:
 
             self.metadata = m
 
-        self.alias = self.metadata.get('ss_output_name', self.name)
+        self.alias = self.metadata.get("ss_output_name", self.name)
 
         self.hash = None
         self.shorthash = None
         self.set_hash(
             hashes.sha256_from_cache(self.filename, "lora/" + self.name, use_addnet_hash=self.is_safetensors) or
-            self.metadata.get('sshs_model_hash') or
-            self.metadata.get('modelspec.hash_sha256') or
-            ''
+            self.metadata.get("sshs_model_hash") or
+            self.metadata.get("modelspec.hash_sha256") or
+            ""
         )
 
         self.sd_version = self.detect_version()
 
 
     def detect_version(self):
-        if str(self.metadata.get('modelspec.implementation', '')) == 'https://github.com/black-forest-labs/flux':
-            return 'SdVersion.Flux'
-        elif str(self.metadata.get('modelspec.architecture', '')) == 'flux-1-dev/lora':
-            return 'SdVersion.Flux'
-        elif str(self.metadata.get('modelspec.architecture', '')).startswith('Flux'):
-            return 'SdVersion.Flux'
-        elif str(self.metadata.get('ss_base_model_version', '')) == 'flux1':
-            return 'SdVersion.Flux'
-        elif str(self.metadata.get('ss_network_module', '')) == 'networks.lora_flux':
-            return 'SdVersion.Flux'
+        if str(self.metadata.get("modelspec.implementation", "")) == "https://github.com/black-forest-labs/flux":
+            return "SdVersion.Flux"
+        elif str(self.metadata.get("modelspec.architecture", "")) == "flux-1-dev/lora":
+            return "SdVersion.Flux"
+        elif str(self.metadata.get("modelspec.architecture", "")).startswith("Flux"):
+            return "SdVersion.Flux"
+        elif str(self.metadata.get("ss_base_model_version", "")) == "flux1":
+            return "SdVersion.Flux"
+        elif str(self.metadata.get("ss_network_module", "")) == "networks.lora_flux":
+            return "SdVersion.Flux"
 
-        elif str(self.metadata.get('ss_base_model_version', '')) == 'flux2_klein_4b':
-            return 'SdVersion.Klein'
-        elif str(self.metadata.get('ss_base_model_version', '')) == 'flux2_klein_9b':
-            return 'SdVersion.Klein'
+        elif str(self.metadata.get("ss_base_model_version", "")) == "krea2":
+            return "SdVersion.Krea2"
 
-        elif str(self.metadata.get('modelspec.architecture', '')).startswith('zimage'):
-            return 'SdVersion.Zimage'
-        elif str(self.metadata.get('ss_base_model_version', '')).lower() == 'zimage':
-            return 'SdVersion.Zimage'
+        elif str(self.metadata.get("ss_base_model_version", "")) == "flux2_klein_4b":
+            return "SdVersion.Klein"
+        elif str(self.metadata.get("ss_base_model_version", "")) == "flux2_klein_9b":
+            return "SdVersion.Klein"
 
-        elif str(self.metadata.get('modelspec.architecture', '')).startswith('anima'):
-            return 'SdVersion.Anima'
-        elif str(self.metadata.get('ss_base_model_version', '')) == 'anima':
-            return 'SdVersion.Anima'
-        elif str(self.metadata.get('ss_network_module', '')) == 'networks.lora_anima':
-            return 'SdVersion.Anima'
+        elif str(self.metadata.get("modelspec.architecture", "")).startswith("zimage"):
+            return "SdVersion.Zimage"
+        elif str(self.metadata.get("ss_base_model_version", "")).lower() == "zimage":
+            return "SdVersion.Zimage"
 
-        elif str(self.metadata.get('modelspec.architecture', '')).startswith('ernie'):
-            return 'SdVersion.ERNIE'
-        elif str(self.metadata.get('ss_base_model_version', '')).lower() == 'ernie_image':
-            return 'SdVersion.ERNIE'
+        elif str(self.metadata.get("modelspec.architecture", "")).startswith("anima"):
+            return "SdVersion.Anima"
+        elif str(self.metadata.get("ss_base_model_version", "")) == "anima":
+            return "SdVersion.Anima"
+        elif str(self.metadata.get("ss_network_module", "")) == "networks.lora_anima":
+            return "SdVersion.Anima"
 
-        elif str(self.metadata.get('modelspec.architecture', '')) == 'stable-diffusion-3-3-5-medium/lora':
-            return 'SdVersion.SD3'
-        elif str(self.metadata.get('ss_base_model_version', '')).startswith('3-5-medium'):
-            return 'SdVersion.SD3'
-        elif str(self.metadata.get('ss_network_module', '')) == 'networks.lora_sd3':
-            return 'SdVersion.SD3'
+        elif str(self.metadata.get("modelspec.architecture", "")).startswith("ernie"):
+            return "SdVersion.ERNIE"
+        elif str(self.metadata.get("ss_base_model_version", "")).lower() == "ernie_image":
+            return "SdVersion.ERNIE"
 
-        elif str(self.metadata.get('modelspec.architecture', '')) == 'stable-diffusion-xl-v1-base/lora':
-            return 'SdVersion.SDXL'
-        elif str(self.metadata.get('ss_base_model_version', '')).startswith('sdxl_'):
-            return 'SdVersion.SDXL'
+        elif str(self.metadata.get("modelspec.architecture", "")) == "stable-diffusion-3-3-5-medium/lora":
+            return "SdVersion.SD3"
+        elif str(self.metadata.get("ss_base_model_version", "")).startswith("3-5-medium"):
+            return "SdVersion.SD3"
+        elif str(self.metadata.get("ss_network_module", "")) == "networks.lora_sd3":
+            return "SdVersion.SD3"
 
-        elif str(self.metadata.get('ss_v2', '')) == 'True':
-            return 'SdVersion.SD2'
+        elif str(self.metadata.get("modelspec.architecture", "")) == "stable-diffusion-xl-v1-base/lora":
+            return "SdVersion.SDXL"
+        elif str(self.metadata.get("ss_base_model_version", "")).startswith("sdxl_"):
+            return "SdVersion.SDXL"
 
-        elif str(self.metadata.get('modelspec.architecture', '')) == 'stable-diffusion-v1/lora':
-            return 'SdVersion.SD1'
-        elif str(self.metadata.get('ss_base_model_version', '')).startswith('sd_v1'):
-            return 'SdVersion.SD1'
+        elif str(self.metadata.get("ss_v2", "")) == "True":
+            return "SdVersion.SD2"
+
+        elif str(self.metadata.get("modelspec.architecture", "")) == "stable-diffusion-v1/lora":
+            return "SdVersion.SD1"
+        elif str(self.metadata.get("ss_base_model_version", "")).startswith("sd_v1"):
+            return "SdVersion.SD1"
 
 
-        return 'SdVersion.Unknown'
+        return "SdVersion.Unknown"
 
     def set_hash(self, v):
         self.hash = v
@@ -115,7 +118,7 @@ class NetworkOnDisk:
 
     def read_hash(self):
         if not self.hash:
-            self.set_hash(hashes.sha256(self.filename, "lora/" + self.name, use_addnet_hash=self.is_safetensors) or '')
+            self.set_hash(hashes.sha256(self.filename, "lora/" + self.name, use_addnet_hash=self.is_safetensors) or "")
 
     def get_alias(self):
         import networks
