@@ -1,16 +1,16 @@
 function toggleCss(key, css, enable) {
     var style = document.getElementById(key);
     if (enable && !style) {
-        style = document.createElement('style');
+        style = document.createElement("style");
         style.id = key;
-        style.type = 'text/css';
+        style.type = "text/css";
         document.head.appendChild(style);
     }
     if (style && !enable) {
         document.head.removeChild(style);
     }
     if (style) {
-        style.innerHTML == '';
+        style.innerHTML == "";
         style.appendChild(document.createTextNode(css));
     }
 }
@@ -28,20 +28,20 @@ function setupExtraNetworksForTab(tabname) {
         });
     }
 
-    var tabnav = gradioApp().querySelector('#' + tabname + '_extra_tabs > div.tab-nav');
-    var controlsDiv = document.createElement('DIV');
-    controlsDiv.classList.add('extra-networks-controls-div');
+    var tabnav = gradioApp().querySelector("#" + tabname + "_extra_tabs > div.tab-nav");
+    var controlsDiv = document.createElement("DIV");
+    controlsDiv.classList.add("extra-networks-controls-div");
     tabnav.appendChild(controlsDiv);
     tabnav.insertBefore(controlsDiv, null);
 
-    var this_tab = gradioApp().querySelector('#' + tabname + '_extra_tabs');
+    var this_tab = gradioApp().querySelector("#" + tabname + "_extra_tabs");
     this_tab.querySelectorAll(":scope > [id^='" + tabname + "_']").forEach(function(elem) {
         // tabname_full = {tabname}_{extra_networks_tabname}
         var tabname_full = elem.id;
         var search = gradioApp().querySelector("#" + tabname_full + "_extra_search");
         var sort_dir = gradioApp().querySelector("#" + tabname_full + "_extra_sort_dir");
         var refresh = gradioApp().querySelector("#" + tabname_full + "_extra_refresh");
-        var currentSort = '';
+        var currentSort = "";
 
         // If any of the buttons above don't exist, we want to skip this iteration of the loop.
         if (!search || !sort_dir || !refresh) {
@@ -51,11 +51,11 @@ function setupExtraNetworksForTab(tabname) {
         var applyFilter = function(force) {
             var searchTerm = search.value.toLowerCase();
 
-            UIpreset = gradioApp().querySelector('#forge_ui_preset > div > div > div > div > input').value;
+            UIpreset = gradioApp().querySelector("#forge_ui_preset > div > div > div > div > input").value;
 
-            gradioApp().querySelectorAll('#' + tabname + '_extra_tabs div.card').forEach(function(elem) {
-                var searchOnly = elem.querySelector('.search_only');
-                var text = Array.prototype.map.call(elem.querySelectorAll('.search_terms, .description'), function(t) {
+            gradioApp().querySelectorAll("#" + tabname + "_extra_tabs div.card").forEach(function(elem) {
+                var searchOnly = elem.querySelector(".search_only");
+                var text = Array.prototype.map.call(elem.querySelectorAll(".search_terms, .description"), function(t) {
                     return t.textContent.toLowerCase();
                 }).join(" ");
 
@@ -67,34 +67,37 @@ function setupExtraNetworksForTab(tabname) {
                     if (text.indexOf(partial) == -1)        visible = false;
                 })
 
-                sdversion = elem.getAttribute('data-sort-sdversion');
+                sdversion = elem.getAttribute("data-sort-sdversion");
                 if (sdversion == null) ;
-                else if (sdversion == 'SdVersion.Unknown')  ;
+                else if (sdversion == "SdVersion.Unknown")  ;
                 else if (opts.lora_filter_disabled == True) ;
-                else if (UIpreset == 'all') ;
-                else if (UIpreset == 'sd') {
-                    if (sdversion != 'SdVersion.SD1' && sdversion != 'SdVersion.SD2') visible = false;
+                else if (UIpreset == "all") ;
+                else if (UIpreset == "anima") {
+                    if (sdversion != "SdVersion.Anima") visible = false;
                 }
-                else if (UIpreset == 'xl') {
-                    if (sdversion != 'SdVersion.SDXL') visible = false;
+                else if (UIpreset == "ernie") {
+                    if (sdversion != "SdVersion.ERNIE") visible = false;
                 }
-                else if (UIpreset == 'sd3') {
-                    if (sdversion != 'SdVersion.SD3') visible = false;
+                else if (UIpreset == "flux" || UIpreset == "chroma") {
+                    if (sdversion != "SdVersion.Flux") visible = false;
                 }
-                else if (UIpreset == 'flux' || UIpreset == 'chroma') {
-                    if (sdversion != 'SdVersion.Flux') visible = false;
+                else if (UIpreset == "klein") {
+                    if (sdversion != "SdVersion.Klein") visible = false;
                 }
-                else if (UIpreset == 'klein') {
-                    if (sdversion != 'SdVersion.Klein') visible = false;
+                else if (UIpreset == "krea2") {
+                    if (sdversion != "SdVersion.Krea2") visible = false;
                 }
-                else if (UIpreset == 'zimage') {
-                    if (sdversion != 'SdVersion.Zimage') visible = false;
+                else if (UIpreset == "sd") {
+                    if (sdversion != "SdVersion.SD1" && sdversion != "SdVersion.SD2") visible = false;
                 }
-                else if (UIpreset == 'anima') {
-                    if (sdversion != 'SdVersion.Anima') visible = false;
+                else if (UIpreset == "sd3") {
+                    if (sdversion != "SdVersion.SD3") visible = false;
                 }
-                else if (UIpreset == 'ernie') {
-                    if (sdversion != 'SdVersion.ERNIE') visible = false;
+                else if (UIpreset == "xl") {
+                    if (sdversion != "SdVersion.SDXL") visible = false;
+                }
+                else if (UIpreset == "zimage") {
+                    if (sdversion != "SdVersion.Zimage") visible = false;
                 }
 
                 if (visible) {
@@ -109,10 +112,10 @@ function setupExtraNetworksForTab(tabname) {
 
 
         var applySort = function(force) {
-            var cards = gradioApp().querySelectorAll('#' + tabname_full + ' div.card');
-            var parent = gradioApp().querySelector('#' + tabname_full + "_cards");
+            var cards = gradioApp().querySelectorAll("#" + tabname_full + " div.card");
+            var parent = gradioApp().querySelector("#" + tabname_full + "_cards");
             var reverse = sort_dir.dataset.sortdir == "Descending";
-            var activeSearchElem = gradioApp().querySelector('#' + tabname_full + "_controls .extra-network-control--sort.extra-network-control--enabled");
+            var activeSearchElem = gradioApp().querySelector("#" + tabname_full + "_controls .extra-network-control--sort.extra-network-control--enabled");
             var sortKey = activeSearchElem ? activeSearchElem.dataset.sortkey : "default";
             var sortKeyDataField = "sort" + sortKey.charAt(0).toUpperCase() + sortKey.slice(1);
             var sortKeyStore = sortKey + "-" + sort_dir.dataset.sortdir + "-" + cards.length;
@@ -137,7 +140,7 @@ function setupExtraNetworksForTab(tabname) {
                 sortedCards.reverse();
             }
 
-            parent.innerHTML = '';
+            parent.innerHTML = "";
 
             var frag = document.createDocumentFragment();
             sortedCards.forEach(function(card) {
@@ -169,9 +172,9 @@ function setupExtraNetworksForTab(tabname) {
 
 
 function extraNetworksMovePromptToTab(tabname, id, showPrompt, showNegativePrompt) {
-    var promptContainer = gradioApp().getElementById(tabname + '_prompt_container');
-    var prompt = gradioApp().getElementById(tabname + '_prompt_row');
-    var negPrompt = gradioApp().getElementById(tabname + '_neg_prompt_row');
+    var promptContainer = gradioApp().getElementById(tabname + "_prompt_container");
+    var prompt = gradioApp().getElementById(tabname + "_prompt_row");
+    var negPrompt = gradioApp().getElementById(tabname + "_neg_prompt_row");
     var elem = id ? gradioApp().getElementById(id) : null;
 
     if (showNegativePrompt && elem) {
@@ -187,13 +190,13 @@ function extraNetworksMovePromptToTab(tabname, id, showPrompt, showNegativePromp
     }
 
     if (elem) {
-        elem.classList.toggle('extra-page-prompts-active', showNegativePrompt || showPrompt);
+        elem.classList.toggle("extra-page-prompts-active", showNegativePrompt || showPrompt);
     }
 }
 
 
 function extraNetworksShowControlsForPage(tabname, tabname_full) {
-    gradioApp().querySelectorAll('#' + tabname + '_extra_tabs .extra-networks-controls-div > div').forEach(function(elem) {
+    gradioApp().querySelectorAll("#" + tabname + "_extra_tabs .extra-networks-controls-div > div").forEach(function(elem) {
         var targetId = tabname_full + "_controls";
         elem.style.display = elem.id == targetId ? "" : "none";
     });
@@ -201,7 +204,7 @@ function extraNetworksShowControlsForPage(tabname, tabname_full) {
 
 
 function extraNetworksUnrelatedTabSelected(tabname) { // called from python when user selects an unrelated tab (generate)
-    extraNetworksMovePromptToTab(tabname, '', false, false);
+    extraNetworksMovePromptToTab(tabname, "", false, false);
 
     extraNetworksShowControlsForPage(tabname, null);
 }
@@ -235,8 +238,8 @@ var extraNetworksApplySort = {};
 var activePromptTextarea = {};
 
 function setupExtraNetworks() {
-    setupExtraNetworksForTab('txt2img');
-    setupExtraNetworksForTab('img2img');
+    setupExtraNetworksForTab("txt2img");
+    setupExtraNetworksForTab("img2img");
 }
 
 var re_extranet = /<([^:^>]+:[^:]+):[\d.]+>(.*)/s;
@@ -302,8 +305,8 @@ function cardClicked(tabname, textToAdd, textToAddNegative, allowNegativePrompt)
 }
 
 function saveCardPreview(event, tabname, filename) {
-    var textarea = gradioApp().querySelector("#" + tabname + '_preview_filename  > label > textarea');
-    var button = gradioApp().getElementById(tabname + '_save_preview');
+    var textarea = gradioApp().querySelector("#" + tabname + "_preview_filename  > label > textarea");
+    var button = gradioApp().getElementById(tabname + "_save_preview");
 
     textarea.value = filename;
     updateInput(textarea);
@@ -439,11 +442,11 @@ function extraNetworksControlSortOnClick(event, tabname, extra_networks_tabname)
     var self = event.currentTarget;
     var parent = event.currentTarget.parentElement;
 
-    parent.querySelectorAll('.extra-network-control--sort').forEach(function(x) {
-        x.classList.remove('extra-network-control--enabled');
+    parent.querySelectorAll(".extra-network-control--sort").forEach(function(x) {
+        x.classList.remove("extra-network-control--enabled");
     });
 
-    self.classList.add('extra-network-control--enabled');
+    self.classList.add("extra-network-control--enabled");
 
     applyExtraNetworkSort(tabname + "_" + extra_networks_tabname);
 }
@@ -490,10 +493,10 @@ function extraNetworksControlTreeViewOnClick(event, tabname, extra_networks_tabn
 }
 
 function clickLoraRefresh(preset) {
-    const targets = ['txt2img_lora', 'txt2img_checkpoints', 'txt2img_textual_inversion', 'img2img_lora', 'img2img_checkpoints', 'img2img_textual_inversion'];
+    const targets = ["txt2img_lora", "txt2img_checkpoints", "txt2img_textual_inversion", "img2img_lora", "img2img_checkpoints", "img2img_textual_inversion"];
     targets.forEach(function(t) {
-        const tab = gradioApp().getElementById(t + '-button');
-        if (tab && tab.getAttribute('aria-selected') == "true") {
+        const tab = gradioApp().getElementById(t + "-button");
+        if (tab && tab.getAttribute("aria-selected") == "true") {
             const applyFunction = extraNetworksApplyFilter[t];
             if (applyFunction) {
                 applyFunction(true);
@@ -529,23 +532,23 @@ function closePopup() {
 
 function popup(contents) {
     if (!globalPopup) {
-        globalPopup = document.createElement('div');
-        globalPopup.classList.add('global-popup');
+        globalPopup = document.createElement("div");
+        globalPopup.classList.add("global-popup");
 
-        var close = document.createElement('div');
-        close.classList.add('global-popup-close');
+        var close = document.createElement("div");
+        close.classList.add("global-popup-close");
         close.addEventListener("click", closePopup);
         close.title = "Close";
         globalPopup.appendChild(close);
 
-        globalPopupInner = document.createElement('div');
-        globalPopupInner.classList.add('global-popup-inner');
+        globalPopupInner = document.createElement("div");
+        globalPopupInner.classList.add("global-popup-inner");
         globalPopup.appendChild(globalPopupInner);
 
-        gradioApp().querySelector('.main').appendChild(globalPopup);
+        gradioApp().querySelector(".main").appendChild(globalPopup);
     }
 
-    globalPopupInner.innerHTML = '';
+    globalPopupInner.innerHTML = "";
     globalPopupInner.appendChild(contents);
 
     globalPopup.style.display = "flex";
@@ -565,10 +568,10 @@ function extraNetworksFlattenMetadata(obj) {
 
     // Convert any stringified JSON objects to actual objects
     for (const key of Object.keys(obj)) {
-        if (typeof obj[key] === 'string') {
+        if (typeof obj[key] === "string") {
             try {
                 const parsed = JSON.parse(obj[key]);
-                if (parsed && typeof parsed === 'object') {
+                if (parsed && typeof parsed === "object") {
                     obj[key] = parsed;
                 }
             } catch (error) {
@@ -579,7 +582,7 @@ function extraNetworksFlattenMetadata(obj) {
 
     // Flatten the object
     for (const key of Object.keys(obj)) {
-        if (typeof obj[key] === 'object' && obj[key] !== null) {
+        if (typeof obj[key] === "object" && obj[key] !== null) {
             const nested = extraNetworksFlattenMetadata(obj[key]);
             for (const nestedKey of Object.keys(nested)) {
                 result[`${key}/${nestedKey}`] = nested[nestedKey];
@@ -614,7 +617,7 @@ function extraNetworksFlattenMetadata(obj) {
 function extraNetworksShowMetadata(text) {
     try {
         let parsed = JSON.parse(text);
-        if (parsed && typeof parsed === 'object') {
+        if (parsed && typeof parsed === "object") {
             parsed = extraNetworksFlattenMetadata(parsed);
             const table = createVisualizationTable(parsed, 0);
             popup(table);
@@ -624,8 +627,8 @@ function extraNetworksShowMetadata(text) {
         console.error(error);
     }
 
-    var elem = document.createElement('pre');
-    elem.classList.add('popup-metadata');
+    var elem = document.createElement("pre");
+    elem.classList.add("popup-metadata");
     elem.textContent = text;
 
     popup(elem);
@@ -635,8 +638,8 @@ function extraNetworksShowMetadata(text) {
 function requestGet(url, data, handler, errorHandler) {
     var xhr = new XMLHttpRequest();
     var args = Object.keys(data).map(function(k) {
-        return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
-    }).join('&');
+        return encodeURIComponent(k) + "=" + encodeURIComponent(data[k]);
+    }).join("&");
     xhr.open("GET", url + "?" + args, true);
 
     xhr.onreadystatechange = function() {
@@ -687,13 +690,13 @@ function extraNetworksRequestMetadata(event, extraPage) {
 var extraPageUserMetadataEditors = {};
 
 function extraNetworksEditUserMetadata(event, tabname, extraPage) {
-    var id = tabname + '_' + extraPage + '_edit_user_metadata';
+    var id = tabname + "_" + extraPage + "_edit_user_metadata";
 
     var editor = extraPageUserMetadataEditors[id];
     if (!editor) {
         editor = {};
         editor.page = gradioApp().getElementById(id);
-        editor.nameTextarea = gradioApp().querySelector("#" + id + "_name" + ' textarea');
+        editor.nameTextarea = gradioApp().querySelector("#" + id + "_name" + " textarea");
         editor.button = gradioApp().querySelector("#" + id + "_button");
         extraPageUserMetadataEditors[id] = editor;
     }
@@ -717,11 +720,11 @@ function extraNetworksRefreshSingleCard(page, tabname, name) {
         if (data && data.html) {
             var card = gradioApp().querySelector(`#${tabname}_${page.replace(" ", "_")}_cards > .card[data-name="${name}"]`);
 
-            var newDiv = document.createElement('DIV');
+            var newDiv = document.createElement("DIV");
             newDiv.innerHTML = data.html;
             var newCard = newDiv.firstElementChild;
 
-            newCard.style.display = '';
+            newCard.style.display = "";
             card.parentElement.insertBefore(newCard, card);
             card.parentElement.removeChild(card);
         }
