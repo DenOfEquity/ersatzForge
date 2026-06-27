@@ -304,7 +304,6 @@ class AutoencoderKLWan(nn.Module, ConfigMixin):
         out = self.decoder(x).squeeze(2)
         if self.out_channels == 12: # spacepxl's x2 upscaling VAE
             out = rearrange(out, "b (c ph pw) h w -> b c (h ph) (w pw)", ph=2, pw=2)
-            print (out.shape)
 
         return out
 
