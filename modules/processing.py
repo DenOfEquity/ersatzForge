@@ -1217,6 +1217,11 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                     self.hr_upscale_to_y = self.hr_resize_y
                     self.truncate_x = target_w
 
+        if not getattr(self, 'txt2img_upscale', False): # prevent upscale button remultiplying the dimensions
+            vae_upscale = int(shared.sd_model.forge_objects.vae.decode_upscale)
+            self.hr_upscale_to_x *= vae_upscale
+            self.hr_upscale_to_y *= vae_upscale
+
         # fix width and height
         factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
         self.hr_upscale_to_x = factor * ((self.hr_upscale_to_x + (factor // 2)) // factor)
