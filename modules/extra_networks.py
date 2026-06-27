@@ -1,26 +1,19 @@
 import json
 import os
 import re
-import logging
 from collections import defaultdict
 
 from modules import errors
 
 extra_network_registry = {}
-extra_network_aliases = {}
 
 
 def initialize():
     extra_network_registry.clear()
-    extra_network_aliases.clear()
 
 
 def register_extra_network(extra_network):
     extra_network_registry[extra_network.name] = extra_network
-
-
-def register_extra_network_alias(extra_network, alias):
-    extra_network_aliases[alias] = extra_network
 
 
 def register_default_extra_networks():
@@ -109,13 +102,10 @@ def lookup_extra_networks(extra_network_data):
 
     for extra_network_name, extra_network_args in list(extra_network_data.items()):
         extra_network = extra_network_registry.get(extra_network_name, None)
-        alias = extra_network_aliases.get(extra_network_name, None)
-
-        if alias is not None and extra_network is None:
-            extra_network = alias
 
         if extra_network is None:
-            logging.info(f"Skipping unknown extra network: {extra_network_name}")
+            print(f"Skipping unknown extra network: {extra_network_name}")
+            extra_network_data.pop(extra_network_name)
             continue
 
         res.setdefault(extra_network, []).extend(extra_network_args)
@@ -130,7 +120,6 @@ def activate(p, extra_network_data):
     activated = []
 
     for extra_network, extra_network_args in lookup_extra_networks(extra_network_data).items():
-
         try:
             extra_network.activate(p, extra_network_args)
             activated.append(extra_network)
