@@ -93,10 +93,14 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             key2 = "decoder.mid_block.resnets.0.norm1.gamma"
             if key2 in state_dict and state_dict[key2].shape == torch.Size([384, 1, 1]):
                 from backend.nn.vae_wan import AutoencoderQwen2D as Wan21VAE
+                out_channels = 3
             else:
                 from backend.nn.vae_wan import AutoencoderKLWan as Wan21VAE
+                out_channels = state_dict["decoder.head.2.bias"].shape[0] # 3 for standard; 12 for spacepxl's x2 upscaling VAE
 
             config = Wan21VAE.load_config(config_path)
+            config["out_channels"] = out_channels
+
             with modeling_utils.no_init_weights():
                 with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
                     model = Wan21VAE.from_config(config)

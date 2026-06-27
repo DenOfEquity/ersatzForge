@@ -182,13 +182,14 @@ class Decoder3d(nn.Module):
                  dim_mult=[1, 2, 4, 4],
                  num_res_blocks=2,
                  attn_scales=[],
-                 dropout=0.0):
+                 dropout=0.0,
+                 out_channels=3):
         super().__init__()
-        self.dim = dim
-        self.z_dim = z_dim
-        self.dim_mult = dim_mult
-        self.num_res_blocks = num_res_blocks
-        self.attn_scales = attn_scales
+        # self.dim = dim
+        # self.z_dim = z_dim
+        # self.dim_mult = dim_mult
+        # self.num_res_blocks = num_res_blocks
+        # self.attn_scales = attn_scales
 
         # dimensions
         dims = [dim * u for u in [dim_mult[-1]] + dim_mult[::-1]]
@@ -223,7 +224,7 @@ class Decoder3d(nn.Module):
         # output blocks
         self.head = nn.Sequential(
             RMS_norm(out_dim, images=False), nn.SiLU(),
-            nn.Conv3d(out_dim, 3, 3, padding=1, temporal_pad=True))
+            nn.Conv3d(out_dim, out_channels, 3, padding=1, temporal_pad=True))
 
     def forward(self, x):
         x = self.conv1(x)
@@ -250,13 +251,15 @@ class AutoencoderKLWan(nn.Module, ConfigMixin):
                  num_res_blocks=2,
                  attn_scales=[],
                  temporal_downsample=[False, True, True],
-                 dropout=0.0):
+                 dropout=0.0,
+                 out_channels=3):
         super().__init__()
-        self.dim = dim
-        self.z_dim = z_dim
-        self.dim_mult = dim_mult
-        self.num_res_blocks = num_res_blocks
-        self.attn_scales = attn_scales
+        # self.dim = dim
+        # self.z_dim = z_dim
+        # self.dim_mult = dim_mult
+        # self.num_res_blocks = num_res_blocks
+        # self.attn_scales = attn_scales
+        self.out_channels = out_channels
 
         # modules
         self.encoder = Encoder3d(dim, z_dim * 2, dim_mult, num_res_blocks,
@@ -264,7 +267,7 @@ class AutoencoderKLWan(nn.Module, ConfigMixin):
         self.conv1 = nn.Conv3d(z_dim * 2, z_dim * 2, 1)
         self.conv2 = nn.Conv3d(z_dim, z_dim, 1)
         self.decoder = Decoder3d(dim, z_dim, dim_mult, num_res_blocks,
-                                 attn_scales, dropout)
+                                 attn_scales, dropout, out_channels)
 
         self.scale_factor = 1.0
         self.latents_mean = torch.tensor([
@@ -298,13 +301,15 @@ class AutoencoderKLWan(nn.Module, ConfigMixin):
         z = z.unsqueeze(2)    # z: [b,c,t,h,w]
 
         x = self.conv2(z)
-        out = self.decoder(x)
-        return out.squeeze(2)
+        out = self.decoder(x).squeeze(2)
+        if self.out_channels == 12: # spacepxl's x2 upscaling VAE
+            out = rearrange(out, "b (c ph pw) h w -> b c (h ph) (w pw)", ph=2, pw=2)
+            print (out.shape)
+
+        return out
 
 
-### Anzhc's 2D WAN VAE
-
-
+#### Anzhc's 2D WAN VAE
 class QwenImageResidualBlock2D(nn.Module):
     def __init__(self, in_dim, out_dim, dropout=0.0):
         super().__init__()

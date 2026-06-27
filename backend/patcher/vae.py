@@ -214,6 +214,10 @@ class VAE:
             self.downscale_ratio = int(2 ** (len(model.config.down_block_types) - 1))
         else:
             self.downscale_ratio = 8
+        if model.__class__.__name__ == "AutoencoderKLWan" and model.config.out_channels == 12:
+            self.decode_upscale = 2
+        else:
+            self.decode_upscale = 1
 
         self.latent_channels = int(model.config.latent_channels)
 
@@ -247,26 +251,29 @@ class VAE:
         n.device = self.device
         n.vae_dtype = self.vae_dtype
         n.output_device = self.output_device
+        n.decode_upscale = self.decode_upscale
         return n
 
-    def decode_tiled(self, samples, tile_x=64, tile_y=64, overlap=16, method="original"):
+    def decode_tiled(self, samples, tile_x=64, tile_y=64, overlap=16):
         if hasattr(self, "tile_info") and self.tile_info is not None:
             tile_x  = self.tile_info[0] // self.downscale_ratio
             tile_y  = self.tile_info[1] // self.downscale_ratio
             overlap = self.tile_info[2] // self.downscale_ratio
             method  = self.tile_info[3]
 
+        upscale = self.downscale_ratio*self.decode_upscale
+
         decode_fn = lambda a: (self.first_stage_model.decode(a.to(self.vae_dtype).to(self.device)) + 1.0).to(torch.float32)
 
         match method:
             case "diffusers":
-                output = tiled_decode_diffusers(samples, decode_fn, tile_x, tile_y, overlap, upscale=self.downscale_ratio, device=self.output_device) / 2.0
+                output = tiled_decode_diffusers(samples, decode_fn, tile_x, tile_y, overlap, upscale=upscale, device=self.output_device) / 2.0
             case "DoE":
-                output = tiled_decode_DoE(samples, decode_fn, tile_x, tile_y, overlap, upscale=self.downscale_ratio, device=self.output_device) / 2.0
+                output = tiled_decode_DoE(samples, decode_fn, tile_x, tile_y, overlap, upscale=upscale, device=self.output_device) / 2.0
             case _:
-                output = (tiled_scale(samples, decode_fn, (tile_x // 2, tile_y * 2), overlap, upscale_amount=self.downscale_ratio, output_device=self.output_device) +
-                          tiled_scale(samples, decode_fn, (tile_x * 2, tile_y // 2), overlap, upscale_amount=self.downscale_ratio, output_device=self.output_device) +
-                          tiled_scale(samples, decode_fn, (tile_x, tile_y),          overlap, upscale_amount=self.downscale_ratio, output_device=self.output_device)) / 6.0
+                output = (tiled_scale(samples, decode_fn, (tile_x // 2, tile_y * 2), overlap, upscale_amount=upscale, output_device=self.output_device) +
+                          tiled_scale(samples, decode_fn, (tile_x * 2, tile_y // 2), overlap, upscale_amount=upscale, output_device=self.output_device) +
+                          tiled_scale(samples, decode_fn, (tile_x, tile_y),          overlap, upscale_amount=upscale, output_device=self.output_device)) / 6.0
         
         return torch.clamp(output, min=0.0, max=1.0)
 
@@ -296,7 +303,7 @@ class VAE:
                 batch_number = int(free_memory / memory_used)
                 batch_number = max(1, batch_number)
 
-                pixel_samples = torch.empty((samples_in.shape[0], 3, round(samples_in.shape[-2] * self.downscale_ratio), round(samples_in.shape[-1] * self.downscale_ratio)), device=self.output_device)
+                pixel_samples = torch.empty((samples_in.shape[0], 3, round(samples_in.shape[-2] * self.downscale_ratio * self.decode_upscale), round(samples_in.shape[-1] * self.downscale_ratio * self.decode_upscale)), device=self.output_device)
                 for x in range(0, samples_in.shape[0], batch_number):
                     samples = samples_in[x:x + batch_number].to(self.vae_dtype).to(self.device)
                     pixel_samples[x:x + batch_number] = torch.clamp((self.first_stage_model.decode(samples).to(self.output_device).to(torch.float32) + 1.0) / 2.0, min=0.0, max=1.0)
