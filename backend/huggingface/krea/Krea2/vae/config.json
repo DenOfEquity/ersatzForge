@@ -3,7 +3,7 @@
   "_diffusers_version": "0.39.0.dev0",
   "_name_or_path": "Qwen/Qwen-Image",
   "attn_scales": [],
-  "base_dim": 96,
+  "dim": 96,
   "dim_mult": [
     1,
     2,
@@ -50,7 +50,7 @@
     1.916
   ],
   "num_res_blocks": 2,
-  "temperal_downsample": [
+  "temporal_downsample": [
     false,
     true,
     true
