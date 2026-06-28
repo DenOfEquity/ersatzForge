@@ -2,6 +2,8 @@ import sys
 import textwrap
 import traceback
 
+from modules_forge import colour_code as cc
+
 
 exception_records = []
 
@@ -49,18 +51,6 @@ def report(message: str, *, exc_info: bool = False) -> None:
         print("---", file=sys.stderr)
 
 
-def print_error_explanation(message):
-    record_exception()
-
-    lines = message.strip().split("\n")
-    max_len = max([len(x) for x in lines])
-
-    print('=' * max_len, file=sys.stderr)
-    for line in lines:
-        print(line, file=sys.stderr)
-    print('=' * max_len, file=sys.stderr)
-
-
 def display(e: Exception, task, *, full_traceback=False):
     record_exception()
 
@@ -70,13 +60,6 @@ def display(e: Exception, task, *, full_traceback=False):
         # include frames leading up to the try-catch block
         te.stack = traceback.StackSummary(traceback.extract_stack()[:-2] + te.stack)
     print(*te.format(), sep="", file=sys.stderr)
-
-    message = str(e)
-    if "copying a param with shape torch.Size([640, 1024]) from checkpoint, the shape in current model is torch.Size([640, 768])" in message:
-        print_error_explanation("""
-The most likely cause of this is you are trying to load Stable Diffusion 2.0 model without specifying its config file.
-See https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Features#stable-diffusion-20 for how to solve this.
-        """)
 
 
 already_displayed = {}
@@ -104,44 +87,31 @@ def check_versions():
     from packaging import version
     from modules import shared
 
-    import gradio
-
     expected_torch_version = "2.3.1"
     expected_xformers_version = "0.0.27"
     expected_gradio_version = "4.40.0"
 
+    version_mismatch = False
     if version.parse(shared.torch_version) < version.parse(expected_torch_version):
-        print_error_explanation(f"""
-You are running torch {shared.torch_version}.
-The program is tested to work with torch {expected_torch_version}.
-To reinstall the desired version, run with commandline flag --reinstall-torch.
-Beware that this will cause a lot of large files to be downloaded, as well as
-there are reports of issues with training tab on the latest version.
-
-Use --skip-version-check commandline argument to disable this check.
-        """.strip())
+        version_mismatch = True
+        print(f"{cc.WARNING}Torch version mismatch:{cc.RESET} {shared.torch_version} installed; minimum {expected_torch_version} expected.")
+        print(f"To reinstall, run with commandline argument {cc.INFO2}--reinstall-torch{cc.RESET}.")
+        print("Note that this will cause a lot of large files to be downloaded.")
 
     if shared.xformers_available[0]:
         if version.parse(shared.xformers_available[1]) < version.parse(expected_xformers_version):
-            print_error_explanation(f"""
-You are running xformers {shared.xformers_available[1]}.
-The program is tested to work with xformers {expected_xformers_version}.
-To reinstall the desired version, run with commandline flag --reinstall-xformers.
+            version_mismatch = True
+            print(f"{cc.WARNING}XFormers version mismatch:{cc.RESET} {shared.xformers_available[1]} installed; {expected_xformers_version} expected.")
+            print(f"To reinstall, run with commandline argument {cc.INFO2}--reinstall-xformers{cc.RESET}.")
 
-Use --skip-version-check commandline argument to disable this check.
-            """.strip())
+    if shared.gradio_version != expected_gradio_version:
+        version_mismatch = True
+        print(f"{cc.WARNING}Gradio version mismatch:{cc.RESET} {shared.gradio_version} installed; {expected_gradio_version} expected.")
+        print("Using a different version of Gradio is extremely likely to break the program.")
+        print("Common reasons why you have a mismatched Gradio version:")
+        print("    - you use --skip-install commandline argument.")
+        print("    - you use webui.py to start the program instead of launch.py.")
+        print("    - an extension installs the incompatible version.")
 
-    if gradio.__version__ != expected_gradio_version:
-        print_error_explanation(f"""
-You are running gradio {gradio.__version__}.
-The program is designed to work with gradio {expected_gradio_version}.
-Using a different version of gradio is extremely likely to break the program.
-
-Reasons why you have the mismatched gradio version can be:
-  - you use --skip-install flag.
-  - you use webui.py to start the program instead of launch.py.
-  - an extension installs the incompatible gradio version.
-
-Use --skip-version-check commandline argument to disable this check.
-        """.strip())
-
+    if version_mismatch:
+        print(f"Use {cc.INFO2}--skip-version-check{cc.RESET} commandline argument to disable version checks.")

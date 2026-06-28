@@ -44,19 +44,9 @@ def check_python_version():
         supported_minors = [7, 8, 9, 10, 11]
 
     if not (major == 3 and minor in supported_minors):
-        errors.print_error_explanation(f"""
-INCOMPATIBLE PYTHON VERSION
-
-This program is tested with 3.10.6 Python, but you have {major}.{minor}.{micro}.
-If you encounter an error with "RuntimeError: Couldn't install torch." message,
-or any other error regarding unsuccessful package (library) installation,
-please downgrade (or upgrade) to the latest version of 3.10 Python
-and delete current Python and "venv" folder in WebUI's directory.
-
-You can download 3.10 Python from here: https://www.python.org/downloads/release/python-3106/
-
-Use --skip-python-version-check to suppress this warning.
-""")
+        print(f"INCOMPATIBLE PYTHON VERSION: This program is tested with Python 3.10.6, but you have {major}.{minor}.{micro}.")
+        print("You can download 3.10 Python from here: https://www.python.org/downloads/release/python-3106/")
+        print("Use --skip-python-version-check commandline argument to suppress this warning.")
 
 
 def git_tag():

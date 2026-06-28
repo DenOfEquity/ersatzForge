@@ -28,6 +28,7 @@ device: str = None
 
 xformers_available = (memory_management.xformers_enabled(), memory_management.XFORMERS_VERSION)
 torch_version = getattr(torch, '__long_version__',torch.__version__)
+gradio_version = gr.__version__
 
 hypernetworks = {}
 
@@ -53,7 +54,7 @@ def process_lama(image, mask):
 
         try:
             lama_model = modelloader.load_spandrel_model(lama_path, device=devices.device)
-        except:
+        except Exception:
             print ("Inpaint (lama) error: could not find model 'big-lama.pt'")
     else:
         lama_model.to(devices.device, dtype=torch.float32)
@@ -85,7 +86,7 @@ def process_MAT(image, mask):
 
         try:
             MAT_model = modelloader.load_spandrel_model(MAT_path, device=devices.device)
-        except:
+        except Exception:
             print ("Inpaint fill (MAT) error: could not find model 'MAT_Places512_G_fp16.safetensors'")
     else:
         MAT_model.to(devices.device, dtype=torch.float32)
