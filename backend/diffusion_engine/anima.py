@@ -7,6 +7,7 @@ from backend.patcher.vae import VAE
 from backend.patcher.unet import UnetPatcher
 from backend.text_processing.anima_engine import AnimaTextProcessingEngine
 from backend.modules.k_prediction import PredictionDiscreteFlow
+# from backend.modules.k_prediction import PredictionCosmosRFlow
 from backend import memory_management
 
 
@@ -28,6 +29,7 @@ class Anima(ForgeDiffusionEngine):
 
         vae = VAE(model=huggingface_components["vae"])
         k_predictor = PredictionDiscreteFlow(shift=3.0, multiplier=1.0)
+        # k_predictor = PredictionCosmosRFlow(sigma_max=80.0)
         unet = UnetPatcher.from_model(
             model=huggingface_components["transformer"],
             diffusers_scheduler=None,
@@ -50,7 +52,12 @@ class Anima(ForgeDiffusionEngine):
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
-        return self.text_processing_engine_anima(prompt)
+        cond_anima, negpip = self.text_processing_engine_anima(prompt)
+        if negpip is None:
+            return cond_anima
+        else:
+            cond = dict(negpip=negpip, crossattn=cond_anima)
+            return cond
 
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt):

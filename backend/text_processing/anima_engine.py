@@ -12,6 +12,7 @@ class PromptChunk:
         self.qwen_tokens = []
         self.t5_tokens = []
         self.t5_multipliers = []
+        self.negpip = []
 
 
 class AnimaTextProcessingEngine:
@@ -44,6 +45,7 @@ class AnimaTextProcessingEngine:
             chunk.qwen_tokens.append(self.id_pad)
             chunk.t5_tokens.append(self.id_end)
             chunk.t5_multipliers.append(1.0)
+            chunk.negpip.append(1.0)
 
             chunks.append(chunk)
             chunk = PromptChunk()
@@ -55,7 +57,15 @@ class AnimaTextProcessingEngine:
 
             chunk.qwen_tokens.extend(Qwen_tokens)
             chunk.t5_tokens.extend(T5_tokens)
-            chunk.t5_multipliers.extend([weight] * len(T5_tokens))
+
+            if opts.use_negPiP:
+                w = 1.0 if weight < 0.0 else weight
+                chunk.t5_multipliers.extend([w] * len(T5_tokens))
+                w = 1.0 if weight >= 0.0 else weight
+                chunk.negpip.extend([w] * len(T5_tokens))
+            else:
+                chunk.t5_multipliers.extend([weight] * len(T5_tokens))
+                chunk.negpip.extend([1.0] * len(T5_tokens))
 
         if chunk.qwen_tokens or not chunks:
             next_chunk()
@@ -64,34 +74,39 @@ class AnimaTextProcessingEngine:
 
     def __call__(self, texts):
         zs = []
+        np = []
         cache = {}
 
         self.emphasis = emphasis.get_current_option(opts.emphasis)()
 
         for line in texts:
             if line in cache:
-                result = cache[line]
+                result, negpip_values = cache[line]
             else:
                 chunks: list[PromptChunk] = self.tokenize_line(line)
                 line_z_values = []
                 t5_tokens = []
                 t5_multipliers = []
+                negpip_values = []
 
                 for chunk in chunks:
                     z: torch.Tensor = self.process_tokens([chunk.qwen_tokens])[0]
                     line_z_values.append(z)
                     t5_tokens.append(torch.tensor(chunk.t5_tokens, dtype=torch.int))
                     t5_multipliers.append(torch.tensor(chunk.t5_multipliers))
+                    negpip_values.append(torch.tensor(chunk.negpip, device=z.device, dtype=z.dtype))
 
                 count_z = len(line_z_values)
                 for i in range(0, count_z-1):
                     line_z_values[i] = line_z_values[i][:-1]
                     t5_tokens[i] = t5_tokens[i][:-1]
                     t5_multipliers[i] = t5_multipliers[i][:-1]
+                    negpip_values[i] = negpip_values[i][:-1]
 
                 line_z_values = torch.cat(line_z_values, dim=0, )
                 t5_tokens = torch.cat(t5_tokens, dim=0, )
                 t5_multipliers = torch.cat(t5_multipliers, dim=0, )
+                negpip_values = [torch.cat(negpip_values, dim=0, )]
 
                 result = self.anima_preprocess(
                     line_z_values,
@@ -99,11 +114,15 @@ class AnimaTextProcessingEngine:
                     t5_multipliers,
                 )
 
-                cache[line] = result
+                cache[line] = result, negpip_values
 
             zs.extend([result])
+            np.extend(negpip_values)
 
-        return zs
+        if opts.use_negPiP:
+            return zs, np
+        else:
+            return zs, None
 
 
     def anima_preprocess(self, cross_attn: torch.Tensor, t5xxl_ids: torch.Tensor, t5xxl_weights: torch.Tensor) -> torch.Tensor:
