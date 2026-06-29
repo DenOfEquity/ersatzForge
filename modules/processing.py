@@ -129,6 +129,12 @@ class StableDiffusionProcessing:
     extra_generation_params: dict[str, Any] = None
     overlay_images: list = None
     eta: float = None
+    s_min_uncond: float = None
+    s_churn: float = None
+    s_tmin: float = None
+    s_tmax: float = None
+    s_noise: float = None
+
     do_not_reload_embeddings: bool = False
     denoising_strength: float = None
     ddim_discretize: str = None
@@ -385,6 +391,7 @@ class StableDiffusionProcessing:
             opts.sdxl_crop_top,
             opts.emphasis,
             opts.use_ELLA,
+            opts.use_negPiP,
             is_negative
         ))
 
@@ -713,6 +720,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
         "Prediction scaling": opts.prediction_scaling if opts.prediction_scaling != 1.0 else None,
         "CFG normalization": opts.cfg_normalization if opts.cfg_normalization > 0.0 else None,
         "CFG rescale": opts.cfg_rescale if opts.cfg_rescale > 0.0 else None,
+        "negPiP": opts.use_negPiP if opts.use_negPiP else None,
         "SDXL Shift": opts.sdxl_flow_shift if dynamic_args.get('SDXL_flow', False) else None,
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
     })
@@ -835,6 +843,21 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
 
         with profiling.Profiler():
             res = process_images_inner(p)
+
+    except Exception as e:
+        sd_models.unload_model_weights()
+        raise e
+        # print(f"RuntimeError: {e}")
+        # p.comment(f"RuntimeError: {e}")
+        # res = Processed(
+            # p,
+            # images_list=[],
+            # seed=0,
+            # info="",
+            # subseed=0,
+            # infotexts=[],
+            # extra_images_list=[],
+        # )
 
     finally:
         # restore original options
@@ -1098,10 +1121,10 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
         if (opts.grid_save and p.check_autosave()):
             images.save_image(grid, p.outpath_grids, "grid", p.all_seeds[0], p.all_prompts[0], opts.grid_format, info=text, p=p, grid=True)
-        elif opts.return_grid: # gallery can break if grid not directly saved
-            from modules.ui_tempdir import save_pil_to_file
-            filename = save_pil_to_file(grid)
-            grid.already_saved_as = filename
+        # elif opts.return_grid: # gallery can break if grid not directly saved
+            # from modules.ui_tempdir import save_pil_to_file
+            # filename = save_pil_to_file(grid)
+            # grid.already_saved_as = filename
 
         if opts.return_grid:
             infotexts.insert(0, text)
@@ -1217,6 +1240,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                     self.hr_upscale_to_y = self.hr_resize_y
                     self.truncate_x = target_w
 
+        # if used x2 upscaling VAE, factor that in to result dimensions
         if not getattr(self, 'txt2img_upscale', False): # prevent upscale button remultiplying the dimensions
             vae_upscale = int(shared.sd_model.forge_objects.vae.decode_upscale)
             self.hr_upscale_to_x *= vae_upscale
@@ -1308,14 +1332,12 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         if self.firstpass_image is not None and self.enable_hr:
             # here we don't need to generate image, we just take self.firstpass_image and prepare it for HiRes fix
-
             if self.latent_scale_mode is None:
                 image = np.array(self.firstpass_image).astype(np.float32) / 255.0 * 2.0 - 1.0
                 image = np.moveaxis(image, 2, 0)
 
                 samples = None
                 decoded_samples = torch.asarray(np.expand_dims(image, 0))
-
             else:
                 image = np.array(self.firstpass_image).astype(np.float32) / 255.0
                 image = np.moveaxis(image, 2, 0)
@@ -1328,18 +1350,13 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         else:
             # here we generate an image normally
-
             x = self.rng.next()
 
             self.sd_model.forge_objects = self.sd_model.forge_objects_after_applying_lora.shallow_copy()
             sd_models.apply_token_merging(self.sd_model, self.get_token_merging_ratio())
 
             if self.scripts is not None:
-                self.scripts.process_before_every_sampling(self,
-                                                           x=x,
-                                                           noise=x,
-                                                           c=conditioning,
-                                                           uc=unconditional_conditioning)
+                self.scripts.process_before_every_sampling(self, x=x, noise=x, c=conditioning, uc=unconditional_conditioning)
 
             if self.modified_noise is not None:
                 x = self.modified_noise
@@ -1514,11 +1531,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         if self.scripts is not None:
             self.scripts.before_hr(self)
-            self.scripts.process_before_every_sampling(self,
-                                                       x=samples,
-                                                       noise=noise,
-                                                       c=self.hr_c,
-                                                       uc=self.hr_uc)
+            self.scripts.process_before_every_sampling(self, x=samples, noise=noise, c=self.hr_c, uc=self.hr_uc)
 
         if self.modified_noise is not None:
             noise = self.modified_noise
@@ -1567,7 +1580,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         self.hr_main_prompt = self.all_hr_prompts[0]
         self.hr_main_negative_prompt = self.all_hr_negative_prompts[0]
 
-
     def calculate_hr_conds(self):
         if self.hr_c is not None:
             return
@@ -1587,7 +1599,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             self.hr_uc = self.get_conds_with_caching(prompt_parser.get_learned_conditioning, hr_negative_prompts, self.firstpass_steps, self.hr_extra_network_data, total_steps, is_negative=True)
 
         self.hr_c = self.get_conds_with_caching(prompt_parser.get_multicond_learned_conditioning, hr_prompts, self.firstpass_steps, self.hr_extra_network_data, total_steps)
-
 
     def setup_conds(self):
         if self.is_hr_pass:

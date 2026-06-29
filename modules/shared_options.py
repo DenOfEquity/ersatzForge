@@ -102,7 +102,7 @@ options_templates.update(options_section(('system', "System", "system"), {
     "show_warnings": OptionInfo(False, "Show warnings in console.").needs_reload_ui(),
     "show_gradio_deprecation_warnings": OptionInfo(True, "Show gradio deprecation warnings in console.").needs_reload_ui(),
     "memmon_poll_rate": OptionInfo(8, "VRAM usage polls per second during generation.", gr.Slider, {"minimum": 0, "maximum": 40, "step": 1}).info("0 = disable"),
-    "samples_log_stdout": OptionInfo(False, "Always print all generation info to standard output"),
+    "samples_log_stdout": OptionInfo(False, "Always print all generation info to standard output"), # is this in any way useful?
     "multiple_tqdm": OptionInfo(True, "Add a second progress bar to the console that shows progress for an entire job."),
     "print_hypernet_extra": OptionInfo(False, "Print extra hypernetwork information to console."),
     "list_hidden_files": OptionInfo(True, "Load models/files in hidden directories").info("directory is hidden if its name starts with \".\""),
@@ -151,6 +151,9 @@ options_templates.update(options_section(('sd', "Stable Diffusion", "sd"), {
     "prediction_scaling": OptionInfo(1.0, "Prediction scaling factor", gr.Slider, {"minimum": 0.8, "maximum": 1.2, "step": 0.001}, infotext="Prediction scaling").info("Scales model output, with modulation by sigma"),
     "cfg_normalization": OptionInfo(0.0, "CFG normalization strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="CFG normalization").info("beneficial for Lumina2, LCM/DMD models"),
     "cfg_rescale": OptionInfo(0.0, "CFG rescale strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="CFG rescale"),
+
+    "use_negPiP": OptionInfo(True, "enable negPiP: negative Prompt in Prompt", infotext="negPiP").info("particularly useful for models that use CFG=1. Currently supported for Anima"),
+
 }))
 
 options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), {
@@ -252,7 +255,7 @@ options_templates.update(options_section(('ui_prompt_editing', "Prompt editing",
 
 options_templates.update(options_section(('ui_gallery', "Gallery", "ui"), {
     "return_grid": OptionInfo(True, "Show grid in gallery"),
-    "do_not_show_images": OptionInfo(False, "Do not show any images in gallery"),
+    "do_not_show_images": OptionInfo(False, "Do not show any images in gallery"), # who wants this?
     "js_modal_lightbox_initially_zoomed": OptionInfo(True, "Full page image viewer: show images zoomed in by default"),
     "gallery_height": OptionInfo("", "Gallery height", gr.Textbox).info("can be any valid CSS value, for example 768px or 20em").needs_reload_ui(),
     "open_dir_button_choice": OptionInfo("Subdirectory", "What directory the [📂] button opens", gr.Radio, {"choices": ["Output Root", "Subdirectory", "Subdirectory (even temp dir)"]}),
@@ -276,7 +279,7 @@ options_templates.update(options_section(('ui', "User interface", "ui"), {
     "show_progress_in_title": OptionInfo(True, "Show generation progress in window title."),
     "send_seed": OptionInfo(True, "Send seed when sending prompt or image to other interface"),
     "send_size": OptionInfo(True, "Send size when sending prompt or image to another interface"),
-    "enable_reloading_ui_scripts": OptionInfo(False, "Reload UI scripts when using Reload UI option").info("useful for developing: if you make changes to UI scripts code, it is applied when the UI is reloded."),
+    "enable_reloading_ui_scripts": OptionInfo(False, "Reload UI scripts when using Reload UI option").info("useful for developing: if you make changes to UI scripts code, it is applied when the UI is reloaded."),
 
     "hires_button_gallery_insert": OptionInfo(False, "Insert [✨] hires button results into gallery").info("Default: original image will be replaced"),
     "hires_button_iterate": OptionInfo("Disabled", "[✨] hires button iterates based on 'Batch count'", gr.Radio, {"choices": ["Disabled", "Enabled", "Enabled, Scaling"]}).info("Result is always one image. Enabled: uses same denoise and steps each iteration; Scaling reduces steps and denoise each iteration, ending at half of start values."),
