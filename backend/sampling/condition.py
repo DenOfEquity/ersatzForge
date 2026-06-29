@@ -111,8 +111,11 @@ def compile_conditions(cond):
     )
 
     if 'vector' in cond:
-        result['pooled_output'] = cond['vector']
+        # result['pooled_output'] = cond['vector'] # unused
         result['model_conds']['y'] = Condition(cond['vector'])
+
+    if 'negpip' in cond:
+        result['model_conds']['negpip'] = Condition(cond['negpip'])
 
     if 'guidance' in cond:
         result['model_conds']['guidance'] = Condition(cond['guidance'])
