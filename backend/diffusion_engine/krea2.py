@@ -52,7 +52,12 @@ class Krea2(ForgeDiffusionEngine):
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
-        return self.text_processing_engine(prompt)
+        zs, negpip = self.text_processing_engine(prompt)
+        if negpip is None:
+            return zs
+        else:
+            cond = dict(negpip=negpip, crossattn=zs)
+            return cond
 
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt):

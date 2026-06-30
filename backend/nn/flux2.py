@@ -74,23 +74,6 @@ class SelfAttention(nn.Module):
         self.norm = QKNorm(head_dim)
         self.proj = nn.Linear(dim, dim, bias=proj_bias)
 
-    def forward(self, x, pe):
-        qkv = self.qkv(x)
-
-        # q, k, v = rearrange(qkv, "B L (K H D) -> K B H L D", K=3, H=self.num_heads)
-        B, L, _ = qkv.shape
-        qkv = qkv.view(B, L, 3, self.num_heads, -1)
-        q, k, v = qkv.permute(2, 0, 3, 1, 4)
-        del qkv
-
-        q, k = self.norm(q, k)
-
-        x = attention(q, k, v, pe=pe)
-        del q, k, v
-
-        x = self.proj(x)
-        return x
-
 
 @dataclass
 class ModulationOut:
@@ -155,7 +138,7 @@ class DoubleStreamBlock(nn.Module):
 
         self.txt_mlp = build_mlp(hidden_size, mlp_hidden_dim, mlp_silu_act=mlp_silu_act, yak_mlp=yak_mlp)
 
-    def forward(self, img: torch.Tensor, txt: torch.Tensor, vec: torch.Tensor, pe: torch.Tensor):
+    def forward(self, img: torch.Tensor, txt: torch.Tensor, vec: torch.Tensor, negpip: torch.Tensor, pe: torch.Tensor):
         if self.modulation:
             img_mod1, img_mod2 = self.img_mod(vec)
             txt_mod1, txt_mod2 = self.txt_mod(vec)
@@ -184,6 +167,9 @@ class DoubleStreamBlock(nn.Module):
         del txt_q, img_q
         k = torch.cat((txt_k, img_k), dim=2)
         del txt_k, img_k
+        if negpip is not None:
+            y_len = len(negpip)
+            txt_v[:, :, :y_len, :] *= negpip[:, None]
         v = torch.cat((txt_v, img_v), dim=2)
         del txt_v, img_v
         # run actual attention
@@ -319,7 +305,7 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
     ):
         super().__init__()
 
-        self.guidance_embed = guidance_embed
+        # self.guidance_embed = guidance_embed
         self.patch_size = patch_size
         self.in_channels = in_channels * patch_size * patch_size
         self.out_channels = out_channels * patch_size * patch_size
@@ -338,12 +324,8 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
         self.pe_embedder = EmbedND(theta=theta, axes_dim=axes_dim)
         self.img_in = nn.Linear(self.in_channels, self.hidden_size, bias=ops_bias)
         self.time_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size, bias=ops_bias)
-        if vec_in_dim is not None:
-            self.vec_in_dim = vec_in_dim
-            self.vector_in = MLPEmbedder(vec_in_dim, self.hidden_size)
-        self.guidance_in = MLPEmbedder(in_dim=256, hidden_dim=self.hidden_size, bias=ops_bias) if guidance_embed else nn.Identity()
-        self.txt_in = nn.Linear(context_in_dim, self.hidden_size, bias=ops_bias)
 
+        self.txt_in = nn.Linear(context_in_dim, self.hidden_size, bias=ops_bias)
         self.txt_norm = RMSNorm(context_in_dim) if txt_norm else None
 
         self.double_blocks = nn.ModuleList(
@@ -396,7 +378,7 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
         txt: torch.Tensor,
         txt_ids: torch.Tensor,
         timesteps: torch.Tensor,
-        y: torch.Tensor,
+        negpip: torch.Tensor, # list of indices for negpip
         guidance: torch.Tensor = None,
         control=None,
     ) -> torch.Tensor:
@@ -407,14 +389,6 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
         # running on sequences img
         img = self.img_in(img)
         vec = self.time_in(timestep_embedding(timesteps, 256).to(img.dtype))
-        if self.guidance_embed:
-            if guidance is not None:
-                vec = vec + self.guidance_in(timestep_embedding(guidance, 256).to(img.dtype))
-
-        if hasattr(self, "vec_in_dim"):
-            if y is None:
-                y = torch.zeros((img.shape[0], self.vec_in_dim), device=img.device, dtype=img.dtype)
-            vec = vec + self.vector_in(y[:, : self.vec_in_dim])
 
         if self.txt_norm is not None:
             txt = self.txt_norm(txt)
@@ -431,7 +405,7 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
             pe = None
 
         for i, block in enumerate(self.double_blocks):
-            img, txt = block(img=img, txt=txt, vec=vec, pe=pe)
+            img, txt = block(img=img, txt=txt, vec=vec, negpip=negpip, pe=pe)
 
         img = fp16_fix(img)
         img = torch.cat((txt, img), 1)
@@ -468,7 +442,7 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
         img_ids[:, :, 2] += torch.linspace(0, w_len - 1, steps=steps_w, device=x.device, dtype=torch.float32).unsqueeze(0)
         return img, repeat(img_ids, "h w c -> b (h w) c", b=bs)
 
-    def forward(self, x, timestep, context, y=None, guidance=None, ref_latents=None, control=None, **kwargs):
+    def forward(self, x, timestep, context, negpip=None, guidance=None, ref_latents=None, control=None, **kwargs):
         bs, c, h_orig, w_orig = x.shape
         patch_size = self.patch_size
 
@@ -493,7 +467,10 @@ class IntegratedFlux2Transformer2DModel(nn.Module):
             for i in self.txt_ids_dims:
                 txt_ids[:, :, i] = torch.linspace(0, context.shape[1] - 1, steps=context.shape[1], device=x.device, dtype=torch.float32)
 
-        out = self.forward_orig(img, img_ids, context, txt_ids, timestep, y, guidance, control)
+        if negpip is not None:
+            negpip = negpip[0]
+
+        out = self.forward_orig(img, img_ids, context, txt_ids, timestep, negpip, guidance, control)
         out = out[:, :img_tokens]
 
         return rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_len, w=w_len, ph=self.patch_size, pw=self.patch_size)[:, :, :h_orig, :w_orig]

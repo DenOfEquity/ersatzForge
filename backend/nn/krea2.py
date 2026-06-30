@@ -67,7 +67,7 @@ class Attention(nn.Module):
         self.qknorm = QKNorm(self.headdim)
         self.wo = nn.Linear(dim, dim, bias=bias)
 
-    def forward(self, x, freqs=None, mask=None, transformer_options={}):
+    def forward(self, x, negpip=None, freqs=None, mask=None, transformer_options={}):
         q = rearrange(self.wq(x), "B L (H D) -> B H L D", H=self.heads)
         k = rearrange(self.wk(x), "B L (H D) -> B H L D", H=self.kvheads)
         q, k = self.qknorm(q, k)
@@ -75,6 +75,10 @@ class Attention(nn.Module):
             q, k = apply_rope(q, k, freqs)
 
         v = rearrange(self.wv(x), "B L (H D) -> B H L D", H=self.kvheads)
+        if negpip is not None:
+            y_len = len(negpip)
+            v[:, :, :y_len, :] *= negpip[:, None]
+
         if self.kvheads != self.heads:
             rep = self.heads // self.kvheads
             k = k.repeat_interleave(rep, dim=1)
@@ -154,9 +158,9 @@ class SingleStreamBlock(nn.Module):
         self.attn = Attention(features, heads, kvheads=kvheads, bias=bias)
         self.mlp = SwiGLU(features, multiplier, bias)
 
-    def forward(self, x, vec, freqs, mask=None, transformer_options={}):
+    def forward(self, x, negpip, vec, freqs, mask=None, transformer_options={}):
         prescale, preshift, pregate, postscale, postshift, postgate = self.mod(vec)
-        x = x + pregate * self.attn((1 + prescale) * self.prenorm(x) + preshift, freqs, mask, transformer_options=transformer_options)
+        x = x + pregate * self.attn((1 + prescale) * self.prenorm(x) + preshift, negpip, freqs, mask, transformer_options=transformer_options)
         x = x + postgate * self.mlp((1 + postscale) * self.postnorm(x) + postshift)
         return x
 
@@ -215,7 +219,7 @@ class SingleStreamDiT(nn.Module):
             nn.Linear(features, features * 6),
         )
 
-    def forward(self, x, timesteps, context, attention_mask=None, transformer_options={}, **kwargs):
+    def forward(self, x, timesteps, context, negpip=None, attention_mask=None, transformer_options={}, **kwargs):
         bs, c, H_orig, W_orig = x.shape
 
         patch = self.patch
@@ -252,8 +256,11 @@ class SingleStreamDiT(nn.Module):
 
         freqs = self.pe_embedder(pos)
 
+        if negpip is not None:
+            negpip = negpip[0]
+
         for block in self.blocks:
-            combined = block(combined, tvec, freqs, None, transformer_options=transformer_options)
+            combined = block(combined, negpip, tvec, freqs, None, transformer_options=transformer_options)
 
         final = self.last(combined, t)
         out = final[:, txtlen:txtlen + imglen, :]

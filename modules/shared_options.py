@@ -152,7 +152,7 @@ options_templates.update(options_section(('sd', "Stable Diffusion", "sd"), {
     "cfg_normalization": OptionInfo(0.0, "CFG normalization strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="CFG normalization").info("beneficial for Lumina2, LCM/DMD models"),
     "cfg_rescale": OptionInfo(0.0, "CFG rescale strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="CFG rescale"),
 
-    "use_negPiP": OptionInfo(True, "enable negPiP: negative Prompt in Prompt", infotext="negPiP").info("particularly useful for models that use CFG=1. Currently supported for Anima"),
+    "use_negPiP": OptionInfo(True, "enable negPiP: negative Prompt in Prompt", infotext="negPiP").info("particularly useful for models that use CFG=1. Currently supported for Anima, Flux.2 Klein, Krea2, Z-Image. Effectiveness varies."),
 
 }))
 

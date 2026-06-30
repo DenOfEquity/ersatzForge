@@ -42,7 +42,7 @@ class JointAttention(nn.Module):
         t_out.addcmul_(freqs_cis[..., 1], t_[..., 1])
         return t_out.reshape(*x_in.shape)
 
-    def forward(self, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor, negpip: torch.Tensor=None) -> torch.Tensor:
         bsz, seqlen, _ = x.shape
 
         xq, xk, xv = torch.split(
@@ -63,6 +63,9 @@ class JointAttention(nn.Module):
         xk = JointAttention.apply_rotary_emb(xk, freqs_cis)
 
         xv = xv.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
+        if negpip is not None:
+            y_len = len(negpip)
+            xv[:, :y_len, :, :] *= negpip[:, None, None]
 
         n_rep = self.n_local_heads // self.n_local_kv_heads
         if n_rep >= 1:
@@ -129,7 +132,7 @@ class JointTransformerBlock(nn.Module):
                     nn.Linear(min(dim, 1024), 4 * dim, bias=True),
                 )
 
-    def forward(self, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor, adaln_input: torch.Tensor=None, control=None, strength=None):
+    def forward(self, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor, adaln_input: torch.Tensor=None, negpip: torch.Tensor=None, control=None, strength=None):
         if self.modulation:
             assert adaln_input is not None
             scale_msa, gate_msa, scale_mlp, gate_mlp = self.adaLN_modulation(adaln_input).chunk(4, dim=1)
@@ -139,6 +142,7 @@ class JointTransformerBlock(nn.Module):
                     self.attention_norm1(x).mul_(scale_msa.add_(1.0).unsqueeze(1)),
                     x_mask,
                     freqs_cis,
+                    negpip,
                 )))
             x.add_(gate_mlp.unsqueeze(1).tanh() * self.ffn_norm2(
                 self.feed_forward(
@@ -151,6 +155,7 @@ class JointTransformerBlock(nn.Module):
                     self.attention_norm1(x),
                     x_mask,
                     freqs_cis,
+                    negpip,
                 )))
             x.add_(self.ffn_norm2(
                 self.feed_forward(
@@ -479,7 +484,7 @@ class Lumina2DiT(nn.Module):
 
         return padded_full_embed, control, freqs_cis
 
-    def forward(self, x, timesteps, context, num_tokens=None, attention_mask=None, **kwargs):
+    def forward(self, x, timesteps, context, negpip=None, num_tokens=None, attention_mask=None, **kwargs):
         t = 1.0 - timesteps
         bs, c, h, w = x.shape
 
@@ -520,7 +525,7 @@ class Lumina2DiT(nn.Module):
 
             timestep_scaling = 1.0 + (time ** 3.3) * (scale_s - 1.0)
             if abs(1.0 - scale_e) > abs(1.0 - timestep_scaling):
-                timestep_scaling = scale_e            
+                timestep_scaling = scale_e
         else:
             timestep_scaling = 1.0
 
@@ -530,9 +535,12 @@ class Lumina2DiT(nn.Module):
         x, control, freqs_cis = self.patchify_and_embed(x, context, control, adaln_input, num_tokens=num_tokens, timestep=time, timestep_scaling=timestep_scaling)
         freqs_cis = freqs_cis.to(x.device)
 
+        if negpip is not None:
+            negpip = negpip[0]
+            # Z-Image-Turbo works better with lower weights like -0.5, rather than -1.0 or -2.0
 
         for layer in self.layers:
-            x = layer(x, None, freqs_cis, adaln_input, control, control_strength)
+            x = layer(x, None, freqs_cis, adaln_input, negpip, control, control_strength)
 
         x = self.final_layer(x, adaln_input)
         x = self.unpatchify(x, [h, w], num_tokens)[:, :, :h, :w]

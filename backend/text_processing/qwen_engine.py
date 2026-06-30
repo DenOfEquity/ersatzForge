@@ -16,6 +16,7 @@ class PromptChunk:
     def __init__(self):
         self.tokens = []
         self.multipliers = []
+        self.negpip = []
 
 
 class Qwen3TextProcessingEngine:
@@ -40,6 +41,12 @@ class Qwen3TextProcessingEngine:
             self.intermediate_output = -2
         self.layer_norm_hidden_state = False
 
+        self.use_negPiP = not is_ernie
+        # seems to work with Krea2
+        # works OK with Z-Image-Turbo, lower strengths better?
+        # sometimes works with Flux.2 Klein4B
+        # bad with ERNIE
+
     def tokenize(self, texts):
         return self.tokenizer(texts)["input_ids"]
 
@@ -58,18 +65,22 @@ class Qwen3TextProcessingEngine:
                 #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
                 chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198, 151667, 198, 198, 151668, 198, 198]
                 chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+                chunk.negpip = [1.0, 1.0, 1.0] + chunk.negpip + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
             elif self.is_krea2:
                 #"<|im_start|>system\nDescribe the image by detailing the color, shape, size, texture, quantity, text, spatial relationships of the objects and background:<|im_end|\n    <|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
                 #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
                 chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198, 151667, 198, 198, 151668, 198, 198]
                 chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+                chunk.negpip = [1.0, 1.0, 1.0] + chunk.negpip + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
             elif self.is_ERNIE:
                 chunk.tokens = [1] + chunk.tokens
                 chunk.multipliers = [1.0] + chunk.multipliers
+                chunk.negpip = [1.0] + chunk.negpip
             else:
                 #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
                 chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198]
                 chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0]
+                chunk.negpip = [1.0, 1.0, 1.0] + chunk.negpip + [1.0, 1.0, 1.0, 1.0, 1.0]
 
             chunks.append(chunk)
             chunk = PromptChunk()
@@ -80,7 +91,14 @@ class Qwen3TextProcessingEngine:
                 continue
 
             chunk.tokens.extend(tokens)
-            chunk.multipliers.extend([weight] * len(tokens))
+            if opts.use_negPiP and self.use_negPiP:
+                w = 1.0 if weight < 0.0 else weight
+                chunk.multipliers.extend([w] * len(tokens))
+                w = 1.0 if weight >= 0.0 else weight
+                chunk.negpip.extend([w] * len(tokens))
+            else:
+                chunk.multipliers.extend([weight] * len(tokens))
+                chunk.negpip.extend([1.0] * len(tokens))
 
         if chunk.tokens or not chunks:
             next_chunk()
@@ -89,16 +107,18 @@ class Qwen3TextProcessingEngine:
 
     def __call__(self, texts):
         zs = []
+        np = []
         cache = {}
 
         self.emphasis = emphasis.get_current_option(opts.emphasis)()
 
         for line in texts:
             if line in cache:
-                line_z_values = cache[line]
+                line_z_values, negpip_values = cache[line]
             else:
                 chunks = self.tokenize_line(line)
                 line_z_values = []
+                negpip_values = []
 
                 for chunk in chunks:
                     tokens = chunk.tokens
@@ -106,6 +126,7 @@ class Qwen3TextProcessingEngine:
 
                     z = self.process_tokens(tokens, multipliers)[0]
                     line_z_values.append(z)
+                    negpip_values.append(torch.tensor(chunk.negpip, device=z.device, dtype=z.dtype))
 
                 # remove start/end tokens
                 if self.is_flux2:
@@ -124,18 +145,26 @@ class Qwen3TextProcessingEngine:
                 for i in range(count_z):
                     if i - 1 >= 0 and i + 1 < count_z:
                         line_z_values[i] = line_z_values[i][s:e]
+                        negpip_values[i] = negpip_values[i][s:e]
                     elif i + 1 < count_z:
                         line_z_values[i] = line_z_values[i][:e]
+                        negpip_values[i] = negpip_values[i][:e]
                     elif i - 1 >= 0:
                         line_z_values[i] = line_z_values[i][s:]
+                        negpip_values[i] = negpip_values[i][s:]
 
                 line_z_values = [torch.cat(line_z_values, dim=0, )]
+                negpip_values = [torch.cat(negpip_values, dim=0, )]
 
-                cache[line] = line_z_values
+                cache[line] = line_z_values, negpip_values
 
             zs.extend(line_z_values)
+            np.extend(negpip_values)
 
-        return zs
+        if opts.use_negPiP and self.use_negPiP:
+            return zs, np
+        else:
+            return zs
 
     def process_embeds(self, batch_tokens):
         torch_device = memory_management.get_torch_device()
