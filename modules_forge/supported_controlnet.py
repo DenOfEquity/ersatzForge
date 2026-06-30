@@ -2,7 +2,7 @@ import os
 import torch
 
 from huggingface_guess.detection import unet_config_from_diffusers_unet, model_config_from_unet
-from huggingface_guess.utils import unet_to_diffusers
+from packages.comfyui_lora_collection.utils import unet_to_diffusers
 from backend import memory_management
 from backend.operations import using_forge_operations
 from backend.nn.cnets import cldm
