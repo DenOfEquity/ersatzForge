@@ -3,15 +3,17 @@
 ##  options to always process last step
 ##  option for maximum consecutive steps to apply caching (0: no limit)
 ##  handles highresfix
-##  handles PAG and SAG (with unet models, not Flux) by accelerating them too, independently
+##  handles PAG and SAG (with compatible models, not Flux) by accelerating them too, independently
 ##      opposite time/quality trade offs ... but some way of handling them is necessary to avoid potential errors
 
 ##  derived from https://github.com/likelovewant/sd-forge-teacache (flux only, teacache only)
 
 
 
-#anima [QUICK TESTING] :    uncached starting: ~40%, threshold: 0.11, max. consecutive: 0 (no limit) -> approx 30% faster, insignificant differences
-#                           high proportion of uncached starting steps seems most important
+# anima [QUICK TESTING] :    fbc, uncached starting: ~35-40%, threshold: 0.27, max. consecutive: 1 -> approx 30% faster, insignificant differences
+#                            high proportion of uncached starting steps seems most important
+#                            tc: higher threshold ~x2
+# changed from preview
 
 import torch
 import numpy
@@ -599,9 +601,11 @@ def patched_forward_unet_fbc(self, x, timesteps=None, context=None, y=None, cont
     return h.type(x.dtype)
 
 
-def patched_forward_cosmos_fbc(self, x, timesteps, context, fps=None, padding_mask=None, **kwargs,):
+def patched_forward_cosmos_fbc(self, x, timesteps, context, negpip=None, fps=None, padding_mask=None, **kwargs,):
     x_B_C_T_H_W = x.unsqueeze(2)
     orig_shape = list(x_B_C_T_H_W.shape)
+
+    transformer_options = kwargs.get("transformer_options", {})
 
     # Reference latents: concat along temporal dim (Flux2-style) by 'inpaint' on civitai
     ref_latents = kwargs.get('ref_latents', None)
@@ -615,12 +619,7 @@ def patched_forward_cosmos_fbc(self, x, timesteps, context, fps=None, padding_ma
 
     timesteps_B_T = timesteps
     crossattn_emb = context
-    """
-    Args:
-        x: (B, C, T, H, W) tensor of spatial-temp inputs
-        timesteps: (B, ) tensor of timesteps
-        crossattn_emb: (B, N, D) tensor of cross-attention embeddings
-    """
+
     x_B_T_H_W_D, rope_emb_L_1_1_D, extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = self.prepare_embedded_sequence(
         x_B_C_T_H_W,
         fps=fps,
@@ -641,6 +640,7 @@ def patched_forward_cosmos_fbc(self, x, timesteps, context, fps=None, padding_ma
         "rope_emb_L_1_1_D": rope_emb_L_1_1_D.unsqueeze(1).unsqueeze(0),
         "adaln_lora_B_T_3D": adaln_lora_B_T_3D,
         "extra_per_block_pos_emb": extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+        "transformer_options": transformer_options,
     }
 
     thisSigma = timesteps[0].item()
@@ -659,6 +659,9 @@ def patched_forward_cosmos_fbc(self, x, timesteps, context, fps=None, padding_ma
 
     index = BlockCache.index
 
+    if negpip is not None:
+        negpip = negpip[0]
+
     original_x = x_B_T_H_W_D.clone()
     first_block = True
     for block in self.blocks:
@@ -666,6 +669,7 @@ def patched_forward_cosmos_fbc(self, x, timesteps, context, fps=None, padding_ma
             x_B_T_H_W_D,
             t_embedding_B_T_D,
             crossattn_emb,
+            negpip,
             **block_kwargs,
         )
         if first_block:
@@ -690,7 +694,7 @@ def patched_forward_cosmos_fbc(self, x, timesteps, context, fps=None, padding_ma
                 if BlockCache.distance[index] < BlockCache.threshold:
                     BlockCache.skipped[index] += 1
 
-                    x_B_T_H_W_D += BlockCache.residual[index] * (x_B_T_H_W_D.mean().abs() / BlockCache.residual[index].mean().abs())
+                    x_B_T_H_W_D += BlockCache.residual[index]# * (x_B_T_H_W_D.mean().abs() / BlockCache.residual[index].mean().abs())
 
                     x_B_T_H_W_O = self.final_layer(x_B_T_H_W_D, t_embedding_B_T_D, adaln_lora_B_T_3D=adaln_lora_B_T_3D)
                     x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)[:, :, : orig_shape[-3], : orig_shape[-2], : orig_shape[-1]]
@@ -1136,9 +1140,11 @@ def patched_forward_unet_tc(self, x, timesteps=None, context=None, y=None, contr
     return h.type(x.dtype)
 
 
-def patched_forward_cosmos_tc(self, x, timesteps, context, fps=None, padding_mask=None, **kwargs,):
+def patched_forward_cosmos_tc(self, x, timesteps, context, negpip=None, fps=None, padding_mask=None, **kwargs,):
     x_B_C_T_H_W = x.unsqueeze(2)
     orig_shape = list(x_B_C_T_H_W.shape)
+
+    transformer_options = kwargs.get("transformer_options", {})
 
     # Reference latents: concat along temporal dim (Flux2-style) by 'inpaint' on civitai
     ref_latents = kwargs.get('ref_latents', None)
@@ -1152,12 +1158,7 @@ def patched_forward_cosmos_tc(self, x, timesteps, context, fps=None, padding_mas
 
     timesteps_B_T = timesteps
     crossattn_emb = context
-    """
-    Args:
-        x: (B, C, T, H, W) tensor of spatial-temp inputs
-        timesteps: (B, ) tensor of timesteps
-        crossattn_emb: (B, N, D) tensor of cross-attention embeddings
-    """
+
     x_B_T_H_W_D, rope_emb_L_1_1_D, extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = self.prepare_embedded_sequence(
         x_B_C_T_H_W,
         fps=fps,
@@ -1178,6 +1179,7 @@ def patched_forward_cosmos_tc(self, x, timesteps, context, fps=None, padding_mas
         "rope_emb_L_1_1_D": rope_emb_L_1_1_D.unsqueeze(1).unsqueeze(0),
         "adaln_lora_B_T_3D": adaln_lora_B_T_3D,
         "extra_per_block_pos_emb": extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+        "transformer_options": transformer_options,
     }
 
     thisSigma = timesteps[0].item()
@@ -1223,14 +1225,18 @@ def patched_forward_cosmos_tc(self, x, timesteps, context, fps=None, padding_mas
     previous = x_B_T_H_W_D.clone()
 
     if skip:
-        x_B_T_H_W_D += residual * (x_B_T_H_W_D.mean().abs() / residual.mean().abs())
+        x_B_T_H_W_D += residual# * (x_B_T_H_W_D.mean().abs() / residual.mean().abs())
         skipped += 1
     else:
+        if negpip is not None:
+            negpip = negpip[0]
+
         for block in self.blocks:
             x_B_T_H_W_D = block(
                 x_B_T_H_W_D,
                 t_embedding_B_T_D,
                 crossattn_emb,
+                negpip,
                 **block_kwargs,
             )
         residual = x_B_T_H_W_D - previous
