@@ -408,20 +408,6 @@ def model_lora_keys_unet(model, key_map={}):
                 key_lora = "lora_transformer_{}".format(k[:-len(".weight")].replace(".", "_")) #OneTrainer lora
                 key_map[key_lora] = to
 
-    # if isinstance(model, comfy.model_base.AuraFlow): #Diffusers lora AuraFlow
-    #     diffusers_keys = utils.auraflow_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
-    #     for k in diffusers_keys:
-    #         if k.endswith(".weight"):
-    #             to = diffusers_keys[k]
-    #             key_lora = "transformer.{}".format(k[:-len(".weight")]) #simpletrainer and probably regular diffusers lora format
-    #             key_map[key_lora] = to
-    #
-    # if isinstance(model, comfy.model_base.HunyuanDiT):
-    #     for k in sdk:
-    #         if k.startswith("diffusion_model.") and k.endswith(".weight"):
-    #             key_lora = k[len("diffusion_model."):-len(".weight")]
-    #             key_map["base_model.model.{}".format(key_lora)] = k #official hunyuan lora format
-
     if model.config.huggingface_repo in ["Lumina2", "Zimage"]:
         diffusers_keys = utils.z_image_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
         for k in diffusers_keys:
