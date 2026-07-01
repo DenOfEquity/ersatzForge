@@ -21,7 +21,6 @@ ui_forge_unet_storage_dtype_options: gr.Dropdown = None
 ui_forge_inference_memory: gr.Number = None
 ui_forge_swap: gr.Dropdown = None
 
-
 forge_unet_storage_dtype_options = {
     'Automatic': (None, False),
     'Automatic (fp16 LoRA)': (None, True),
@@ -41,6 +40,7 @@ module_list = {}        # vae + te + other
 module_vae_list = {}
 module_te_list = {}
 
+
 def bind_to_opts(comp, k, save=False, callback=None):
     def on_change(v):
         shared.opts.set(k, v)
@@ -54,14 +54,20 @@ def bind_to_opts(comp, k, save=False, callback=None):
     return
 
 
-def find_files_with_extensions(base_path, extensions):
+def find_files_with_extensions(search_path, extensions, base_path=None):
+    if not base_path:
+        base_path = search_path
+
+    prefix = len(os.path.join(base_path, ""))
+
     found_files = {}
-    for root, _, files in os.walk(base_path):
+    for root, subdirs, files in os.walk(search_path, followlinks=True):
+        for subdir in subdirs:
+            found_files.update(find_files_with_extensions(os.path.join(root, subdir), extensions, base_path))
         for file in files:
             if any(file.endswith(ext) for ext in extensions):
                 full_path = os.path.join(root, file)
-                found_files[file] = full_path
-                # found_files[os.path.splitext(file)[0]] = full_path
+                found_files[full_path[prefix:]] = full_path
     return found_files
 
 
@@ -274,9 +280,12 @@ def modules_change(module_values:list, save=True, refresh=True) -> bool:
     """ module values may be provided as file paths, or just the module names. Returns True if modules changed. """
     modules = []
     for v in module_values:
-        module_name = os.path.basename(v) # If the input is a filepath, extract the file name
-        if module_name in module_list:
-            modules.append(module_list[module_name])
+        if v in module_list:
+            modules.append(module_list[v])
+        else:
+            module_name = os.path.basename(v) # If the input is a filepath, extract the file name
+            if module_name in module_list:
+                modules.append(module_list[module_name])
 
     # skip further processing if value unchanged
     if sorted(modules) == sorted(shared.opts.data.get('forge_additional_modules', [])):

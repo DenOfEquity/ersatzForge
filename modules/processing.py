@@ -720,7 +720,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
         "Prediction scaling": opts.prediction_scaling if opts.prediction_scaling != 1.0 else None,
         "CFG normalization": opts.cfg_normalization if opts.cfg_normalization > 0.0 else None,
         "CFG rescale": opts.cfg_rescale if opts.cfg_rescale > 0.0 else None,
-        "negPiP": opts.use_negPiP if opts.use_negPiP else None,
+        "negPiP": opts.use_negPiP if opts.use_negPiP and (shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_krea2 or shared.sd_model.is_flux2 or shared.sd_model.is_lumina2) else None,
         "SDXL Shift": opts.sdxl_flow_shift if dynamic_args.get('SDXL_flow', False) else None,
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
     })
@@ -761,7 +761,10 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
         generation_params['Diffusion in Low Bits'] = opts.forge_unet_storage_dtype
 
     for i, m in enumerate(opts.forge_additional_modules):
-        generation_params[f'Module {i+1}'] = os.path.splitext(os.path.basename(m))[0]
+        for name, file in main_entry.module_list.items():
+            if m == file:
+                generation_params[f'Module {i+1}'] = name
+                break
 
     if use_main_prompt:
         if "HiRes prompt" in generation_params and hasattr(p, "hr_main_prompt"):
@@ -1278,7 +1281,10 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                     self.extra_generation_params['HiRes Module 1'] = 'Use same choices'
                 else:
                     for i, m in enumerate(self.hr_additional_modules):
-                        self.extra_generation_params[f'HiRes Module {i+1}'] = os.path.splitext(os.path.basename(m))[0]
+                        for name, file in main_entry.module_list.items():
+                            if m == file:
+                                generation_params[f'HiRes Module {i+1}'] = name
+                                break
 
             if self.hr_sampler_name is not None and self.hr_sampler_name != self.sampler_name:
                 self.extra_generation_params["HiRes sampler"] = self.hr_sampler_name

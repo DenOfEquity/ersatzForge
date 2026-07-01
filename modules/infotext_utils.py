@@ -222,8 +222,8 @@ def restore_old_hires_fix_params(res):
     """for infotexts that specify old First pass size parameter, convert it into
     width, height, and hr scale"""
 
-    firstpass_width = res.get('First pass size-1', None)
-    firstpass_height = res.get('First pass size-2', None)
+    firstpass_width = res.get("First pass size-1", None)
+    firstpass_height = res.get("First pass size-2", None)
 
     if firstpass_width is None or firstpass_height is None:
         return
@@ -239,10 +239,10 @@ def restore_old_hires_fix_params(res):
         firstpass_width = math.ceil(scale * width / 64) * 64
         firstpass_height = math.ceil(scale * height / 64) * 64
 
-    res['Size-1'] = int(firstpass_width)
-    res['Size-2'] = int(firstpass_height)
-    res['HiRes resize-1'] = width
-    res['HiRes resize-2'] = height
+    res["Size-1"] = int(firstpass_width)
+    res["Size-2"] = int(firstpass_height)
+    res["HiRes resize-1"] = width
+    res["HiRes resize-2"] = height
 
 
 def parse_generation_parameters(x: str, skip_fields: list[str] | None = None, force_ignore_styles=False):
@@ -280,25 +280,23 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
         else:
             prompt += ("" if prompt == "" else "\n") + line
 
-    if 'Civitai' in lastline and 'FLUX' in lastline:
+    if "Civitai" in lastline and "FLUX" in lastline:
         # Civitai really like to add random Clip skip to Flux metadata, where Clip skip is not a thing.
-        lastline = lastline.replace('Clip skip: 0, ', '')
-        lastline = lastline.replace('Clip skip: 1, ', '')
-        lastline = lastline.replace('Clip skip: 2, ', '')
-        lastline = lastline.replace('Clip skip: 3, ', '')
-        lastline = lastline.replace('Clip skip: 4, ', '')
-        lastline = lastline.replace('Clip skip: 5, ', '')
-        lastline = lastline.replace('Clip skip: 6, ', '')
-        lastline = lastline.replace('Clip skip: 7, ', '')
-        lastline = lastline.replace('Clip skip: 8, ', '')
+        lastline = lastline.replace("Clip skip: 0, ", "")
+        lastline = lastline.replace("Clip skip: 1, ", "")
+        lastline = lastline.replace("Clip skip: 2, ", "")
+        lastline = lastline.replace("Clip skip: 3, ", "")
+        lastline = lastline.replace("Clip skip: 4, ", "")
+        lastline = lastline.replace("Clip skip: 5, ", "")
+        lastline = lastline.replace("Clip skip: 6, ", "")
+        lastline = lastline.replace("Clip skip: 7, ", "")
+        lastline = lastline.replace("Clip skip: 8, ", "")
 
         # Civitai also add Sampler: Undefined
-        lastline = lastline.replace('Sampler: Undefined, ', 'Sampler: Euler, Schedule type: Simple, ')  # <- by lllyasviel, seem to give similar results to Civitai "Undefined" Sampler
+        lastline = lastline.replace("Sampler: Undefined, ", "Sampler: Euler, Schedule type: Simple, ")  # <- by lllyasviel, seem to give similar results to Civitai "Undefined" Sampler
 
         # Civitai also confuse CFG scale and Distilled CFG Scale
-        lastline = lastline.replace('CFG scale: ', 'CFG scale: 1, Distilled CFG scale: ')
-
-        print('Applied Forge Fix to broken Civitai Flux Meta.')
+        lastline = lastline.replace("CFG scale: ", "CFG scale: 1, Distilled CFG scale: ")
 
     lastline = lastline.replace("Hires",      "HiRes")
     lastline = lastline.replace("CFG Scale",  "CFG scale")
@@ -327,13 +325,13 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
             hr_found_styles, hr_prompt_no_styles, hr_negative_prompt_no_styles = shared.prompt_styles.extract_styles_from_prompt(hr_prompt, hr_negative_prompt)
 
             if same_hr_styles := found_styles == hr_found_styles:
-                res["HiRes prompt"] = '' if hr_prompt_no_styles == prompt_no_styles else hr_prompt_no_styles
-                res['HiRes negative prompt'] = '' if hr_negative_prompt_no_styles == negative_prompt_no_styles else hr_negative_prompt_no_styles
+                res["HiRes prompt"] = "" if hr_prompt_no_styles == prompt_no_styles else hr_prompt_no_styles
+                res["HiRes negative prompt"] = "" if hr_negative_prompt_no_styles == negative_prompt_no_styles else hr_negative_prompt_no_styles
 
         if same_hr_styles:
             prompt, negative_prompt = prompt_no_styles, negative_prompt_no_styles
             if (shared.opts.infotext_styles == "Apply if any" and found_styles) or shared.opts.infotext_styles == "Apply":
-                res['Styles array'] = found_styles
+                res["Styles array"] = found_styles
 
     res["Prompt"] = prompt
     res["Negative prompt"] = negative_prompt
@@ -432,35 +430,53 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
         res.pop(key, None)
 
     # basic check for same checkpoint using short name
-    checkpoint = res.get('Model', None)
+    checkpoint = res.get("Model", None)
+    known_models = main_entry.ckpt_list
     if checkpoint is not None:
-        if checkpoint in shared.opts.sd_model_checkpoint:
-            res.pop('Model')
+        if checkpoint in shared.opts.sd_model_checkpoint: # model already selected
+            res.pop("Model")
+        elif checkpoint not in known_models: # try partial name match
+            matched = False
+            for known in known_models:
+                if checkpoint in known:
+                    res["Model"] = known
+                    matched = True
+                    break
+            if not matched:
+                res.pop("Model")
 
     # VAE / TE
     modules = []
     hr_modules = []
-    vae = res.pop('VAE', None)  # old form
+    vae = res.pop("VAE", None)  # old form
+    known_modules = main_entry.module_list.keys()
     if vae:
-        modules = [vae]
+        if vae in known_modules:       # exact name match
+            modules = [vae]
+        else:                          # partial name match, e.g. name without extension. possible mismatch with name and nameblah
+            for known in known_modules:
+                if vae in known:
+                    modules = [known]
+                    break
+        # if neither exact nor partial match, ignore
     else:
         for key in res:
-            if key.startswith('Module '):
-                added = False
-                for knownmodule in main_entry.module_list.keys():
-                    filename, _ = os.path.splitext(knownmodule)
-                    if res[key] == filename:
-                        added = True
-                        modules.append(knownmodule)
-                        break
-                if not added:
-                    modules.append(res[key])   # so it shows in the override section (consistent with checkpoint and old vae)
-            elif key.startswith('HiRes Module '):
-                for knownmodule in main_entry.module_list.keys():
-                    filename, _ = os.path.splitext(knownmodule)
-                    if res[key] == filename:
-                        hr_modules.append(knownmodule)
-                        break
+            if key.startswith("Module "):
+                if res[key] in known_modules:
+                    modules.append(res[key])
+                else:
+                    for known in known_modules:
+                        if res[key] in known:
+                            modules.append(known)
+                            break
+            elif key.startswith("HiRes Module "):
+                if res[key] in known_modules:
+                    hr_modules.append(res[key])
+                else:
+                    for known in known_modules:
+                        if res[key] in known:
+                            hr_modules.append(known)
+                            break
 
     if modules != []:
         current_modules = shared.opts.forge_additional_modules
@@ -469,32 +485,31 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
             basename_modules.append(os.path.basename(m))
 
         if sorted(modules) != sorted(basename_modules):
-            res['VAE/TE'] = modules
+            res["VAE/TE"] = modules
 
     # if 'Use same choices' was the selection for HiRes VAE / Text Encoder, it will be the only HiRes Module
     # if the selection was empty, it will be the only Hires Module, saved as 'Built-in'
-    if 'HiRes Module 1' in res:
-        if res['HiRes Module 1'] == 'Use same choices':
-            hr_modules = ['Use same choices']
-        elif res['HiRes Module 1'] == 'Built-in':
+    if "HiRes Module 1" in res:
+        if res["HiRes Module 1"] == "Use same choices":
+            hr_modules = ["Use same choices"]
+        elif res["HiRes Module 1"] == "Built-in":
             hr_modules = []
 
-        res['HiRes VAE/TE'] = hr_modules
-    else:
-        # no Hires Module infotext, use default
-        res['HiRes VAE/TE'] = ['Use same choices']
+        res["HiRes VAE/TE"] = hr_modules
+    else: # no Hires Module infotext, use default
+        res["HiRes VAE/TE"] = ["Use same choices"]
 
-    if 'ELLA' not in res:
-        res['ELLA'] = 'CLIP (normal)'
+    if "ELLA" not in res:
+        res["ELLA"] = "CLIP (normal)"
 
-    if 'negPiP' not in res:
-        res['negPiP'] = False
+    if "negPiP" not in res:
+        res["negPiP"] = False
 
     return res
 
 
 infotext_to_setting_name_mapping = [
-    ('VAE/TE', 'forge_additional_modules'),
+    ("VAE/TE", "forge_additional_modules"),
 ]
 """Mapping of infotext labels to setting names. Only left for backwards compatibility - use OptionInfo(..., infotext='...') instead.
 Example content:
