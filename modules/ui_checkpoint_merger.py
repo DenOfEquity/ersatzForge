@@ -126,22 +126,16 @@ def convert_embeds(one, many, output_dir):
 
 
 class UiCheckpointMerger:
-    vae_list = []
-    te_list = []
+    te_list = list(module_te_list.keys())
+    vae_list = [""] + list(module_vae_list.keys())
 
-    def refresh_additional (fromUI=True):
+    def refresh_additional():
         _ = refresh_vaete()
 
         te_list = list(module_te_list.keys())
         vae_list = [""] + list(module_vae_list.keys())
 
-        if fromUI:
-            return gr.Dropdown(choices=vae_list), gr.Dropdown(choices=te_list)
-        else:
-            return vae_list, te_list
-
-    vae_list = [""] + list(module_vae_list.keys())
-    te_list = list(module_te_list.keys())
+        return gr.Dropdown(choices=vae_list), gr.Dropdown(choices=te_list)
 
     def __init__(self):
         with gr.Blocks(analytics_enabled=False) as modelmerger_interface:
@@ -174,9 +168,6 @@ class UiCheckpointMerger:
 
                     btn_save_unet_forge.click(save_unet, inputs=textbox_file_name_forge, outputs=result_html)
                     btn_save_ckpt_forge.click(save_checkpoint, inputs=textbox_file_name_forge, outputs=result_html)
-
-# add checkbox to specify checkbox is vpred (add vpred key)
-# similar possible for cos? etc
 
             with gr.Accordion(open=False, label="nArn0's embedding converter: SD1 to SDXL"):
                 with gr.Row():
