@@ -97,6 +97,9 @@ class BlockCache(scripts.Script):
                     IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_fbc
                 elif p.sd_model.is_cosmos_predict2:
                     MiniTrainDIT.forward = patched_forward_cosmos_fbc
+                else:
+                    setattr(BlockCache, "active", False)
+                    return
             else:
                 if p.sd_model.is_sd3:
                     MMDiTX.forward = patched_forward_mmditx_tc
@@ -107,6 +110,9 @@ class BlockCache(scripts.Script):
                     IntegratedChromaTransformer2DModel.inner_forward = patched_inner_forward_chroma_tc
                 elif p.sd_model.is_cosmos_predict2:
                     MiniTrainDIT.forward = patched_forward_cosmos_tc
+                else:
+                    setattr(BlockCache, "active", False)
+                    return
 
             p.extra_generation_params.update({
                 "bc_enabled"        : enabled,
@@ -117,6 +123,7 @@ class BlockCache(scripts.Script):
                 "bc_always_last"    : always_last,
             })
 
+            setattr(BlockCache, "active", True)
             setattr(BlockCache, "threshold", threshold)
             setattr(BlockCache, "nocache_steps", nocache_steps)
             setattr(BlockCache, "skip_limit", max_cached)
@@ -128,7 +135,7 @@ class BlockCache(scripts.Script):
 
         #   possibly many passes through the forward method on each step: cond, uncond, PAG, SAG, TRAsce, SLG, 
 
-        if enabled:
+        if enabled and getattr(BlockCache, "active", False):
             setattr(BlockCache, "index", 0)
             setattr(BlockCache, "distance", [0])
             setattr(BlockCache, "this_step", 0)
@@ -139,12 +146,11 @@ class BlockCache(scripts.Script):
             setattr(BlockCache, "skipped", [0])
 
 
-    def post_sample (self, params, ps, *args):
-    # def postprocess(self, params, processed, *args):
+    def postprocess(self, params, processed, *args):
         # always clean up after processing
         enabled = args[0]
 
-        if enabled:
+        if enabled and getattr(BlockCache, "active", False):
             # restore the original inner_forward method
             IntegratedChromaTransformer2DModel.inner_forward = BlockCache.chroma_inner_forward
             IntegratedFluxTransformer2DModel.inner_forward = BlockCache.original_inner_forward
