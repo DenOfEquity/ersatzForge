@@ -140,7 +140,8 @@ class UiCheckpointMerger:
         else:
             return vae_list, te_list
 
-    vae_list, te_list = refresh_additional (fromUI=False)
+    vae_list = [""] + list(module_vae_list.keys())
+    te_list = list(module_te_list.keys())
 
     def __init__(self):
         with gr.Blocks(analytics_enabled=False) as modelmerger_interface:
