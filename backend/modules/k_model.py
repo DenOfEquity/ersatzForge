@@ -56,9 +56,9 @@ class KModel(torch.nn.Module):
         # also cond size is relevant, tested with 300+ token prompts
         match (self.diffusion_model.__class__.__name__):
             case "IntegratedChromaDCTTransformer2DModel": # untested
-                scaler = (2.3 / 3.0) / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.75)
-            case "IntegratedChromaTransformer2DModel": # assumed same as flux, untested
-                scaler = 2.3 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.75)
+                scaler = (2.55 / 3.0) / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.75)
+            case "IntegratedChromaTransformer2DModel":
+                scaler = 2.55 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.75)
             case "Lumina2DiT":
                 scaler = 1.95 / (((input_shape[2] / 128) * (input_shape[3] / 128)) ** 0.4)
             case "IntegratedFlux2Transformer2DModel":
