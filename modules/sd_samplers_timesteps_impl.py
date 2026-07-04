@@ -5,14 +5,13 @@ import numpy as np
 
 from modules import shared
 from modules.models.diffusion.uni_pc import uni_pc
-from modules.torch_utils import float64
 
 
 @torch.no_grad()
 def ddim(model, x, timesteps, extra_args=None, callback=None, disable=None, eta=0.0):
     alphas_cumprod = model.inner_model.inner_model.alphas_cumprod
     alphas = alphas_cumprod[timesteps]
-    alphas_prev = alphas_cumprod[torch.nn.functional.pad(timesteps[:-1], pad=(1, 0))].to(float64(x))
+    alphas_prev = alphas_cumprod[torch.nn.functional.pad(timesteps[:-1], pad=(1, 0))].to(torch.float32)
     sqrt_one_minus_alphas = torch.sqrt(1 - alphas)
     sigmas = eta * np.sqrt((1 - alphas_prev.cpu().numpy()) / (1 - alphas.cpu()) * (1 - alphas.cpu() / alphas_prev.cpu().numpy()))
 
@@ -44,15 +43,13 @@ def ddim(model, x, timesteps, extra_args=None, callback=None, disable=None, eta=
 def ddim_cfgpp(model, x, timesteps, extra_args=None, callback=None, disable=None, eta=0.0):
     """ Implements CFG++: Manifold-constrained Classifier Free Guidance For Diffusion Models (2024).
     Uses the unconditional noise prediction instead of the conditional noise to guide the denoising direction.
-    The CFG scale is divided by 12.5 to map CFG from [0.0, 12.5] to [0, 1.0].
     """
     alphas_cumprod = model.inner_model.inner_model.alphas_cumprod
     alphas = alphas_cumprod[timesteps]
-    alphas_prev = alphas_cumprod[torch.nn.functional.pad(timesteps[:-1], pad=(1, 0))].to(float64(x))
+    alphas_prev = alphas_cumprod[torch.nn.functional.pad(timesteps[:-1], pad=(1, 0))].to(torch.float32)
     sqrt_one_minus_alphas = torch.sqrt(1 - alphas)
     sigmas = eta * np.sqrt((1 - alphas_prev.cpu().numpy()) / (1 - alphas.cpu()) * (1 - alphas.cpu() / alphas_prev.cpu().numpy()))
 
-    model.cond_scale_miltiplier = 1 / 12.5
     model.need_last_noise_uncond = True
 
     extra_args = {} if extra_args is None else extra_args
@@ -84,7 +81,7 @@ def ddim_cfgpp(model, x, timesteps, extra_args=None, callback=None, disable=None
 def plms(model, x, timesteps, extra_args=None, callback=None, disable=None):
     alphas_cumprod = model.inner_model.inner_model.alphas_cumprod
     alphas = alphas_cumprod[timesteps]
-    alphas_prev = alphas_cumprod[torch.nn.functional.pad(timesteps[:-1], pad=(1, 0))].to(float64(x))
+    alphas_prev = alphas_cumprod[torch.nn.functional.pad(timesteps[:-1], pad=(1, 0))].to(torch.float32)
     sqrt_one_minus_alphas = torch.sqrt(1 - alphas)
 
     extra_args = {} if extra_args is None else extra_args
