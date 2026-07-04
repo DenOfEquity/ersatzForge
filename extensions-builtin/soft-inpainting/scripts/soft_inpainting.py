@@ -1,9 +1,10 @@
-import numpy as np
 import gradio as gr
 import math
+import numpy as np
+import torch
+
 from modules.ui_components import InputAccordion
 import modules.scripts as scripts
-from modules.torch_utils import float64
 
 
 class SoftInpaintingSettings:
@@ -54,53 +55,31 @@ def latent_blend(settings, a, b, t):
     The "detail_preservation" factor biases the magnitude interpolation towards
     the larger of the two magnitudes.
     """
-    import torch
 
     # NOTE: We use inplace operations wherever possible.
 
-    if len(t.shape) == 3:
-        # [4][w][h] to [1][4][w][h]
-        t2 = t.unsqueeze(0)
-        # [4][w][h] to [1][1][w][h] - the [4] seem redundant.
-        t3 = t[0].unsqueeze(0).unsqueeze(0)
-    else:
-        t2 = t
-        t3 = t[:, 0][:, None]
-
-    one_minus_t2 = 1 - t2
-    one_minus_t3 = 1 - t3
-
     # Linearly interpolate the image vectors.
-    a_scaled = a * one_minus_t2
-    b_scaled = b * t2
-    image_interp = a_scaled
-    image_interp.add_(b_scaled)
+    image_interp = torch.lerp(a, b, t)
     result_type = image_interp.dtype
-    del a_scaled, b_scaled, t2, one_minus_t2
 
     # Calculate the magnitude of the interpolated vectors. (We will remove this magnitude.)
-    # 64-bit operations are used here to allow large exponents.
-    current_magnitude = torch.norm(image_interp, p=2, dim=1, keepdim=True).to(float64(image_interp)).add_(0.00001)
+    current_magnitude = torch.norm(image_interp, p=2, dim=1, keepdim=True).to(torch.float32).clamp_(min=0.00001)
 
     # Interpolate the powered magnitudes, then un-power them (bring them back to a power of 1).
-    a_magnitude = torch.norm(a, p=2, dim=1, keepdim=True).to(float64(a)).pow_(settings.inpaint_detail_preservation) * one_minus_t3
-    b_magnitude = torch.norm(b, p=2, dim=1, keepdim=True).to(float64(b)).pow_(settings.inpaint_detail_preservation) * t3
-    desired_magnitude = a_magnitude
-    desired_magnitude.add_(b_magnitude).pow_(1 / settings.inpaint_detail_preservation)
-    del a_magnitude, b_magnitude, t3, one_minus_t3
+    a_magnitude = torch.norm(a, p=2, dim=1, keepdim=True).to(torch.float32).pow_(settings.inpaint_detail_preservation)
+    b_magnitude = torch.norm(b, p=2, dim=1, keepdim=True).to(torch.float32).pow_(settings.inpaint_detail_preservation)
+
+    desired_magnitude = torch.lerp(a_magnitude, b_magnitude, t)
+    del a_magnitude, b_magnitude
+
+    desired_magnitude.pow_(1 / settings.inpaint_detail_preservation)
+    desired_magnitude.div_(current_magnitude)
+    del current_magnitude
 
     # Change the linearly interpolated image vectors' magnitudes to the value we want.
-    # This is the last 64-bit operation.
-    image_interp_scaling_factor = desired_magnitude
-    image_interp_scaling_factor.div_(current_magnitude)
-    image_interp_scaling_factor = image_interp_scaling_factor.to(result_type)
-    image_interp_scaled = image_interp
-    image_interp_scaled.mul_(image_interp_scaling_factor)
-    del current_magnitude
+    image_interp_scaled = image_interp.mul(desired_magnitude.to(result_type))
     del desired_magnitude
     del image_interp
-    del image_interp_scaling_factor
-    del result_type
 
     return image_interp_scaled
 
@@ -120,7 +99,6 @@ def get_modified_nmask(settings, nmask, sigma):
 
     NOTE: "mask" is not used
     """
-    import torch
     return torch.pow(nmask, (sigma ** settings.mask_blend_power) * settings.mask_blend_scale)
 
 
@@ -132,7 +110,6 @@ def apply_adaptive_masks(
         overlay_images,
         width, height,
         paste_to):
-    import torch
     import modules.processing as proc
     import modules.images as images
     from PIL import Image, ImageOps, ImageFilter
@@ -167,7 +144,6 @@ def apply_adaptive_masks(
         # simpler, faster, better? prefers lower mask blur
         converted_mask = gaussian_filter(converted_mask, sigma=2.25)
 
-       
         # The distance at which opacity of original decreases to 50%
         if len(mask_scalar.shape) == 3:
             if mask_scalar.shape[0] > i:
@@ -214,7 +190,6 @@ def apply_masks(
         overlay_images,
         width, height,
         paste_to):
-    import torch
     import modules.processing as proc
     import modules.images as images
     from PIL import Image, ImageOps, ImageFilter
@@ -693,11 +668,10 @@ class Script(scripts.Script):
 
         settings = SoftInpaintingSettings(power, scale, detail_preservation, mask_inf, dif_thresh, dif_contr)
 
-        # todo: Why is sigma 2D? Both values are the same.
         mba.blended_latent = latent_blend(settings,
                                           mba.init_latent,
                                           mba.current_latent,
-                                          get_modified_nmask(settings, mba.nmask, mba.sigma[0]))
+                                          get_modified_nmask(settings, mba.nmask[0:1], mba.sigma[0]).unsqueeze(0))
 
     def post_sample(self, p, ps: scripts.PostSampleArgs, enabled, power, scale, detail_preservation, mask_inf,
                     dif_thresh, dif_contr):
