@@ -669,11 +669,40 @@ class ForgeCanvas {
         const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
         const ctx = canvas.getContext("2d");
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        this.history = this.history.slice(0, this.historyIndex + 1);
-        this.history.push(imageData);
-        this.historyIndex++;
-        this.updateUndoRedoButtons();
-        this.updateDrawingData();
+        const currentImageData = this.history[this.historyIndex];
+
+        let save = false;
+        if (currentImageData) {
+            const buf1 = new Uint32Array(imageData.data.buffer);
+            const buf2 = new Uint32Array(currentImageData.data.buffer);
+
+            for (let i = 0; i < buf1.length; i++) {
+                if (buf1[i] !== buf2[i]) {
+                    save = true;
+                    break;
+                }
+            }
+        }
+        else {
+            save = true;
+        }
+
+        if (save) {
+            this.history = this.history.slice(0, this.historyIndex + 1);
+            this.history.push(imageData);
+            this.historyIndex++;
+            if (this.historyIndex > 12) { // unlucky for some
+//                this.history.shift();
+//                this.historyIndex--;
+                this.history.splice(9, 1);
+                this.history.splice(7, 1);
+                this.history.splice(4, 1);
+                this.history.splice(Math.floor(Math.random()*1.75), 1);
+                this.historyIndex -= 4;
+            }
+            this.updateUndoRedoButtons();
+            this.updateDrawingData();
+        }
     }
 
     restoreState() {
@@ -682,13 +711,13 @@ class ForgeCanvas {
         const imageData = this.history[this.historyIndex];
         ctx.putImageData(imageData, 0, 0);
         this.updateDrawingData();
+        this.updateUndoRedoButtons();
     }
 
     undo() {
         if (this.historyIndex > 0) {
             this.historyIndex--;
             this.restoreState();
-            this.updateUndoRedoButtons();
         }
     }
 
@@ -696,7 +725,6 @@ class ForgeCanvas {
         if (this.historyIndex < this.history.length - 1) {
             this.historyIndex++;
             this.restoreState();
-            this.updateUndoRedoButtons();
         }
     }
 
