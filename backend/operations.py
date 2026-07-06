@@ -6,6 +6,7 @@ import contextlib
 
 from backend import stream, memory_management, utils
 from backend.patcher.lora import merge_lora_to_weight
+from backend.shared import global_variables
 
 
 stash = {}
@@ -21,8 +22,6 @@ def get_weight_and_bias(layer, weight_args=None, bias_args=None, weight_fn=None,
 
     if patches is not None:
         weight_patches = patches.get('weight', None)
-
-    if patches is not None:
         bias_patches = patches.get('bias', None)
 
     weight = None
@@ -134,6 +133,11 @@ class ForgeOperations:
         elif prefix + 'weight_scale' in state_dict:
             cls.scale_weight = torch.nn.Parameter(state_dict[prefix + 'weight_scale'])
 
+        if prefix + 'A' in state_dict:
+            cls.A = torch.nn.Parameter(state_dict[prefix + 'A'].flatten(start_dim=1))
+            cls.B = torch.nn.Parameter(state_dict[prefix + 'B'].flatten(start_dim=1))
+
+
     class Linear(torch.nn.Module):
         def __init__(self, in_features, out_features, *args, **kwargs):
             super().__init__()
@@ -142,6 +146,7 @@ class ForgeOperations:
             self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype))
             self.weight = None
             self.scale_weight = None
+            self.A = None
             self.bias = None
             self.parameters_manual_cast = current_manual_cast_enabled
 
@@ -158,12 +163,17 @@ class ForgeOperations:
                 super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
 
         def forward(self, x):
+            strength = getattr(global_variables, "krea2_control_lora_strength", 0.0)
             if self.parameters_manual_cast:
                 weight, bias, signal = weights_manual_cast(self, x)
+                if self.A is not None and strength > 0.0:
+                    weight.add_(torch.mm(self.B.to(weight), self.A.to(weight)).mul_(strength))
                 with main_stream_worker(weight, bias, signal):
                     return torch.nn.functional.linear(x, weight, bias)
             else:
                 weight, bias = get_weight_and_bias(self)
+                if self.A is not None and strength > 0.0:
+                    weight.add_(torch.mm(self.B.to(weight), self.A.to(weight)).mul_(strength))
                 return torch.nn.functional.linear(x, weight, bias)
 
 
@@ -583,6 +593,58 @@ class ForgeOperationsGGUF(ForgeOperations):
             weight, bias, signal = weights_manual_cast(self, x, weight_fn=dequantize_tensor, skip_weight_dtype=True, skip_bias_dtype=True)
             with main_stream_worker(weight, bias, signal):
                 return torch.nn.functional.embedding(x, weight, self.padding_idx, self.max_norm, self.norm_type, self.scale_grad_by_freq, self.sparse)
+
+## unused
+    # class GroupNorm(torch.nn.GroupNorm):
+        # def __init__(self, *args, **kwargs):
+            # kwargs['device'] = current_device
+            # kwargs['dtype'] = current_dtype
+            # super().__init__(*args, **kwargs)
+            # self.dummy = {"device": current_device, "dtype": current_dtype}
+            # self.weight = None
+            # self.bias = None
+
+        # def reset_parameters(self):
+            # self.weight = None
+            # self.bias = None
+            # return None
+
+        # def _load_from_state_dict(self, state_dict, prefix, *args, **kwargs):
+            # if hasattr(self, "dummy"):
+                # if (computation_dtype := self.dummy["dtype"]) not in [torch.float16, torch.bfloat16]:
+                    # computation_dtype = torch.float16
+
+                # if prefix + "weight" in state_dict:
+                    # self.weight = state_dict[prefix + "weight"].to(device=self.dummy["device"])
+                    # self.weight.computation_dtype = computation_dtype
+                # if prefix + "bias" in state_dict:
+                    # self.bias = state_dict[prefix + "bias"].to(device=self.dummy["device"])
+                    # self.bias.computation_dtype = computation_dtype
+
+                # del self.dummy
+            # else:
+                # if prefix + "weight" in state_dict:
+                    # self.weight = state_dict[prefix + "weight"]
+                # if prefix + "bias" in state_dict:
+                    # self.bias = state_dict[prefix + "bias"]
+
+        # def _apply(self, fn, recurse=True):
+            # for k, p in self.named_parameters(recurse=False, remove_duplicate=True):
+                # setattr(self, k, utils.tensor2parameter(fn(p)))
+            # return self
+
+        # def forward(self, x):
+            # if self.bias is not None and self.bias.dtype != x.dtype:
+                # self.bias = utils.tensor2parameter(dequantize_tensor(self.bias).to(x.dtype))
+
+            # if self.weight is not None and self.weight.dtype != x.dtype and getattr(self.weight, 'gguf_cls', None) is None:
+                # self.weight = utils.tensor2parameter(self.weight.to(x.dtype))
+
+            # weight, bias, signal = weights_manual_cast(self, x, weight_fn=dequantize_tensor, bias_fn=None, skip_bias_dtype=True)
+            # with main_stream_worker(weight, bias, signal):
+                # return torch.nn.functional.group_norm(x, self.num_groups, weight, bias, self.eps)
+
+
 
 @contextlib.contextmanager
 def using_forge_operations(operations=None, device=None, dtype=None, manual_cast_enabled=False, bnb_dtype=None):

@@ -376,7 +376,8 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 model_loader = lambda c: WanModel(**c)
             elif cls_name == "Krea2Transformer2DModel":
                 from backend.nn.krea2 import SingleStreamDiT
-                model_loader = lambda c: SingleStreamDiT(**c)
+                ctrl_patched = "first_ctrl.weight" in state_dict
+                model_loader = lambda c: SingleStreamDiT(**c, ctrl_patched=ctrl_patched)
             elif cls_name == "Lumina2Transformer2DModel":
                 from backend.nn.lumina2 import Lumina2DiT
                 
@@ -937,6 +938,17 @@ def replace_state_dict(sd, asd, guess):
         for k, v in asd.items():
             if k.startswith("control_"):
                 sd["model.diffusion_model." + k] = asd[k]
+
+
+# Krea2 (depth) control lora by Tanmay Patil, loaded directly into model
+# faster to load and less memory, and actually works: modifications in operations.ForgeOperations.Linear to handle .A/.B pairs
+    if "model.diffusion_model.first.bias" in sd and "first.bias" in asd and "blocks.0.attn.gate.A" in asd:
+        sd["model.diffusion_model.first_ctrl.bias"]   = asd.pop("first.bias")     # note different name, to allow bypass
+        sd["model.diffusion_model.first_ctrl.weight"] = asd.pop("first.weight")
+
+        for k in list(asd.keys()):
+            sd["model.diffusion_model." + k] = asd.pop(k)
+
 
     return sd
 

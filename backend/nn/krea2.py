@@ -181,11 +181,11 @@ class LastLayer(nn.Module):
 class SingleStreamDiT(nn.Module):
     def __init__(self, features=6144, tdim=256, txtdim=2560, heads=48, kvheads=12, multiplier=4,
                  layers=28, patch=2, in_channels=16, bias=False, theta=1e3, txtlayers=12,
-                 txtheads=20, txtkvheads=20, image_model=None,
+                 txtheads=20, txtkvheads=20, image_model=None, ctrl_patched=False, 
                  **kwargs):
         super().__init__()
         self.patch = patch
-        self.channels = in_channels
+        self.ctrl_patched = ctrl_patched
         self.tdim = tdim
         self.heads = heads
         self.txtdim = txtdim
@@ -196,7 +196,12 @@ class SingleStreamDiT(nn.Module):
         assert sum(axes) == headdim, f"axes {axes} sum != headdim {headdim}"
         self.pe_embedder = EmbedND(theta=int(theta), axes_dim=axes)
 
-        self.first = nn.Linear(in_channels * patch ** 2, features, bias=True)
+        self.first = nn.Linear(16 * patch ** 2, features, bias=True)
+        if self.ctrl_patched:
+            self.first_ctrl = nn.Linear(32 * patch ** 2, features, bias=True)
+        else:
+            self.first_ctrl = None
+
         self.blocks = nn.ModuleList([
             SingleStreamBlock(features, heads, multiplier, bias, kvheads)
             for _ in range(layers)
@@ -213,14 +218,14 @@ class SingleStreamDiT(nn.Module):
             nn.GELU(approximate="tanh"),
             nn.Linear(features, features),
         )
-        self.last = LastLayer(features, patch, in_channels)
+        self.last = LastLayer(features, patch, 16)
         self.tproj = nn.Sequential(
             nn.GELU(approximate="tanh"),
             nn.Linear(features, features * 6),
         )
 
     def forward(self, x, timesteps, context, negpip=None, attention_mask=None, transformer_options={}, **kwargs):
-        bs, c, H_orig, W_orig = x.shape
+        bs, _, H_orig, W_orig = x.shape
 
         patch = self.patch
         if patch >= 2:
@@ -230,11 +235,29 @@ class SingleStreamDiT(nn.Module):
         H, W = x.shape[-2], x.shape[-1]
         h_, w_ = H // patch, W // patch
 
-        # context arrives as (B, seq, txtlayers*txtdim); reshape to (B, txtlayers, seq, txtdim).
         context = self._unpack_context(context)
 
-        img = rearrange(x, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
-        img = self.first(img)
+        x = rearrange(x, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
+        # img = self.first(x)
+
+        # Reference latents: concat along channels dim
+        ref_latents = kwargs.get("ref_latents", None)
+        if ref_latents is None or not self.ctrl_patched:
+            img = self.first(x)
+        else:
+            if isinstance(ref_latents, list):
+                ctrl = ref_latents[0] # for control lora, only one entry expected
+            else:
+                ctrl = ref_latents
+            if patch >= 2:
+                pad_h = (patch - ctrl.shape[-2] % patch) % patch
+                pad_w = (patch - ctrl.shape[-1] % patch) % patch
+                ctrl = torch.nn.functional.pad(ctrl, (0, pad_w, 0, pad_h), mode="circular")
+
+            ctrl = rearrange(ctrl, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
+
+            img = torch.cat([x, ctrl], dim=-1).contiguous()
+            img = self.first_ctrl(img)
 
         t = self.tmlp(timestep_embedding(timesteps, self.tdim).unsqueeze(1).to(img.dtype))
         tvec = self.tproj(t)
@@ -244,6 +267,7 @@ class SingleStreamDiT(nn.Module):
 
         txtlen, imglen = context.shape[1], img.shape[1]
         combined = torch.cat((context, img), dim=1)
+
 
         # Position ids: text at 0, image at (0, h_idx, w_idx).
         device = combined.device
@@ -263,9 +287,8 @@ class SingleStreamDiT(nn.Module):
             combined = block(combined, negpip, tvec, freqs, None, transformer_options=transformer_options)
 
         final = self.last(combined, t)
-        out = final[:, txtlen:txtlen + imglen, :]
-        out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)",
-                        h=h_, w=w_, ph=patch, pw=patch, c=self.channels)
+        out = final[:, txtlen:txtlen + imglen]
+        out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_, w=w_, ph=patch, pw=patch)
         out = out[:, :, :H_orig, :W_orig]  # crop padding back off
         return out
 
