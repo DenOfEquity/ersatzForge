@@ -3,12 +3,14 @@ import torch
 import numpy
 from einops import rearrange, repeat
 
+from backend.misc.image_resize import adaptive_resize
+from backend.nn.flux import IntegratedFluxTransformer2DModel
+from backend.shared import global_variables
+from backend.sampling.condition import Condition
 from modules import scripts, shared
 from modules.api.api import decode_base64_to_image
 from modules.ui_components import InputAccordion, ToolButton
 from modules.sd_samplers_common import images_tensor_to_samples
-from backend.misc.image_resize import adaptive_resize
-from backend.nn.flux import IntegratedFluxTransformer2DModel
 from modules_forge.forge_canvas.canvas import ForgeCanvas
 
 
@@ -211,10 +213,28 @@ class ersatzOtherControl(scripts.Script):
                         z_image.background.change(fn=get_dims, inputs=[z_image.background, selected_tab], outputs=[z_image_info, z_image_send, z_image_dims], show_progress="hidden")
                         z_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z_image_dims], outputs=None)
 
+                with gradio.Tab("Krea2 Control LoRA") as krea2:
+                    gradio.Markdown("Select the control model in the **Additional modules** menu. Include pre-processed reference image here.")
+                    with gradio.Row():
+                        with gradio.Column():
+                            k2_image = ForgeCanvas(height=300, contrast_scribbles=True, scribble_alpha=50)
+                        with gradio.Column():
+                            k2_mask_mode = gradio.Radio(value="unmasked", choices=["masked", "unmasked"], label="Target area")
+                            k2_strength = gradio.Slider(value=1.0, minimum=0.0, maximum=2.0, step=0.01, label="strength")
+                            k2_stop = gradio.Slider(value=0.85, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
+                            with gradio.Row():
+                                k2_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
+                                k2_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                k2_image_dims = gradio.Textbox(visible=False, value="0")
 
-            fkon.select(fn=lambda: 0, inputs=None, outputs=selected_tab, show_progress="hidden")
+                        k2_image.background.change(fn=get_dims, inputs=[k2_image.background, selected_tab], outputs=[k2_image_info, k2_image_send, k2_image_dims], show_progress="hidden")
+                        k2_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, k2_image_dims], outputs=None)
+
+
+            fkon.select( fn=lambda: 0, inputs=None, outputs=selected_tab, show_progress="hidden")
             klein.select(fn=lambda: 1, inputs=None, outputs=selected_tab, show_progress="hidden")
-            zitc.select(fn=lambda: 2, inputs=None, outputs=selected_tab, show_progress="hidden")
+            zitc.select( fn=lambda: 2, inputs=None, outputs=selected_tab, show_progress="hidden")
+            krea2.select(fn=lambda: 3, inputs=None, outputs=selected_tab, show_progress="hidden")
 
 
         self.infotext_fields = [
@@ -233,13 +253,16 @@ class ersatzOtherControl(scripts.Script):
             (klein_2_str, "klein_2_str"),
             (klein_3_str, "klein_3_str"),
             (klein_4_str, "klein_4_str"),
+            (k2_strength, "k2_strength"),
+            (k2_stop, "k2_stop"),
+            (k2_mask_mode, "k2_mask_mode")
         ]
 
-        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str
+        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image.background, k2_image.foreground, k2_mask_mode, k2_strength, k2_stop
 
 
     def process(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_mask_mode, k2_strength, k2_stop = script_args
         if enabled:
             if selected_tab == 0 and (kontext_1 is not None or kontext_2 is not None) and params.sd_model.is_flux:
                 params.extra_generation_params.update(dict(
@@ -247,7 +270,7 @@ class ersatzOtherControl(scripts.Script):
                     kontext_sizing = kontext_sizing,
                     kontext_reduce = kontext_reduce,
                 ))
-            if selected_tab == 1 and (klein_1 is not None or klein_2 is not None or klein_3 is not None or klein_4 is not None) and params.sd_model.is_flux2:
+            elif selected_tab == 1 and (klein_1 is not None or klein_2 is not None or klein_3 is not None or klein_4 is not None) and params.sd_model.is_flux2:
                 params.extra_generation_params.update(dict(
                     eOC_enabled  = enabled,
                 ))
@@ -259,7 +282,7 @@ class ersatzOtherControl(scripts.Script):
                     params.extra_generation_params.update(dict(klein_3_resize = klein_3_resize, klein_3_str = klein_3_str,))
                 if klein_4 is not None:
                     params.extra_generation_params.update(dict(klein_4_resize = klein_4_resize, klein_4_str = klein_4_str,))
-            if selected_tab == 2 and z_image is not None and z_strength > 0.0 and z_stop < 1.0 and params.sd_model.is_lumina2:
+            elif selected_tab == 2 and z_image is not None and z_strength > 0.0 and z_stop < 1.0 and params.sd_model.is_lumina2:
                 if getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "control", False):
                     params.extra_generation_params.update(dict(
                         eOC_enabled = enabled,
@@ -268,10 +291,18 @@ class ersatzOtherControl(scripts.Script):
                         z_strength  = z_strength,
                         z_stop      = z_stop,
                     ))
+            elif selected_tab == 3 and k2_image is not None and k2_stop < 1.0 and params.sd_model.is_krea2:
+                if getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
+                    params.extra_generation_params.update(dict(
+                        eOC_enabled  = enabled,
+                        k2_mask_mode = k2_mask_mode,
+                        k2_strength  = k2_strength,
+                        k2_stop      = k2_stop,
+                    ))
 
 
     def process_before_every_sampling(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_mask_mode, k2_strength, k2_stop = script_args
 
         if not enabled:
             return
@@ -523,20 +554,70 @@ class ersatzOtherControl(scripts.Script):
             # print ("[Z-Image-Turbo Control] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
             # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
+
+        elif selected_tab == 3 and k2_image is not None and params.sd_model.is_krea2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
+            k_width = w * 8
+            k_height = h * 8
+            patch_size = 2
+
+            if isinstance (k2_mask, str):
+                k2_mask = decode_base64_to_image(k2_mask)
+
+            k2_mask = k2_mask.getchannel("A").convert("L")
+            if k2_mask_mode == "masked":
+                k2_mask = k2_mask.point(lambda v: 1 if v > 128 else 0)
+            else:
+                k2_mask = k2_mask.point(lambda v: 0 if v > 128 else 1)
+            k2_mask = numpy.array(k2_mask.convert("RGB"))
+            k2_mask = numpy.transpose(k2_mask, (2, 0, 1))
+            k2_mask = torch.tensor(k2_mask).unsqueeze(0)
+
+            if k2_mask.shape[3] != w*8 or k2_mask.shape[2] != h*8:
+                k2_mask = adaptive_resize(k2_mask, w*8, h*8, "lanczos", "center") #does this handle one channel?
+
+            k_latent = pil_to_latent(k2_image, k_width, k_height, patch_size, "Krea2", mask=k2_mask)
+
+            k_latent = Condition(k_latent)
+            percent_to_timestep_function = params.sd_model.forge_objects.unet.model.predictor.percent_to_sigma
+            end_sigma = percent_to_timestep_function(k2_stop)
+
+            setattr(global_variables, "krea2_control_lora_strength", k2_strength)
+            
+            def ref_latents_modifier(model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed):
+                t = timestep[0].item()
+                if t < end_sigma:
+                    setattr(global_variables, "krea2_control_lora_strength", 0.0)
+                    return model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed
+
+                if un_cond is not None:
+                    for c in un_cond:
+                        c["model_conds"]["ref_latents"] = k_latent
+                for c in m_cond:
+                    c["model_conds"]["ref_latents"] = k_latent
+
+                return model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed
+            
+            params.sd_model.forge_objects.unet.add_conditioning_modifier(ref_latents_modifier)
+
         return
+
 
     def postprocess(self, params, processed, *args):
         enabled, selected_tab = args[0], args[1]
         if enabled:
-            if selected_tab == 0:
-                IntegratedFluxTransformer2DModel.forward = ersatzOtherControl.original_kontext_forward
-                params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
-            if selected_tab == 1:
-                shared.klein_strength = (0.0, 0.0, 0.0, 0.0)
-                params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
-            if selected_tab == 2:
-                shared.ZITstrength = 0.0
-                shared.ZITstop = 0.0
-                # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
-
+            match selected_tab:
+                case 0:
+                    IntegratedFluxTransformer2DModel.forward = ersatzOtherControl.original_kontext_forward
+                    params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
+                case 1:
+                    shared.klein_strength = (0.0, 0.0, 0.0, 0.0)
+                    params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
+                case 2:
+                    shared.ZITstrength = 0.0
+                    shared.ZITstop = 0.0
+                    # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
+                case 3:
+                    setattr(global_variables, "krea2_control_lora_strength", 0.0)
+                case _:
+                    pass
         return
