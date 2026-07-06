@@ -307,7 +307,7 @@ class StableDiffusionProcessing:
         )
 
         # Encode the new masked image using first stage of network.
-        conditioning_image = self.sd_model.get_first_stage_encoding(self.sd_model.encode_first_stage(conditioning_image))
+        conditioning_image = self.sd_model.encode_first_stage(conditioning_image)
 
         # Create the concatenated conditioning tensor to be fed to `c_concat`
         conditioning_mask = torch.nn.functional.interpolate(conditioning_mask, size=latent_image.shape[-2:])
@@ -891,7 +891,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
     if p.refiner_checkpoint not in (None, "", "None", "none", "[STOP]"):
         p.refiner_checkpoint_info = sd_models.get_closet_checkpoint_match(p.refiner_checkpoint)
         if p.refiner_checkpoint_info is None:
-            raise Exception(f'Could not find checkpoint with name {p.refiner_checkpoint}')
+            raise Exception(f"[Refiner] Could not find checkpoint with name {p.refiner_checkpoint}")
 
     p.sd_model_name = shared.sd_model.sd_checkpoint_info.name_for_extra
     p.sd_model_hash = shared.sd_model.sd_model_hash
@@ -1043,7 +1043,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 # avoid postprocessing if generation interrupted
                 if not (state.interrupted or state.stopping_generation):
                     if save_samples and opts.save_images_before_postprocess:
-                        images.save_image(Image.fromarray(x_sample), p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=infotexts[i], p=p, suffix="-before-postprocess")
+                        images.save_image(Image.fromarray(x_sample), p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=infotexts[i + n * p.batch_size], p=p, suffix="-before-postprocess")
 
                     if opts.face_restoration_model != "None" and opts.face_restoration_before_scripts and not (state.interrupted or state.stopping_generation):
                         devices.torch_gc()
@@ -1088,10 +1088,10 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                     image = Image.fromarray(x_sample)
 
                 if save_samples:
-                    images.save_image(image, p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=infotexts[i], p=p)
+                    images.save_image(image, p.outpath_samples, "", p.seeds[i], p.prompts[i], opts.samples_format, info=infotexts[i + n * p.batch_size], p=p)
 
                 if opts.enable_pnginfo:
-                    image.info["parameters"] = infotexts[i]
+                    image.info["parameters"] = infotexts[i + n * p.batch_size]
                 output_images.append(image)
 
             del x_samples_ddim
