@@ -51,7 +51,7 @@ class Wan(ForgeDiffusionEngine):
 
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt):
-        token_count = len(self.text_processing_engine_t5.tokenize([prompt])[0])
+        token_count = self.text_processing_engine_t5.tokenize_for_UI(prompt)
         return token_count, max(512, token_count)
 
     @torch.inference_mode()

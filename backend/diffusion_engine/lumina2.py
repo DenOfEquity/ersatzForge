@@ -46,7 +46,7 @@ class Lumina2(ForgeDiffusionEngine):
 
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt):
-        token_count = len(self.text_processing_engine_gemma.tokenize([prompt])[0])
+        token_count = self.text_processing_engine_gemma.tokenize_for_UI(prompt)
         return token_count, -1
 
     @torch.inference_mode()
@@ -100,7 +100,7 @@ class Zimage(ForgeDiffusionEngine):
 
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt):
-        token_count = len(self.text_processing_engine_qwen.tokenize([prompt])[0])
+        token_count = self.text_processing_engine_qwen.tokenize_for_UI(prompt)
         return token_count, -1
 
     @torch.inference_mode()

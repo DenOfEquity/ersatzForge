@@ -91,15 +91,12 @@ class Flux(ForgeDiffusionEngine):
         if self.use_distilled_cfg_scale:
             distilled_cfg_scale = getattr(prompt, 'distilled_cfg_scale', 3.5) or 3.5
             cond['guidance'] = torch.FloatTensor([distilled_cfg_scale] * len(prompt))
-            print(f'Distilled CFG Scale: {distilled_cfg_scale}')
-        else:
-            print('Distilled CFG Scale will be ignored for Schnell')
 
         return cond
 
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt):
-        token_count = len(self.text_processing_engine_t5.tokenize([prompt])[0])
+        token_count = self.text_processing_engine_t5.tokenize_for_UI(prompt)
         return token_count, max(255, token_count)
 
     @torch.inference_mode()

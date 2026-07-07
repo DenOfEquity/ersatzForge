@@ -52,11 +52,12 @@ class ERNIE(ForgeDiffusionEngine):
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
-        return self.text_processing_engine(prompt)
+        cond_qwen = self.text_processing_engine(prompt)
+        return cond_qwen
 
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt):
-        token_count = len(self.text_processing_engine.tokenize([prompt])[0])
+        token_count = self.text_processing_engine.tokenize_for_UI(prompt)
         return token_count, -1
 
     @torch.inference_mode()
