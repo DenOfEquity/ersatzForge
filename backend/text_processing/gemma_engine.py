@@ -27,6 +27,12 @@ class GemmaTextProcessingEngine:
         tokenized = self.tokenizer(texts, truncation=False, add_special_tokens=False)["input_ids"]
         return tokenized
 
+    def tokenize_for_UI(self, prompt):
+        parsed = parsing.parse_prompt_attention(prompt, "Ignore")
+        text = "".join([text for text, _ in parsed if text != "BREAK"])
+        length = len(self.tokenizer(text, truncation=False, add_special_tokens=False)["input_ids"])
+        return length + 2
+
     def tokenize_line(self, line):
         parsed = parsing.parse_prompt_attention(line, self.emphasis.name)
 

@@ -32,6 +32,11 @@ class AnimaTextProcessingEngine:
             self.t5_tokenizer(texts, truncation=False, add_special_tokens=False)["input_ids"],
         )
 
+    def tokenize_for_UI(self, prompt):
+        parsed = parsing.parse_prompt_attention(prompt, "Ignore")
+        text = "".join([text for text, _ in parsed if text != "BREAK"])
+        return 1 + len(self.qwen_tokenizer(text, truncation=False, add_special_tokens=False)["input_ids"])
+
     def tokenize_line(self, line):
         parsed = parsing.parse_prompt_attention(line, self.emphasis.name)
         qwen_tokenized, t5_tokenized = self.tokenize([text for text, _ in parsed])

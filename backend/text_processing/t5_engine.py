@@ -33,6 +33,14 @@ class T5TextProcessingEngine:
         tokenized = self.tokenizer(texts, truncation=False, add_special_tokens=self.add_special_tokens)["input_ids"]
         return tokenized
 
+    def tokenize_for_UI(self, prompt):
+        parsed = parsing.parse_prompt_attention(prompt, "Ignore")
+        text = "".join([text for text, _ in parsed if text != "BREAK"])
+        length = len(self.tokenizer(text, truncation=False, add_special_tokens=self.add_special_tokens)["input_ids"])
+        if self.end_with_pad:
+            length += 1
+        return 1 + length
+
     def _process_tokens(self, tokens):
         attention_masks = []
 

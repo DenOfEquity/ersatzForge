@@ -35,6 +35,7 @@ class Qwen3TextProcessingEngine:
         
         if is_flux2:
             self.intermediate_output = [9, 18, 27]
+            # self.intermediate_output = [7, 17, 27]
         elif is_krea2:
             self.intermediate_output = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
         else:
@@ -49,6 +50,21 @@ class Qwen3TextProcessingEngine:
 
     def tokenize(self, texts):
         return self.tokenizer(texts)["input_ids"]
+
+    def tokenize_for_UI(self, prompt):
+        parsed = parsing.parse_prompt_attention(prompt, "Ignore")
+        text = "".join([text for text, _ in parsed if text != "BREAK"])
+        length = len(self.tokenizer(text, truncation=False, add_special_tokens=False)["input_ids"])
+
+        if self.is_flux2:
+            extra_length = 3 + 11
+        elif self.is_krea2:
+            extra_length = 3 + 11
+        elif self.is_ERNIE:
+            extra_length = 1
+        else:
+            extra_length = 3 + 5
+        return length + extra_length
 
     def tokenize_line(self, line):
         parsed = parsing.parse_prompt_attention(line, self.emphasis.name)
