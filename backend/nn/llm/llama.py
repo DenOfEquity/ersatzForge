@@ -84,30 +84,6 @@ class Qwen3_4BConfig:
 
 
 @dataclass
-class Qwen3VL_4BConfig:
-    vocab_size: int = 151936
-    hidden_size: int = 2560
-    intermediate_size: int = 9728
-    num_hidden_layers: int = 36
-    num_attention_heads: int = 32
-    num_key_value_heads: int = 8
-    max_position_embeddings: int = 40960
-    rms_norm_eps: float = 1e-6
-    rope_theta: float = 1000000.0
-    transformer_type: str = "llama"
-    head_dim = 128
-    rms_norm_add = False
-    mlp_activation = "silu"
-    qkv_bias = False
-    rope_dims = None
-    q_norm = "gemma3"
-    k_norm = "gemma3"
-    rope_scale = None
-    final_norm: bool = True
-
-
-
-@dataclass
 class Qwen3_8BConfig:
     vocab_size: int = 151936
     hidden_size: int = 4096
@@ -133,6 +109,7 @@ class Qwen3_8BConfig:
 @dataclass
 class Qwen3VL_4BConfig(Qwen3_8BConfig):
     max_position_embeddings: int = 262144
+    num_hidden_layers: int = 36
     rope_theta: float = 5000000.0
     rope_dims = [24, 20, 20]
     interleaved_mrope = True
@@ -522,6 +499,10 @@ class Qwen3_4B(BaseLlama, torch.nn.Module):
             if key in config_dict:
                 assert value == config_dict[key]
 
+        if "layers_hack" in config_dict: # for Klein4B
+            config.num_hidden_layers = config_dict["layers_hack"]
+        else:
+            config.num_hidden_layers = 36
         self.num_layers = config.num_hidden_layers
         self.model = Llama2_(config)
 
@@ -550,6 +531,10 @@ class Qwen3_8B(BaseLlama, torch.nn.Module):
             if key in config_dict:
                 assert value == config_dict[key]
 
+        if "layers_hack" in config_dict: # for Klein9B
+            config.num_hidden_layers = config_dict["layers_hack"]
+        else:
+            config.num_hidden_layers = 36
         self.num_layers = config.num_hidden_layers
         self.model = Llama2_(config)
 

@@ -236,11 +236,15 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             config = read_arbitrary_config(config_path)
 
             if config["hidden_size"] == 4096:
+                if guess.huggingface_repo == "black-forest-labs/FLUX.2-klein-9B": # only need layers 0-27 for Klein9B
+                    config["layers_hack"] = 28
                 from backend.nn.llm.llama import Qwen3_8B as Qwen3
             elif config["hidden_size"] == 2560:
                 if cls_name == "Qwen3VLModel":
                     from backend.nn.llm.llama import Qwen3VL_4B as Qwen3
                 else:
+                    if guess.huggingface_repo == "black-forest-labs/FLUX.2-klein-4B": # only need layers 0-27 for Klein4B
+                        config["layers_hack"] = 28
                     from backend.nn.llm.llama import Qwen3_4B as Qwen3
             else:
                 from backend.nn.llm.llama import Qwen3_06B as Qwen3
@@ -548,6 +552,8 @@ def replace_state_dict(sd, asd, guess):
     legacy_test_key = "model.diffusion_model.input_blocks.4.1.transformer_blocks.0.attn2.to_k.weight"
     cosmos_test_key = "net.blocks.0.adaln_modulation_cross_attn.1.weight"
     wan_test_key = "model.diffusion_model.head.modulation"
+# could use guess.huggingface_repo
+
 
     model_type = "-"
     if legacy_test_key in sd:
@@ -864,6 +870,13 @@ def replace_state_dict(sd, asd, guess):
             size_str = None
 
         if size_str:
+            if "FLUX.2-klein" in guess.huggingface_repo: # only need layers 0-27 for Klein 4B and 9B
+                for k in list(asd.keys()):
+                    if k.startswith("model.layers."):
+                        layer = int(k.split(".")[2])
+                        if layer > 27:
+                            asd.pop(k)
+
             for k, v in asd.items():
                 if k.startswith("model.visual."):
                     continue
@@ -938,6 +951,12 @@ def replace_state_dict(sd, asd, guess):
         for k, v in asd.items():
             if k.startswith("control_"):
                 sd["model.diffusion_model." + k] = asd[k]
+
+
+# krea2 depth control lora loaded thru ControlNet as ReferenceControlLoraPatcher
+    # if "model.diffusion_model.first.bias" in sd and "model.diffusion_model.first_ctrl.bias" not in sd:
+        # sd["model.diffusion_model.first_ctrl.bias"] = torch.zeros(6144, dtype=torch.float32, requires_grad=False)
+        # sd["model.diffusion_model.first_ctrl.weight"] = torch.zeros(6144, 128, dtype=torch.float32, requires_grad=False)
 
 
 # Krea2 (depth) control lora by Tanmay Patil, loaded directly into model
