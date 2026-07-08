@@ -230,7 +230,10 @@ class Qwen3TextProcessingEngine:
 
         memory_management.soft_empty_cache()
 
-        if self.is_flux2 or self.is_krea2:
+        if self.is_flux2:
             z = z.movedim(1, 2)
             z = z.reshape(z.shape[0], z.shape[1], -1)
+        elif self.is_krea2:
+            z = z.movedim(1, 2) # [b, seq, txt_layers, txt_dim]
+
         return z

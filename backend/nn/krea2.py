@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-from backend import memory_management
+# from backend import memory_management
 from backend.nn.flux import EmbedND, timestep_embedding, apply_rope
 from backend.attention import attention_function
 
@@ -27,8 +27,8 @@ class RMSNorm(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         dtype = x.dtype
-        weight = memory_management.cast_to_device(self.scale, dtype=torch.float32, device=x.device) + 1.0
-        return F.rms_norm(x.float(), (x.shape[-1],), weight=weight, eps=self.eps).to(dtype)
+        weight = self.scale.to(device=x.device).to(torch.float32) + 1.0
+        return F.rms_norm(x.to(torch.float32), (x.shape[-1],), weight=weight, eps=self.eps).to(dtype)
 
 
 class QKNorm(nn.Module):
@@ -86,7 +86,8 @@ class Attention(nn.Module):
         out = attention_function(q, k, v, self.heads, mask=mask, skip_reshape=True)
 
         gate = self.gate(x)
-        return self.wo(out * F.sigmoid(gate))
+        out.mul_(F.sigmoid(gate))
+        return self.wo(out)
 
 
 class SimpleModulation(nn.Module):
@@ -95,7 +96,7 @@ class SimpleModulation(nn.Module):
         self.lin = nn.Parameter(torch.empty(2, dim))
 
     def forward(self, vec):
-        out = vec + memory_management.cast_to_device(self.lin, dtype=vec.dtype, device=vec.device).unsqueeze(0)
+        out = vec + self.lin.to(vec).unsqueeze(0)
         scale, shift = out.chunk(2, dim=1)
         return scale, shift
 
@@ -106,7 +107,7 @@ class DoubleSharedModulation(nn.Module):
         self.lin = nn.Parameter(torch.empty(6 * dim))
 
     def forward(self, vec):
-        out = vec + memory_management.cast_to_device(self.lin, dtype=vec.dtype, device=vec.device)
+        out = vec + self.lin.to(vec)
         return out.chunk(6, dim=-1)
 
 
@@ -160,8 +161,8 @@ class SingleStreamBlock(nn.Module):
 
     def forward(self, x, negpip, vec, freqs, mask=None, transformer_options={}):
         prescale, preshift, pregate, postscale, postshift, postgate = self.mod(vec)
-        x = x + pregate * self.attn((1 + prescale) * self.prenorm(x) + preshift, negpip, freqs, mask, transformer_options=transformer_options)
-        x = x + postgate * self.mlp((1 + postscale) * self.postnorm(x) + postshift)
+        x.addcmul_(pregate, self.attn(torch.addcmul(preshift, 1 + prescale, self.prenorm(x)), negpip, freqs, mask, transformer_options=transformer_options))
+        x.addcmul_(postgate, self.mlp(torch.addcmul(postshift, 1 + postscale, self.postnorm(x))))
         return x
 
 
@@ -174,7 +175,7 @@ class LastLayer(nn.Module):
 
     def forward(self, x, tvec):
         scale, shift = self.modulation(tvec)
-        x = (1 + scale) * self.norm(x) + shift
+        x = torch.addcmul(shift, 1 + scale, self.norm(x))
         return self.linear(x)
 
 
@@ -235,10 +236,7 @@ class SingleStreamDiT(nn.Module):
         H, W = x.shape[-2], x.shape[-1]
         h_, w_ = H // patch, W // patch
 
-        context = self._unpack_context(context)
-
         x = rearrange(x, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
-        # img = self.first(x)
 
         # Reference latents: concat along channels dim
         ref_latents = kwargs.get("ref_latents", None)
@@ -268,7 +266,6 @@ class SingleStreamDiT(nn.Module):
         txtlen, imglen = context.shape[1], img.shape[1]
         combined = torch.cat((context, img), dim=1)
 
-
         # Position ids: text at 0, image at (0, h_idx, w_idx).
         device = combined.device
         txtpos = torch.zeros(bs, txtlen, 3, device=device, dtype=torch.float32)
@@ -291,8 +288,3 @@ class SingleStreamDiT(nn.Module):
         out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_, w=w_, ph=patch, pw=patch)
         out = out[:, :, :H_orig, :W_orig]  # crop padding back off
         return out
-
-    def _unpack_context(self, context):
-        # context: (B, seq, txtlayers*txtdim) -> (B, seq, txtlayers, txtdim).
-        b, seq, fused = context.shape
-        return context.reshape(b, seq, self.txtlayers, self.txtdim)
