@@ -55,17 +55,16 @@ def load_lora(lora, to_load):
                 new_lora[k] = lora[k]
         return new_lora
 
-
-    # rename keys NewBie - for NewBie model only(?) [Lumina derived, not supported]
-    # def convert_NewBie(sd):
-        # new_lora = {}
-        # for k, v in lora.items():
-            # if k.startswith("base_model.model."):
-                # name = "diffusion_model." + k[17:]
-                # new_lora[name] = lora[k]
-            # else:
-                # new_lora[k] = lora[k]
-        # return new_lora
+    # rename keys FAL.AI (Krea2)
+    def convert_fal(sd):
+        new_lora = {}
+        for k, v in lora.items():
+            if k.startswith("base_model.model."):
+                name = "diffusion_model." + k[17:]
+                new_lora[name] = lora[k]
+            else:
+                new_lora[k] = lora[k]
+        return new_lora
 
 
     if "img_in.lora_A.weight" in lora and "single_blocks.0.norm.key_norm.scale" in lora:
@@ -74,8 +73,9 @@ def load_lora(lora, to_load):
     if any(k.startswith("oft_") for k in lora.keys()):
         lora = convert_oft(lora)
 
-    # if any(k.startswith("base_model.") for k in lora.keys()):
-        # lora = convert_NewBie(lora)
+    if any(k.startswith("base_model.model.") for k in lora.keys()):
+        lora = convert_fal(lora)
+
 
     patch_dict = {}
     loaded_keys = set()
