@@ -121,6 +121,20 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             return model
 
 
+        def state_dict_info(state_dict_dtype, storage_dtype, model_text=""):
+            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
+                print(f"{cc.SETTING2}Using detected {model_text} data type: {state_dict_dtype}{cc.RESET}")
+                storage_dtype = state_dict_dtype
+                if state_dict_dtype == "gguf":
+                    beautiful_print_gguf_state_dict_statics(state_dict)
+                elif state_dict_dtype in ["nf4", "fp4"]:
+                    print("Using pre-quant state dict!")
+            else:
+                print(f"{cc.SETTING2}Using default {model_text} data type: {storage_dtype}{cc.RESET}")
+
+            return storage_dtype
+
+
         if component_name.startswith("text_encoder") and cls_name in ["CLIPTextModel", "CLIPTextModelWithProjection"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing CLIP text encoder!"
 
@@ -131,16 +145,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
-
-            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
-                print(f"{cc.SETTING2}Using Detected CLIP Data Type: {state_dict_dtype}{cc.RESET}")
-                storage_dtype = state_dict_dtype
-                if state_dict_dtype == "gguf":
-                    beautiful_print_gguf_state_dict_statics(state_dict)
-                elif state_dict_dtype in ["nf4", "fp4"]:
-                    print("Using pre-quant state dict!")
-            else:
-                print(f"{cc.SETTING2}Using Default CLIP Data Type: {storage_dtype}{cc.RESET}")
+            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "CLIP")
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
@@ -173,16 +178,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
-
-            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
-                print(f"{cc.SETTING2}Using Detected Gemma2 Data Type: {state_dict_dtype}{cc.RESET}")
-                storage_dtype = state_dict_dtype
-                if state_dict_dtype == "gguf":
-                    beautiful_print_gguf_state_dict_statics(state_dict)
-                elif state_dict_dtype in ["nf4", "fp4"]:
-                    print("Using pre-quant state dict!")
-            else:
-                print(f"{cc.SETTING2}Using Default Gemma2 Data Type: {storage_dtype}{cc.RESET}")
+            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "Gemma2")
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
@@ -206,16 +202,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
-
-            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
-                print(f"{cc.SETTING2}Using Detected Ministral Data Type: {state_dict_dtype}{cc.RESET}")
-                storage_dtype = state_dict_dtype
-                if state_dict_dtype == "gguf":
-                    beautiful_print_gguf_state_dict_statics(state_dict)
-                elif state_dict_dtype in ["nf4", "fp4"]:
-                    print("Using pre-quant state dict!")
-            else:
-                print(f"{cc.SETTING2}Using Default Ministral Data Type: {storage_dtype}{cc.RESET}")
+            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "Ministral")
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
@@ -251,16 +238,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
-
-            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
-                print(f"{cc.SETTING2}Using Detected Qwen3 Data Type: {state_dict_dtype}{cc.RESET}")
-                storage_dtype = state_dict_dtype
-                if state_dict_dtype == "gguf":
-                    beautiful_print_gguf_state_dict_statics(state_dict)
-                elif state_dict_dtype in ["nf4", "fp4"]:
-                    print("Using pre-quant state dict!")
-            else:
-                print(f"{cc.SETTING2}Using Default Qwen3 Data Type: {storage_dtype}{cc.RESET}")
+            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "Qwen3")
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
@@ -324,16 +302,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
-
-            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
-                print(f"{cc.SETTING2}Using Detected T5 Data Type: {state_dict_dtype}{cc.RESET}")
-                storage_dtype = state_dict_dtype
-                if state_dict_dtype == "gguf":
-                    beautiful_print_gguf_state_dict_statics(state_dict)
-                elif state_dict_dtype in ["nf4", "fp4"]:
-                    print("Using pre-quant state dict!")
-            else:
-                print(f"{cc.SETTING2}Using Default T5 Data Type: {storage_dtype}{cc.RESET}")
+            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "T5")
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
@@ -430,21 +399,15 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             unet_config = guess.unet_config.copy()
             state_dict_parameters = memory_management.state_dict_parameters(state_dict)
+
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
 
-            storage_dtype = memory_management.unet_dtype(model_params=state_dict_parameters, supported_dtypes=guess.supported_inference_dtypes)
-
             unet_storage_dtype_overwrite = backend.args.dynamic_args.get("forge_unet_storage_dtype")
-
             if unet_storage_dtype_overwrite is not None:
                 storage_dtype = unet_storage_dtype_overwrite
-            elif state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
-                print(f"{cc.SETTING2}Using Detected UNet Type: {state_dict_dtype}{cc.RESET}")
-                storage_dtype = state_dict_dtype
-                if state_dict_dtype == "gguf":
-                    beautiful_print_gguf_state_dict_statics(state_dict)
-                elif state_dict_dtype in ["nf4", "fp4"]:
-                    print("Using pre-quant state dict!")
+            else:
+                storage_dtype = memory_management.unet_dtype(model_params=state_dict_parameters, supported_dtypes=guess.supported_inference_dtypes)
+                storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "UNet" if cls_name == "UNet2DConditionModel" else "Transformer")
 
             load_device = memory_management.get_torch_device()
             computation_dtype = memory_management.get_computation_dtype(load_device, parameters=state_dict_parameters, supported_dtypes=guess.supported_inference_dtypes)
@@ -961,13 +924,13 @@ def replace_state_dict(sd, asd, guess):
 
 # Krea2 (depth) control lora by Tanmay Patil, loaded directly into model
 # faster to load and less memory, and actually works: modifications in operations.ForgeOperations.Linear to handle .A/.B pairs
-    if "model.diffusion_model.first.bias" in sd and "first.bias" in asd and "blocks.0.attn.gate.A" in asd:
-        sd["model.diffusion_model.first_ctrl.bias"]   = asd.pop("first.bias")     # note different name, to allow bypass
-        sd["model.diffusion_model.first_ctrl.weight"] = asd.pop("first.weight")
+    if "Krea2" in guess.huggingface_repo:
+        if "first.bias" in asd and "blocks.0.attn.gate.A" in asd:
+            sd["model.diffusion_model.first_ctrl.bias"]   = asd.pop("first.bias")     # note different name, to allow bypass
+            sd["model.diffusion_model.first_ctrl.weight"] = asd.pop("first.weight")
 
-        for k in list(asd.keys()):
-            sd["model.diffusion_model." + k] = asd.pop(k)
-
+            for k in list(asd.keys()):
+                sd["model.diffusion_model." + k] = asd.pop(k)
 
     return sd
 
