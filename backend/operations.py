@@ -163,7 +163,7 @@ class ForgeOperations:
                 super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
 
         def forward(self, x):
-            strength = getattr(global_variables, "krea2_control_lora_strength", 0.0)
+            strength = getattr(global_variables, "krea2_control_lora_strength", 0.0) or 0.0
             if self.parameters_manual_cast:
                 weight, bias, signal = weights_manual_cast(self, x)
                 if self.A is not None and strength > 0.0:
