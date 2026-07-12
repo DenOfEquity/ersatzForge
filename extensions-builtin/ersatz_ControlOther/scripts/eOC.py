@@ -580,11 +580,8 @@ class ersatzOtherControl(scripts.Script):
                 k2_latent = pil_to_latent(k2_image, k_width, k_height, patch_size, "Krea2 Control", mask=k2_mask)
                 setattr(global_variables, "krea2_control_lora_latent", k2_latent)
 
-            percent_to_timestep_function = params.sd_model.forge_objects.unet.model.predictor.percent_to_sigma
-            end_sigma = percent_to_timestep_function(k2_stop)
-
             setattr(global_variables, "krea2_control_lora_strength", k2_strength)
-            setattr(global_variables, "krea2_control_lora_stop_sigma", end_sigma)
+            setattr(global_variables, "krea2_control_lora_stop_sigma", k2_stop)
 
         return
 
