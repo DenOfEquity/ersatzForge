@@ -6,7 +6,6 @@ from einops import rearrange, repeat
 from backend.misc.image_resize import adaptive_resize
 from backend.nn.flux import IntegratedFluxTransformer2DModel
 from backend.shared import global_variables
-from backend.sampling.condition import Condition
 from modules import scripts, shared
 from modules.api.api import decode_base64_to_image
 from modules.ui_components import InputAccordion, ToolButton
@@ -18,9 +17,6 @@ def patched_flux_forward(self, x, timestep, context, y, guidance=None, **kwargs)
     bs, c, h, w = x.shape
 
     if c != 16:
-        # fix the case where user is also using FluxTools extension, x has extra channels
-        # spam message every step, so user might pay attention, or silently fix?
-        # print ("\n[Kontext] ERROR: too many channels, excess channels will be stripped.\n")
         x = x[:, :16, :, :]
 
     input_device = x.device
@@ -64,10 +60,6 @@ PREFERRED_KONTEXT_RESOLUTIONS = [
 ]
 
 
-#extra memory reservation for Z-Image-Turbo Controlommented out as control layers are processed before standard layers
-#Task Manager shows increased VRAM usage, into shared memory, but no slowdown noticed
-
-
 class ersatzOtherControl(scripts.Script):
     sorting_priority = 0
     zitc_image_hash = None
@@ -80,6 +72,8 @@ class ersatzOtherControl(scripts.Script):
     kontext_resize = None
     klein_image_hash = None
     klein_latent_size = None
+    k2_image_hash = None
+    k2_latent_size = None
 
     def __init__(self):
         if ersatzOtherControl.original_kontext_forward is None:
@@ -317,7 +311,7 @@ class ersatzOtherControl(scripts.Script):
 
         def pil_to_latent(image, width, height, pad, mode_text, mask=None):
             if isinstance (image, str):
-                image = decode_base64_to_image(image).convert('RGB')
+                image = decode_base64_to_image(image)
             image = numpy.array(image.convert('RGB')) / 255.0
             image = numpy.transpose(image, (2, 0, 1))
             image = torch.tensor(image).unsqueeze(0)
@@ -550,54 +544,47 @@ class ersatzOtherControl(scripts.Script):
                 shared.ZITstrength = z_strength
                 shared.ZITstop = z_stop
 
-            # extra_mem = n * shared.ZITlatent.shape[1] * shared.ZITlatent.shape[2] * x.element_size() * 1024 * 1.2
-            # print ("[Z-Image-Turbo Control] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
-            # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
-
 
         elif selected_tab == 3 and k2_image is not None and params.sd_model.is_krea2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
             k_width = w * 8
             k_height = h * 8
             patch_size = 2
 
-            if isinstance (k2_mask, str):
-                k2_mask = decode_base64_to_image(k2_mask)
-
-            k2_mask = k2_mask.getchannel("A").convert("L")
-            if k2_mask_mode == "masked":
-                k2_mask = k2_mask.point(lambda v: 1 if v > 128 else 0)
+            if isinstance (k2_image, str):
+                k2_image_hash = hash(k2_image + k2_mask + k2_mask_mode)
             else:
-                k2_mask = k2_mask.point(lambda v: 0 if v > 128 else 1)
-            k2_mask = numpy.array(k2_mask.convert("RGB"))
-            k2_mask = numpy.transpose(k2_mask, (2, 0, 1))
-            k2_mask = torch.tensor(k2_mask).unsqueeze(0)
+                k2_image_hash = hash(str(list(k2_image.getdata(band=None))) + str(list(k2_mask.getdata(band=None))) + k2_mask_mode)
+            k2_latent_size = (w, h)
 
-            if k2_mask.shape[3] != w*8 or k2_mask.shape[2] != h*8:
-                k2_mask = adaptive_resize(k2_mask, w*8, h*8, "lanczos", "center") #does this handle one channel?
+            if k2_image_hash == self.k2_image_hash and k2_latent_size == self.k2_latent_size:
+                print ("[Krea2 Control] used cache")
+            else:
+                self.k2_image_hash = k2_image_hash
+                self.k2_latent_size = k2_latent_size
 
-            k_latent = pil_to_latent(k2_image, k_width, k_height, patch_size, "Krea2", mask=k2_mask)
+                if isinstance (k2_mask, str):
+                    k2_mask = decode_base64_to_image(k2_mask)
 
-            k_latent = Condition(k_latent)
+                k2_mask = k2_mask.getchannel("A").convert("L")
+                if k2_mask_mode == "masked":
+                    k2_mask = k2_mask.point(lambda v: 1 if v > 128 else 0)
+                else:
+                    k2_mask = k2_mask.point(lambda v: 0 if v > 128 else 1)
+                k2_mask = numpy.array(k2_mask.convert("RGB"))
+                k2_mask = numpy.transpose(k2_mask, (2, 0, 1))
+                k2_mask = torch.tensor(k2_mask).unsqueeze(0)
+
+                if k2_mask.shape[3] != k_width or k2_mask.shape[2] != k_height:
+                    k2_mask = adaptive_resize(k2_mask, k_width, k_height, "lanczos", "center")
+
+                k2_latent = pil_to_latent(k2_image, k_width, k_height, patch_size, "Krea2 Control", mask=k2_mask)
+                setattr(global_variables, "krea2_control_lora_latent", k2_latent)
+
             percent_to_timestep_function = params.sd_model.forge_objects.unet.model.predictor.percent_to_sigma
             end_sigma = percent_to_timestep_function(k2_stop)
 
             setattr(global_variables, "krea2_control_lora_strength", k2_strength)
-            
-            def ref_latents_modifier(model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed):
-                t = timestep[0].item()
-                if t < end_sigma:
-                    setattr(global_variables, "krea2_control_lora_strength", 0.0)
-                    return model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed
-
-                if un_cond is not None:
-                    for c in un_cond:
-                        c["model_conds"]["ref_latents"] = k_latent
-                for c in m_cond:
-                    c["model_conds"]["ref_latents"] = k_latent
-
-                return model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed
-            
-            params.sd_model.forge_objects.unet.add_conditioning_modifier(ref_latents_modifier)
+            setattr(global_variables, "krea2_control_lora_stop_sigma", end_sigma)
 
         return
 
@@ -615,9 +602,10 @@ class ersatzOtherControl(scripts.Script):
                 case 2:
                     shared.ZITstrength = 0.0
                     shared.ZITstop = 0.0
-                    # params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
                 case 3:
                     setattr(global_variables, "krea2_control_lora_strength", 0.0)
+                    setattr(global_variables, "krea2_control_lora_stop_sigma", 1.0)
+                    # setattr(global_variables, "krea2_control_lora_latent", None) # keep it, for repeat use
                 case _:
                     pass
         return
