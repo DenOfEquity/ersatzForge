@@ -12,9 +12,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-# from backend import memory_management
 from backend.nn.flux import EmbedND, timestep_embedding, apply_rope
 from backend.attention import attention_function
+from backend.shared import global_variables
 
 
 class RMSNorm(nn.Module):
@@ -227,6 +227,7 @@ class SingleStreamDiT(nn.Module):
 
     def forward(self, x, timesteps, context, negpip=None, attention_mask=None, transformer_options={}, **kwargs):
         bs, _, H_orig, W_orig = x.shape
+        device = x.device
 
         patch = self.patch
         if patch >= 2:
@@ -238,15 +239,17 @@ class SingleStreamDiT(nn.Module):
 
         x = rearrange(x, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
 
-        # Reference latents: concat along channels dim
-        ref_latents = kwargs.get("ref_latents", None)
-        if ref_latents is None or not self.ctrl_patched:
+        end_sigma = getattr(global_variables, "krea2_control_lora_stop_sigma", 1.0)
+        strength = getattr(global_variables, "krea2_control_lora_strength", 0.0)
+        if timesteps[0].item() > end_sigma and strength > 0.0:
+            ctrl = getattr(global_variables, "krea2_control_lora_latent", None)
+        else:
+            ctrl = None
+            setattr(global_variables, "krea2_control_lora_strength", 0.0)
+
+        if ctrl is None or not self.ctrl_patched:
             img = self.first(x)
         else:
-            if isinstance(ref_latents, list):
-                ctrl = ref_latents[0] # for control lora, only one entry expected
-            else:
-                ctrl = ref_latents
             if patch >= 2:
                 pad_h = (patch - ctrl.shape[-2] % patch) % patch
                 pad_w = (patch - ctrl.shape[-1] % patch) % patch
@@ -254,7 +257,7 @@ class SingleStreamDiT(nn.Module):
 
             ctrl = rearrange(ctrl, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
 
-            img = torch.cat([x, ctrl], dim=-1).contiguous()
+            img = torch.cat([x, ctrl], dim=2).contiguous()
             img = self.first_ctrl(img)
 
         t = self.tmlp(timestep_embedding(timesteps, self.tdim).unsqueeze(1).to(img.dtype))
@@ -264,15 +267,14 @@ class SingleStreamDiT(nn.Module):
         context = self.txtmlp(context)
 
         txtlen, imglen = context.shape[1], img.shape[1]
-        combined = torch.cat((context, img), dim=1)
-
         # Position ids: text at 0, image at (0, h_idx, w_idx).
-        device = combined.device
         txtpos = torch.zeros(bs, txtlen, 3, device=device, dtype=torch.float32)
         imgids = torch.zeros(h_, w_, 3, device=device, dtype=torch.float32)
         imgids[..., 1] = torch.arange(h_, device=device, dtype=torch.float32)[:, None]
         imgids[..., 2] = torch.arange(w_, device=device, dtype=torch.float32)[None, :]
         imgpos = imgids.reshape(1, h_ * w_, 3).repeat(bs, 1, 1)
+
+        combined = torch.cat((context, img), dim=1)
         pos = torch.cat((txtpos, imgpos), dim=1)
 
         freqs = self.pe_embedder(pos)
