@@ -239,8 +239,8 @@ class SingleStreamDiT(nn.Module):
 
         x = rearrange(x, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
 
-        end_sigma = getattr(global_variables, "krea2_control_lora_stop_sigma", 1.0)
-        strength = getattr(global_variables, "krea2_control_lora_strength", 0.0)
+        end_sigma = getattr(global_variables, "krea2_control_lora_stop_sigma", 1.0) or 1.0
+        strength = getattr(global_variables, "krea2_control_lora_strength", 0.0) or 0.0
         if timesteps[0].item() > end_sigma and strength > 0.0:
             ctrl = getattr(global_variables, "krea2_control_lora_latent", None)
         else:
