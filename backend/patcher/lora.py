@@ -1,13 +1,14 @@
 import torch
 
-import packages.webui_lora_collection.lora as lora_utils_webui
+# import packages.webui_lora_collection.lora as lora_utils_webui
 import packages.comfyui_lora_collection.lora as lora_utils_comfyui
 
 from backend import memory_management, utils
 
 
 extra_weight_calculators = {}
-lora_collection_priority = [lora_utils_webui, lora_utils_comfyui]
+# lora_collection_priority = [lora_utils_webui, lora_utils_comfyui]
+lora_collection_priority = [lora_utils_comfyui]
 
 
 def get_function(function_name: str):
@@ -17,7 +18,7 @@ def get_function(function_name: str):
 
 
 def load_lora(lora, to_load):
-    patch_dict, remaining_dict = get_function('load_lora')(lora, to_load)
+    patch_dict, remaining_dict = get_function("load_lora")(lora, to_load)
     return patch_dict, remaining_dict
 
 
@@ -26,12 +27,12 @@ def inner_str(k, prefix="", suffix=""):
 
 
 def model_lora_keys_clip(model, key_map={}):
-    model_keys, key_maps = get_function('model_lora_keys_clip')(model, key_map)
+    model_keys, key_maps = get_function("model_lora_keys_clip")(model, key_map)
 
     for model_key in model_keys:
         if model_key.endswith(".weight"):
             if model_key.startswith("t5xxl.transformer."):
-                for prefix in ['te1', 'te2', 'te3']:
+                for prefix in ["te1", "te2", "te3"]:
                     formatted = inner_str(model_key, "t5xxl.transformer.", ".weight")
                     formatted = formatted.replace(".", "_")
                     formatted = f"lora_{prefix}_{formatted}"
@@ -41,7 +42,7 @@ def model_lora_keys_clip(model, key_map={}):
 
 
 def model_lora_keys_unet(model, key_map={}):
-    model_keys, key_maps = get_function('model_lora_keys_unet')(model, key_map)
+    model_keys, key_maps = get_function("model_lora_keys_unet")(model, key_map)
 
     return key_maps
 
@@ -165,9 +166,9 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
 
     weight_dtype_backup = None
 
-    if computation_dtype == weight.dtype:
-        weight = weight.clone()
-    else:
+    if computation_dtype != weight.dtype:
+        # weight = weight.clone()
+    # else:
         weight_dtype_backup = weight.dtype
         weight = weight.to(dtype=computation_dtype)
 
@@ -191,7 +192,7 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
         if isinstance(v, list):
             v = (merge_lora_to_weight(v[1:], v[0].clone(), key),)
 
-        patch_type = ''
+        patch_type = ""
 
         if len(v) == 1:
             patch_type = "diff"
@@ -205,13 +206,12 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 if w1.shape != weight.shape:
                     if w1.ndim == weight.ndim == 4:
                         new_shape = [max(n, m) for n, m in zip(weight.shape, w1.shape)]
-                        print(f'Merged with {key} channel changed to {new_shape}')
+                        print(f"Merged with {key} channel changed to {new_shape}")
                         new_diff = strength * memory_management.cast_to_device(w1, weight.device, weight.dtype)
                         new_weight = torch.zeros(size=new_shape).to(weight)
                         new_weight[:weight.shape[0], :weight.shape[1], :weight.shape[2], :weight.shape[3]] = weight
                         new_weight[:new_diff.shape[0], :new_diff.shape[1], :new_diff.shape[2], :new_diff.shape[3]] += new_diff
-                        new_weight = new_weight.contiguous().clone()
-                        weight = new_weight
+                        weight = new_weight.contiguous()#.clone()
                     else:
                         print("WARNING SHAPE MISMATCH {} WEIGHT NOT MERGED {} != {}".format(key, w1.shape, weight.shape))
                 else:
@@ -234,29 +234,34 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 mat3 = memory_management.cast_to_device(v[3], weight.device, computation_dtype)
                 final_shape = [mat2.shape[1], mat2.shape[0], mat3.shape[2], mat3.shape[3]]
                 mat2 = torch.mm(mat2.transpose(0, 1).flatten(start_dim=1), mat3.transpose(0, 1).flatten(start_dim=1)).reshape(final_shape).transpose(0, 1)
+                del mat3
             
             try:
                 lora_diff = torch.mm(mat1.flatten(start_dim=1), mat2.flatten(start_dim=1))
+                del mat1, mat2
                 
                 try:
                     lora_diff = lora_diff.reshape(weight.shape)
                 except:
                     if weight.shape[1] < lora_diff.shape[1]:
                         expand_factor = (lora_diff.shape[1] - weight.shape[1])
-                        weight = torch.nn.functional.pad(weight, (0, expand_factor), mode='constant', value=0)                        
+                        weight = torch.nn.functional.pad(weight, (0, expand_factor), mode="constant", value=0)                        
                     elif weight.shape[1] > lora_diff.shape[1]:
                         # expand factor should be 1*64 (for FluxTools Canny or Depth), or 5*64 (for FluxTools Fill)
                         expand_factor = (weight.shape[1] - lora_diff.shape[1])
-                        lora_diff = torch.nn.functional.pad(lora_diff, (0, expand_factor), mode='constant', value=0)
+                        lora_diff = torch.nn.functional.pad(lora_diff, (0, expand_factor), mode="constant", value=0)
                     
                 if dora_scale is not None:
                     weight = function(weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype))
                 else:
-                    weight.add_(function(torch.mul(lora_diff, (strength*alpha)).type(weight.dtype)))
+                    lora_diff.mul_(strength*alpha)
+                    weight.add_(function(lora_diff.type(weight.dtype)))
+
+                del lora_diff
 
             except Exception as e:
                 print("ERROR {} {} {}".format(patch_type, key, e))
-                raise e
+
         elif patch_type == "lokr":
             w1 = v[0]
             w2 = v[1]
@@ -281,7 +286,7 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                     w2 = torch.mm(memory_management.cast_to_device(w2_a, weight.device, computation_dtype),
                                   memory_management.cast_to_device(w2_b, weight.device, computation_dtype))
                 else:
-                    w2 = torch.einsum('i j k l, j r, i p -> p r k l',
+                    w2 = torch.einsum("i j k l, j r, i p -> p r k l",
                                       memory_management.cast_to_device(t2, weight.device, computation_dtype),
                                       memory_management.cast_to_device(w2_b, weight.device, computation_dtype),
                                       memory_management.cast_to_device(w2_a, weight.device, computation_dtype))
@@ -300,10 +305,11 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 if dora_scale is not None:
                     weight = function(weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype))
                 else:
-                    weight.add_(function(torch.mul(lora_diff, (strength*alpha)).type(weight.dtype)))
+                    lora_diff.mul_(strength*alpha)
+                    weight.add_(function(lora_diff.type(weight.dtype)))
             except Exception as e:
                 print("ERROR {} {} {}".format(patch_type, key, e))
-                raise e
+
         elif patch_type == "loha":
             w1a = v[0]
             w1b = v[1]
@@ -318,12 +324,12 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
             if v[5] is not None:
                 t1 = v[5]
                 t2 = v[6]
-                m1 = torch.einsum('i j k l, j r, i p -> p r k l',
+                m1 = torch.einsum("i j k l, j r, i p -> p r k l",
                                   memory_management.cast_to_device(t1, weight.device, computation_dtype),
                                   memory_management.cast_to_device(w1b, weight.device, computation_dtype),
                                   memory_management.cast_to_device(w1a, weight.device, computation_dtype))
 
-                m2 = torch.einsum('i j k l, j r, i p -> p r k l',
+                m2 = torch.einsum("i j k l, j r, i p -> p r k l",
                                   memory_management.cast_to_device(t2, weight.device, computation_dtype),
                                   memory_management.cast_to_device(w2b, weight.device, computation_dtype),
                                   memory_management.cast_to_device(w2a, weight.device, computation_dtype))
@@ -338,10 +344,10 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 if dora_scale is not None:
                     weight = function(weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype))
                 else:
-                    weight.add_(function(torch.mul(lora_diff, (strength*alpha)).type(weight.dtype)))
+                    lora_diff.mul_(strength*alpha)
+                    weight.add_(function(lora_diff.type(weight.dtype)))
             except Exception as e:
                 print("ERROR {} {} {}".format(patch_type, key, e))
-                raise e
 
         elif patch_type == "glora":
             dora_scale = v[5]
@@ -382,10 +388,10 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 if dora_scale is not None:
                     weight = weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype, function)
                 else:
-                    weight.add_(function(torch.mul(lora_diff, (strength*alpha)).type(weight.dtype)))
+                    lora_diff.mul_(strength*alpha)
+                    weight.add_(function(lora_diff.type(weight.dtype)))
             except Exception as e:
                 print("ERROR {} {} {}".format(patch_type, key, e))
-                raise e
 
         elif patch_type == "oft":
             blocks = v[0]
@@ -396,9 +402,6 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
             dora_scale = v[3]
 
             blocks = memory_management.cast_to_device(blocks, weight.device, computation_dtype)
-            # if rescale is not None:
-                # rescale = memory_management.cast_to_device(rescale, weight.device, computation_dtype)
-
             block_num, block_size, *_ = blocks.shape
 
             try:
@@ -423,24 +426,26 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
 
                 # does OFT use rescale? this multiplication not in Comfy, inferred from BOFT
                 # if rescale is not None:
+                    # rescale = memory_management.cast_to_device(rescale, weight.device, computation_dtype)
                     # lora_diff = lora_diff * rescale
 
                 if dora_scale is not None:
                     weight = weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype, function)
                 else:
-                    weight += function((strength * lora_diff).type(weight.dtype))
+                    lora_diff.mul_(strength*alpha)
+                    weight.add_(function(lora_diff.type(weight.dtype)))
             except Exception as e:
-                logging.error("ERROR {} {} {}".format(self.name, key, e))
+                print("ERROR {} {} {}".format(self.name, key, e))
 
         elif patch_type == "boft":
             blocks = v[0]
             rescale = v[1]
             alpha = v[2]
+            if alpha is None:
+                alpha = 0
             dora_scale = v[3]
 
             blocks = memory_management.cast_to_device(blocks, weight.device, computation_dtype)
-            if rescale is not None:
-                rescale = memory_management.cast_to_device(rescale, weight.device, computation_dtype)
 
             boft_m, block_num, boft_b, *_ = blocks.shape
 
@@ -478,6 +483,7 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                     )
 
                 if rescale is not None:
+                    rescale = memory_management.cast_to_device(rescale, weight.device, computation_dtype)
                     inp = inp * rescale
 
                 lora_diff = inp - org
@@ -485,13 +491,16 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 if dora_scale is not None:
                     weight = weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype, function)
                 else:
-                    weight += function((strength * lora_diff).type(weight.dtype))
+                    lora_diff.mul_(strength*alpha)
+                    weight.add_(function(lora_diff.type(weight.dtype)))
             except Exception as e:
-                logging.error("ERROR {} {} {}".format(self.name, key, e))
+                print("ERROR {} {} {}".format(self.name, key, e))
 
         elif patch_type == "oftv2":
             oft_r_weight_orig = v[0]
             alpha = v[1]
+            if alpha is None:
+                alpha = 0
             dora_scale = v[2]
 
             try:
@@ -500,7 +509,6 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 r_loaded, n_elements = oft_r_weight_processed.shape
                 block_size_f = (1 + (1 + 8 * n_elements) ** 0.5) / 2
                 if abs(block_size_f - round(block_size_f)) > 1e-6:
-                    logging.error(f"OFTv2: Could not determine integer block_size for {key}. n_elements={n_elements} is invalid.")
                     return weight
                 block_size = int(round(block_size_f))
 
@@ -509,20 +517,17 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 in_features = torch.prod(torch.tensor(in_dims_tuple)).item()
 
                 if in_features % block_size != 0:
-                    logging.warning(f"OFTv2: in_features ({in_features}) not divisible by block_size ({block_size}) for {key}.")
                     return weight
 
                 r_actual = in_features // block_size
                 block_share = r_loaded == 1
 
                 if not block_share and r_loaded != r_actual:
-                    logging.error(f"OFTv2: Mismatch in number of blocks for {key}. Loaded: {r_loaded}, Expected: {r_actual}.")
                     return weight
 
                 # Pass the unscaled weight to the utility to get the full rotation matrix
                 util = OFTRotationUtil(oft_r_weight_processed, block_size)
                 orth_rotate = util.get_rotation_matrix()
-
 
                 # For Linear layers,  rotates the input (x @ R), equivalent to rotating weights by R.T (W @ R.T).
                 # For Conv2d layers,  rotates the weights directly (W @ R) to preserve spatial information.
@@ -559,10 +564,11 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 if dora_scale is not None:
                     weight = weight_decompose(dora_scale, weight, lora_diff, strength, 1.0, intermediate_dtype, function)
                 else:
-                    weight += function((lora_diff * strength).type(weight.dtype))
+                    lora_diff.mul_(strength*alpha)
+                    weight.add_(function(lora_diff.type(weight.dtype)))
 
             except Exception as e:
-                logging.error(f"ERROR applying OFTv2 for {key}: {e}", exc_info=True)
+                print(f"ERROR applying OFTv2 for {key}: {e}", exc_info=True)
 
         elif patch_type in extra_weight_calculators:
             weight = extra_weight_calculators[patch_type](weight, strength, v)
@@ -653,7 +659,7 @@ class LoraLoader:
                 raise ValueError(f"Wrong LoRA Key: {key}")
 
             if online_mode:
-                if not hasattr(parent_layer, 'forge_online_loras'):
+                if not hasattr(parent_layer, "forge_online_loras"):
                     parent_layer.forge_online_loras = {}
 
                 parent_layer.forge_online_loras[child_key] = current_patches
@@ -665,12 +671,12 @@ class LoraLoader:
 
             bnb_layer = None
 
-            if hasattr(weight, 'bnb_quantized') and operations.bnb_avaliable:
+            if hasattr(weight, "bnb_quantized") and operations.bnb_avaliable:
                 bnb_layer = parent_layer
                 from backend.operations_bnb import functional_dequantize_4bit
                 weight = functional_dequantize_4bit(weight)
 
-            gguf_cls = getattr(weight, 'gguf_cls', None)
+            gguf_cls = getattr(weight, "gguf_cls", None)
             gguf_parameter = None
 
             if gguf_cls is not None:
@@ -680,8 +686,8 @@ class LoraLoader:
 
             try:
                 weight = merge_lora_to_weight(current_patches, weight, key, computation_dtype=torch.float32)
-            except:
-                print('Patching LoRA weights out of memory. Retrying by offloading models.')
+            except MemoryError:
+                print("Patching LoRA weights out of memory. Retrying by offloading models.")
                 set_parameter_devices(self.model, parameter_devices={k: offload_device for k in parameter_devices.keys()})
                 memory_management.soft_empty_cache()
                 weight = merge_lora_to_weight(current_patches, weight, key, computation_dtype=torch.float32)
