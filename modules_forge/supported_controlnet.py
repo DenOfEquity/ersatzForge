@@ -182,49 +182,50 @@ class ControlNetPatcher(ControlModelPatcher):
 
 add_supported_control_model(ControlNetPatcher)
 
-# anima controlnet (Reference latents), original by 'inpaint' on civitai
-class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
+
+# controlnet (Reference latents), original by 'inpaint' on civitai
+class ReferenceControlLoraPatcher(ControlModelPatcher):
     @staticmethod
     def try_build_from_state_dict(controlnet_data, ckpt_path, metadata=None):
         if "zero_convs.0.0.weight" in controlnet_data or "input_hint_block.0.weight" in controlnet_data:
             return None
 
-        if not ("lora_unet_blocks_0_cross_attn_k_proj.alpha" in controlnet_data or 
-                "diffusion_model.blocks.0.adaln_modulation_cross_attn.1.lora_A.weight" in controlnet_data):
-                    return None
-
-        if "lora_unet_blocks_0_cross_attn_k_proj.alpha" in controlnet_data:
-            # convert key names to match model
-            converted = {}
-            for k, v in controlnet_data.items():
-                _k = k.replace("lora_unet_blocks_", "diffusion_model.blocks.", 1)
-                _k = _k.replace("_self_attn_", ".self_attn.", 1)
-                _k = _k.replace("_cross_attn_", ".cross_attn.", 1)
-                _k = _k.replace("_mlp_", ".mlp.", 1)
-                _k = _k.replace("proj_", "proj.", 1)
-                converted[_k] = v
-
-            controlnet_data = converted
-
         prefixes = set()
-        for k in controlnet_data.keys():
-            for suffix in [".lora_A.weight", ".lora_B.weight", ".lora_up.weight", ".lora_down.weight", ".alpha", ".dora_scale", ".lokr_w1", ".lokr_w2"]:
-                if k.endswith(suffix):
-                    prefixes.add(k[:-len(suffix)])
-                    break
-       
+            # Anima
+        if "lora_unet_blocks_0_cross_attn_k_proj.alpha" in controlnet_data or \
+           "diffusion_model.blocks.0.adaln_modulation_cross_attn.1.lora_A.weight" in controlnet_data:
+            if "lora_unet_blocks_0_cross_attn_k_proj.alpha" in controlnet_data:
+                # convert key names to match model
+                converted = {}
+                for k, v in controlnet_data.items():
+                    _k = k.replace("lora_unet_blocks_", "diffusion_model.blocks.", 1)
+                    _k = _k.replace("_self_attn_", ".self_attn.", 1)
+                    _k = _k.replace("_cross_attn_", ".cross_attn.", 1)
+                    _k = _k.replace("_mlp_", ".mlp.", 1)
+                    _k = _k.replace("proj_", "proj.", 1)
+                    converted[_k] = v
+
+                controlnet_data = converted
+
+            for k in controlnet_data.keys():
+                for suffix in [".lora_B.weight", ".lora_up.weight", ".lokr_w1", ".lokr_w1_a"]:
+                    if k.endswith(suffix):
+                        prefixes.add(k[:-len(suffix)])
+                        break
+        else:
+            return None
+
         to_load = {p: f"{p}.weight" for p in prefixes}
        
         from packages.comfyui_lora_collection.lora import load_lora
         model_lora, lora_unmatch = load_lora(controlnet_data, to_load)
 
         if len(lora_unmatch) > 0:
-            print(f"{cc.WARNING}[AnimaReferenceControlLoraPatcher]{cc.RESET} ({cc.MINOR}{len(lora_unmatch)} unmatched keys{cc.RESET}) {ckpt_path}")
+            print(f"{cc.WARNING}[ReferenceControlLoraPatcher]{cc.RESET} ({cc.MINOR}{len(lora_unmatch)} unmatched keys{cc.RESET}) {ckpt_path}")
         del lora_unmatch
         
-        patcher = AnimaReferenceControlLoraPatcher()
+        patcher = ReferenceControlLoraPatcher()
         patcher.model_lora = model_lora
-
         patcher.lora_filename = ckpt_path
 
         return patcher
@@ -242,9 +243,14 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
         start_sigma = percent_to_timestep_function(self.start_percent)
         end_sigma = percent_to_timestep_function(self.end_percent)
 
-        image = cond.to(devices.device, dtype=devices.dtype_vae)
-        ref_latent = images_tensor_to_samples(image, model=process.sd_model)
-        
+        if mask is not None:
+            if getattr(process, "inpainting_mask_invert", False):
+                mask = 1.0 - mask
+            cond *= mask
+
+        ref_latent = images_tensor_to_samples(cond.to(devices.device, dtype=devices.dtype_vae), model=process.sd_model)
+        ref_latent = Condition(ref_latent)
+
         def ref_latents_modifier(model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed):
             t = timestep[0].item()
             if t > start_sigma or t < end_sigma:
@@ -252,13 +258,13 @@ class AnimaReferenceControlLoraPatcher(ControlModelPatcher):
     
             if un_cond is not None:
                 for c in un_cond:
-                    c["model_conds"]["ref_latents"] = Condition(ref_latent)
+                    c["model_conds"]["ref_latents"] = ref_latent
             for c in m_cond:
-                c["model_conds"]["ref_latents"] = Condition(ref_latent)
+                c["model_conds"]["ref_latents"] = ref_latent
             return model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed
     
         unet.add_conditioning_modifier(ref_latents_modifier)
         process.sd_model.forge_objects.unet = unet
 
 
-add_supported_control_model(AnimaReferenceControlLoraPatcher)
+add_supported_control_model(ReferenceControlLoraPatcher)
