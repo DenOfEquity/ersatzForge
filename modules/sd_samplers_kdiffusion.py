@@ -2,12 +2,10 @@ import torch
 import inspect
 import k_diffusion.sampling
 import k_diffusion.external
-from modules import sd_samplers_common, sd_samplers_extra, sd_samplers_cfg_denoiser, sd_schedulers, devices
-from modules.sd_samplers_cfg_denoiser import CFGDenoiser  # noqa: F401
+from modules import sd_samplers_common, sd_samplers_extra, sd_samplers_cfg_denoiser, sd_schedulers, devices, shared
 from modules.script_callbacks import ExtraNoiseParams, extra_noise_callback
 
 from modules.shared import opts
-import modules.shared as shared
 from backend.sampling.sampling_function import sampling_prepare, sampling_cleanup
 
 
@@ -192,7 +190,6 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
             extra_params_kwargs['solver_type'] = 'heun'
 
         self.model_wrap_cfg.init_latent = x
-        self.last_latent = x
         self.sampler_extra_args = {
             'cond': conditioning,
             'image_cond': image_conditioning,
@@ -245,7 +242,6 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
         if self.config.options.get('solver_type', None) == 'heun':
             extra_params_kwargs['solver_type'] = 'heun'
 
-        self.last_latent = x
         self.sampler_extra_args = {
             'cond': conditioning,
             'image_cond': image_conditioning,

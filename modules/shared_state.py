@@ -133,6 +133,7 @@ class State:
         log.info("Ending job %s (%.2f seconds)", self.job, duration)
         self.job = ""
         self.job_count = 0
+        self.current_latent = None
 
         devices.torch_gc()
 
@@ -153,11 +154,12 @@ class State:
         else:
             self.assign_current_image(modules.sd_samplers_common.sample_to_image(self.current_latent))
         self.current_image_sampling_step = self.sampling_step
-        self.current_latent = None
 
     @torch.inference_mode()
     def assign_current_image(self, image):
-        if shared.opts.live_previews_image_format == 'jpeg' and image.mode in ('RGBA', 'P'):
-            image = image.convert('RGB')
+        if image.mode == "RGBA":
+            image = image.convert("RGB") # less to compress / base64 encode for preview
+        elif shared.opts.live_previews_image_format in ("jpg", "jpeg") and image.mode == "P":
+            image = image.convert("RGB")
         self.current_image = image
         self.id_live_preview += 1

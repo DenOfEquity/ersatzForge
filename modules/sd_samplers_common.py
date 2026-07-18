@@ -35,10 +35,13 @@ approximation_indexes = {"Full": 0, "Approx NN": 1, "Approx cheap": 2, "TAESD": 
 def samples_to_images_tensor(sample, approximation=None, model=None):
     """Transforms latent space images into 3-channel RGB image tensors, with values in range [-1, 1]."""
 
-    if approximation is None or shared.state.interrupted:
+    if approximation is None:
         approximation = approximation_indexes.get(opts.show_progress_type, 0)
         if approximation == 0:
             approximation = 1
+
+    if shared.state.interrupted:
+        approximation = 2
 
     if model is None:
         model = shared.sd_model
@@ -58,6 +61,7 @@ def samples_to_images_tensor(sample, approximation=None, model=None):
             x_sample = sd_vae_approx.cheap_approximation(sample)
         else:
             x_sample = m(sample).detach()
+
         if approximation == 3:
             x_sample = x_sample * 2 - 1
     else:
@@ -107,14 +111,9 @@ def images_tensor_to_samples(image, approximation=None, model=None):
         image = image.to(shared.device, dtype=devices.dtype_vae)
         image = image * 2 - 1
         if len(image) > 1:
-            x_latent = torch.stack([
-                model.get_first_stage_encoding(
-                    model.encode_first_stage(torch.unsqueeze(img, 0))
-                )[0]
-                for img in image
-            ])
+            x_latent = torch.stack([model.encode_first_stage(torch.unsqueeze(img, 0))[0] for img in image])
         else:
-            x_latent = model.get_first_stage_encoding(model.encode_first_stage(image))
+            x_latent = model.encode_first_stage(image)
 
     return x_latent
 
@@ -246,7 +245,6 @@ class Sampler:
         self.stop_at = None
         self.eta = None
         self.config: SamplerData = None  # set by the function calling the constructor
-        self.last_latent = None
         self.s_min_uncond = None
         self.s_churn = 0.0
         self.s_tmin = 0.0
@@ -287,9 +285,9 @@ class Sampler:
                 'rho >5 with a polyexponential scheduler may cause this error. '
                 'You should try to use a smaller rho value instead.'
             )
-            return self.last_latent
+            return state.current_latent
         except InterruptedException:
-            return self.last_latent
+            return state.current_latent
 
     def number_of_needed_noises(self, p):
         return p.steps
