@@ -612,7 +612,6 @@ class ScriptRunner:
                 self.scripts.append(script)
                 self.alwayson_scripts.append(script)
                 script.alwayson = True
-
             elif visibility:
                 self.scripts.append(script)
                 self.selectable_scripts.append(script)
@@ -642,7 +641,6 @@ class ScriptRunner:
             on_after.clear()
 
     def create_script_ui(self, script):
-
         script.args_from = len(self.inputs)
         script.args_to = len(self.inputs)
 
@@ -925,7 +923,7 @@ class ScriptRunner:
                 script_args = p.script_args[script.args_from:script.args_to]
                 script.on_mask_blend(p, mba, *script_args)
             except Exception:
-                errors.report(f"Error running post_sample: {script.filename}", exc_info=True)
+                errors.report(f"Error running on_mask_blend: {script.filename}", exc_info=True)
 
     def postprocess_image(self, p, pp: PostprocessImageArgs):
         for script in self.ordered_scripts('postprocess_image'):
@@ -941,7 +939,7 @@ class ScriptRunner:
                 script_args = p.script_args[script.args_from:script.args_to]
                 script.postprocess_maskoverlay(p, ppmo, *script_args)
             except Exception:
-                errors.report(f"Error running postprocess_image: {script.filename}", exc_info=True)
+                errors.report(f"Error running postprocess_maskoverlay: {script.filename}", exc_info=True)
 
     def postprocess_image_after_composite(self, p, pp: PostprocessImageArgs):
         for script in self.ordered_scripts('postprocess_image_after_composite'):
@@ -992,7 +990,7 @@ class ScriptRunner:
                 cache[filename] = module
 
             for script_class in module.__dict__.values():
-                if type(script_class) == type and issubclass(script_class, Script):
+                if type(script_class) is type and issubclass(script_class, Script):
                     self.scripts[si] = script_class()
                     self.scripts[si].filename = filename
                     self.scripts[si].args_from = args_from
@@ -1060,4 +1058,3 @@ def reload_script_body_only():
 
 
 reload_scripts = load_scripts  # compatibility alias
-
