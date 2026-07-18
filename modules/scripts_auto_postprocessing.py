@@ -21,10 +21,15 @@ class ScriptPostprocessingForMainUI(scripts.Script):
 
         pp = scripts_postprocessing.PostprocessedImage(script_pp.image)
         pp.info = {}
+
         self.script.process(pp, **args_dict)
-        p.extra_generation_params.update(pp.info)
+
         script_pp.image = pp.image
-        script_pp.info = pp.info
+
+        if not hasattr(script_pp, "info"):
+            script_pp.info = pp.info
+        else:
+            script_pp.info.update(pp.info)
 
 
 def create_auto_preprocessing_script_data():

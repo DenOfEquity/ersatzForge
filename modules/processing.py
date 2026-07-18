@@ -59,9 +59,6 @@ def uncrop(image, dest_size, paste_loc):
 
 
 def apply_overlay(image, paste_loc, overlay):
-    if overlay is None:
-        return image
-
     if paste_loc is not None:
         image = uncrop(image, (overlay.width, overlay.height), paste_loc)
 
@@ -786,7 +783,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
             errors.report(f'Error creating infotext for key "{key}"', exc_info=True)
             generation_params[key] = None
 
-    generation_params_text = ", ".join([k if k == v else f'{k}: {infotext_utils.quote(v)}' for k, v in generation_params.items() if v is not None])
+    generation_params_text = ", ".join([k if k == v else f"{k}: {infotext_utils.quote(v)}" for k, v in generation_params.items() if v is not None])
 
     negative_prompt_text = f"\nNegative prompt: {negative_prompt}" if negative_prompt and p.cfg_scale > 1 else ""
 
@@ -989,6 +986,9 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             if sigmas_backup is not None:
                 p.sd_model.forge_objects.unet.model.predictor.set_sigmas(sigmas_backup)
 
+            if samples_ddim is None:
+                break
+
             # build all infotexts after sampling: Settings changed during sampling can be incorrect in infotext
             # but many extensions suboptimally set extra_generation_params in process_before_every_sampling
             # also Scheduler settings
@@ -1052,16 +1052,6 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
                     image = Image.fromarray(x_sample)
 
-                    if p.scripts is not None:
-                        pp = scripts.PostprocessImageArgs(image, i + p.iteration * p.batch_size)
-                        p.scripts.postprocess_image(p, pp)
-                        image = pp.image
-
-                    if opts.face_restoration_model != "None" and not opts.face_restoration_before_scripts:
-                        devices.torch_gc()
-                        image = Image.fromarray(face_restoration.restore_faces(np.array(image)))
-                        devices.torch_gc()
-
                     if not opts.overlay_inpaint:
                         overlay_image = None
                     elif getattr(p, "overlay_images", None) is not None and i < len(p.overlay_images):
@@ -1069,21 +1059,32 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                     else:
                         overlay_image = None
 
-                    if p.scripts is not None:
+                    if p.scripts is not None and overlay_image is not None:
                         mask_for_overlay = getattr(p, "mask_for_overlay", None)
                         ppmo = scripts.PostProcessMaskOverlayArgs(i, mask_for_overlay, overlay_image)
                         p.scripts.postprocess_maskoverlay(p, ppmo)
                         mask_for_overlay, overlay_image = ppmo.mask_for_overlay, ppmo.overlay_image
-
-                    if p.color_corrections is not None and i < len(p.color_corrections):
-                        image = apply_color_correction(p.color_corrections[i], image)
-
-                    image = apply_overlay(image, p.paste_to, overlay_image)
+                        image = apply_overlay(image, p.paste_to, overlay_image)
 
                     if p.scripts is not None:
                         pp = scripts.PostprocessImageArgs(image, i + p.iteration * p.batch_size)
                         p.scripts.postprocess_image_after_composite(p, pp)
                         image = pp.image
+
+                    if p.scripts is not None:
+                        pp = scripts.PostprocessImageArgs(image, i + p.iteration * p.batch_size)
+                        p.scripts.postprocess_image(p, pp)
+                        image = pp.image
+                        pp_params_text = "\n" + ", ".join([f"{k}: {v}" for k, v in pp.info.items() if v is not None])
+                        infotexts[i + n * p.batch_size] += pp_params_text
+
+                    if opts.face_restoration_model != "None" and not opts.face_restoration_before_scripts:
+                        devices.torch_gc()
+                        image = Image.fromarray(face_restoration.restore_faces(np.array(image)))
+                        devices.torch_gc()
+
+                    if p.color_corrections is not None and i < len(p.color_corrections):
+                        image = apply_color_correction(p.color_corrections[i], image)
                 else:
                     image = Image.fromarray(x_sample)
 
@@ -1608,7 +1609,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
     def setup_conds(self):
         if self.is_hr_pass:
-            # if we are in hr pass right now, the call is being made from the refiner, and we don't need to setup firstpass cons or switch model
+            # if we are in hr pass right now, the call is being made from the refiner, and we don't need to setup firstpass conds or switch model
             self.hr_c = None
             self.calculate_hr_conds()
             return
