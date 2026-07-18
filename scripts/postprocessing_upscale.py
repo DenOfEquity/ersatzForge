@@ -31,10 +31,11 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
     def ui(self):
         selected_tab = gr.State(value=0)
 
-        with InputAccordion(False, label="Upscale", elem_id="extras_upscale") as upscale_enabled:
+        with InputAccordion(False, label="Upscale") as upscale_enabled:
             with FormRow():
-                extras_upscaler_1 = gr.Dropdown(label='Upscaler 1', elem_id="extras_upscaler_1", choices=[x.name for x in shared.sd_upscalers], value=shared.sd_upscalers[0].name)
-                extras_upscaler_2 = gr.Dropdown(label='Upscaler 2', elem_id="extras_upscaler_2", choices=[x.name for x in shared.sd_upscalers], value=shared.sd_upscalers[0].name)
+                upscalers = [x.name for x in shared.sd_upscalers]
+                extras_upscaler_1 = gr.Dropdown(label="Upscaler 1", elem_id="extras_upscaler_1", choices=upscalers, value=upscalers[0])
+                extras_upscaler_2 = gr.Dropdown(label="Upscaler 2", elem_id="extras_upscaler_2", choices=upscalers, value=upscalers[0])
 
             with FormRow():
                 extras_color_correction = gr.Checkbox(label="Color correction", elem_id="extras_color_correction", value=False)
@@ -42,21 +43,21 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
 
             with FormRow():
                 with gr.Tabs(elem_id="extras_resize_mode"):
-                    with gr.TabItem('Scale by', id="extras_scale_by_tab", elem_id="extras_scale_by_tab") as tab_scale_by:
+                    with gr.TabItem("Scale by", id="extras_scale_by_tab", elem_id="extras_scale_by_tab") as tab_scale_by:
                         with gr.Row():
                             with gr.Column(scale=4):
                                 upscaling_resize = gr.Slider(minimum=1.0, maximum=8.0, step=0.05, label="Resize", value=4, elem_id="extras_upscaling_resize")
                             with gr.Column(scale=1, min_width=160):
                                 max_side_length = gr.Number(label="Max side length", value=0, elem_id="extras_upscale_max_side_length", tooltip="If any of two sides of the image ends up larger than specified, will downscale it to fit. 0 = no limit.", min_width=160, step=8, minimum=0)
 
-                    with gr.TabItem('Scale to', id="extras_scale_to_tab", elem_id="extras_scale_to_tab") as tab_scale_to:
+                    with gr.TabItem("Scale to", id="extras_scale_to_tab", elem_id="extras_scale_to_tab") as tab_scale_to:
                         with FormRow():
                             with gr.Column(elem_id="upscaling_column_size", scale=4):
                                 upscaling_resize_w = gr.Slider(minimum=64, maximum=8192, step=8, label="Width", value=512, elem_id="extras_upscaling_resize_w")
                                 upscaling_resize_h = gr.Slider(minimum=64, maximum=8192, step=8, label="Height", value=512, elem_id="extras_upscaling_resize_h")
                             with gr.Column(elem_id="upscaling_dimensions_row", scale=1, elem_classes="dimensions-tools"):
                                 upscaling_res_switch_btn = ToolButton(value=switch_values_symbol, elem_id="upscaling_res_switch_btn", tooltip="Switch width/height")
-                                upscaling_crop = gr.Checkbox(label='Crop to fit', value=True, elem_id="extras_upscaling_crop")
+                                upscaling_crop = gr.Checkbox(label="Crop to fit", value=True, elem_id="extras_upscaling_crop")
 
         upscaling_res_switch_btn.click(lambda w, h: (h, w), inputs=[upscaling_resize_w, upscaling_resize_h], outputs=[upscaling_resize_w, upscaling_resize_h], show_progress="hidden")
         tab_scale_by.select(fn=lambda: 0, inputs=None, outputs=[selected_tab])
@@ -127,7 +128,7 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
                 break
 
         upscaled_image = self.upscale(pp.image, upscaler_1, upscale_mode, upscale_by, max_side_length, upscale_to_width, upscale_to_height, upscale_crop)
-        info = 'Upscaler: ' + upscaler_1.name
+        info = upscaler_1.name
 
         if upscaler_2_name != "None" and upscaler_2_visibility > 0:
             for x in shared.sd_upscalers:
@@ -139,17 +140,15 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
 
             upscaled_image = Image.blend(upscaled_image, second_upscale, upscaler_2_visibility)
 
-            info += f' {upscaler_2.name} ({str(upscaler_2_visibility)})'
+            info += f" + {upscaler_2.name} ({str(upscaler_2_visibility)})"
 
         if upscale_cc and "cc" in upscale_cache:
             pp.image = apply_color_correction(upscale_cache["cc"], upscaled_image)
-            info += ' [cc]'
+            info += " [cc]"
         else:
             pp.image = upscaled_image
 
-        pp.info['PostProcess Upscale'] = info
+        pp.info["PostProcess Upscale"] = info
 
     def image_changed(self):
         upscale_cache.clear()
-
-
