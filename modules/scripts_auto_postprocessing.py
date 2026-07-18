@@ -24,6 +24,7 @@ class ScriptPostprocessingForMainUI(scripts.Script):
         self.script.process(pp, **args_dict)
         p.extra_generation_params.update(pp.info)
         script_pp.image = pp.image
+        script_pp.info = pp.info
 
 
 def create_auto_preprocessing_script_data():
