@@ -1,5 +1,5 @@
-from __future__ import annotations
-
+# from __future__ import annotations
+import torch
 import re
 from collections import namedtuple
 import lark
@@ -332,15 +332,39 @@ def reconstruct_cond_batch(c: list[list[ScheduledPromptConditioning]], current_s
 def stack_conds(tensors):
     try:
         result = torch.stack(tensors)
-    except:
-        # if prompts have wildly different lengths above the limit we'll get tensors of different shapes
-        # and won't be able to torch.stack them. So this fixes that.
-        token_count = max([x.shape[0] for x in tensors])
+    except: # add padding
+        dimensions = tensors[0].ndim
+        match dimensions:
+            case 1: # negPiP
+                token_count = max([len(x) for x in tensors])
+            case 2: # crossattn or vector
+                token_count = max([x.shape[0] for x in tensors])
+            case 3: # Anima crossattn (already padded to 512)
+                token_count = max([x.shape[1] for x in tensors])
+            case _:
+                pass
+
         for i in range(len(tensors)):
-            if tensors[i].shape[0] != token_count:
-                last_vector = tensors[i][-1:]
-                last_vector_repeated = last_vector.repeat([token_count - tensors[i].shape[0], 1])
-                tensors[i] = torch.vstack([tensors[i], last_vector_repeated])
+            match dimensions:
+                case 1:
+                    missing = token_count - len(tensors[i])
+                    if missing:
+                        tensors[i] = torch.cat([tensors[i], tensors[i].new_zeros([missing])])
+                case 2:
+                    missing = token_count - tensors[i].shape[0]
+                    if missing:
+                        # last_vector = tensors[i][-1:]
+                        # last_vector_repeated = last_vector.repeat([missing, 1])
+                        # tensors[i] = torch.vstack([tensors[i], last_vector_repeated])
+                        vector_repeated = tensors[i].new_zeros([missing, tensors[i].shape[1]])
+                        tensors[i] = torch.vstack([tensors[i], vector_repeated])
+                case 3:
+                    missing = token_count - tensors[i].shape[1]
+                    if missing:
+                        vector_repeated = tensors[i].new_zeros([1, missing, tensors[i].shape[2]])
+                        tensors[i] = torch.vstack([tensors[i], vector_repeated])
+                case _:
+                    pass
         result = torch.stack(tensors)
     return result
 
@@ -483,9 +507,3 @@ def parse_prompt_attention(text):
             i += 1
 
     return res
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod(optionflags=doctest.NORMALIZE_WHITESPACE)
-else:
-    import torch  # doctest faster
