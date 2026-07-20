@@ -1,12 +1,8 @@
-import math
+import gradio
 
-import modules.scripts as scripts
-import gradio as gr
-
-from modules import images
+from modules import images, scripts
 from modules.processing import process_images
 from modules.shared import opts, state
-import modules.sd_samplers
 
 
 def draw_xy_grid(xs, ys, x_label, y_label, cell):
@@ -42,21 +38,20 @@ class Script(scripts.Script):
         return "Prompt matrix"
 
     def ui(self, is_img2img):
-        gr.HTML('<br />')
-        with gr.Row():
-            with gr.Column():
-                put_at_start = gr.Checkbox(label='Put variable parts at start of prompt', value=False, elem_id=self.elem_id("put_at_start"))
-                different_seeds = gr.Checkbox(label='Use different seed for each picture', value=False, elem_id=self.elem_id("different_seeds"))
-            with gr.Column():
-                prompt_type = gr.Radio(["positive", "negative"], label="Select prompt", elem_id=self.elem_id("prompt_type"), value="positive")
-                variations_delimiter = gr.Radio(["comma", "space"], label="Select joining char", elem_id=self.elem_id("variations_delimiter"), value="comma")
-            with gr.Column():
-                margin_size = gr.Slider(label="Grid margins (px)", minimum=0, maximum=500, value=0, step=2, elem_id=self.elem_id("margin_size"))
+        gradio.Markdown("Split character is **|**. Prompt format will be: *common part* | *optional part 1* | *optional part 2* | ...")
+        with gradio.Row():
+            with gradio.Column():
+                put_at_start = gradio.Checkbox(label='Put variable parts at start of prompt', value=False, elem_id=self.elem_id("put_at_start"))
+                different_seeds = gradio.Checkbox(label='Use different seed for each picture', value=False, elem_id=self.elem_id("different_seeds"))
+            with gradio.Column():
+                prompt_type = gradio.Radio(["positive", "negative"], label="Select prompt", elem_id=self.elem_id("prompt_type"), value="positive")
+                variations_delimiter = gradio.Radio(["comma", "space"], label="Select joining char", elem_id=self.elem_id("variations_delimiter"), value="comma")
+            with gradio.Column():
+                margin_size = gradio.Slider(label="Grid margins (px)", minimum=0, maximum=500, value=0, step=2, elem_id=self.elem_id("margin_size"))
 
         return [put_at_start, different_seeds, prompt_type, variations_delimiter, margin_size]
 
     def run(self, p, put_at_start, different_seeds, prompt_type, variations_delimiter, margin_size):
-        modules.processing.fix_seed(p)
         # Raise error if prompt type is not positive or negative
         if prompt_type not in ["positive", "negative"]:
             raise ValueError(f"Unknown prompt type {prompt_type}")
@@ -73,7 +68,7 @@ class Script(scripts.Script):
         prompt_matrix_parts = original_prompt.split("|")
         combination_count = 2 ** (len(prompt_matrix_parts) - 1)
         for combination_num in range(combination_count):
-            selected_prompts = [text.strip().strip(',') for n, text in enumerate(prompt_matrix_parts[1:]) if combination_num & (1 << n)]
+            selected_prompts = [text.strip().strip(",") for n, text in enumerate(prompt_matrix_parts[1:]) if combination_num & (1 << n)]
 
             if put_at_start:
                 selected_prompts = selected_prompts + [prompt_matrix_parts[0]]
@@ -82,10 +77,12 @@ class Script(scripts.Script):
 
             all_prompts.append(delimiter.join(selected_prompts))
 
-        p.n_iter = math.ceil(len(all_prompts) / p.batch_size)
+        p.n_iter = len(all_prompts)
+        p.batch_size = 1 # cond padding will change results
+
         p.do_not_save_grid = True
 
-        print(f"Prompt matrix will create {len(all_prompts)} images using a total of {p.n_iter} batches.")
+        print(f"[Prompt matrix] will generate {len(all_prompts)} images in {p.n_iter} batches.")
 
         if prompt_type == "positive":
             p.prompt = all_prompts
