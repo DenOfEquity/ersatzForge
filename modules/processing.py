@@ -575,6 +575,11 @@ def decode_latent_batch(model, batch, target_device=None):
 
 # option to use Textbox for Seed is removed, but keep string handling here as extensions may use this function.
 def get_fixed_seed(seed):
+    def _clamp(s):
+        if s == -1:
+            return random.randint(0, 4294967295)
+        return s & 4294967295
+
     if seed == '' or seed is None:
         seed = -1
     elif isinstance(seed, str):
@@ -583,10 +588,10 @@ def get_fixed_seed(seed):
         except Exception:
             seed = -1
 
-    if seed == -1:
-        return random.randint(0, 4294967295)
-
-    return seed % 4294967295
+    if isinstance(seed, list):
+        return [_clamp(s) for s in seed]
+    else:
+        return _clamp(seed)
 
 
 def fix_seed(p):
