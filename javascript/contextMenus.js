@@ -7,30 +7,30 @@ var contextMenuInit = function() {
     };
 
     function showContextMenu(event, element, menuEntries) {
-        let oldMenu = gradioApp().querySelector('#context-menu');
+        let oldMenu = gradioApp().querySelector("#context-menu");
         if (oldMenu) {
             oldMenu.remove();
         }
 
         let baseStyle = window.getComputedStyle(uiCurrentTab);
 
-        const contextMenu = document.createElement('nav');
+        const contextMenu = document.createElement("nav");
         contextMenu.id = "context-menu";
         contextMenu.style.background = baseStyle.background;
         contextMenu.style.color = baseStyle.color;
         contextMenu.style.fontFamily = baseStyle.fontFamily;
-        contextMenu.style.top = event.pageY + 'px';
-        contextMenu.style.left = event.pageX + 'px';
+        contextMenu.style.top = event.pageY + "px";
+        contextMenu.style.left = event.pageX + "px";
 
-        const contextMenuList = document.createElement('ul');
-        contextMenuList.className = 'context-menu-items';
+        const contextMenuList = document.createElement("ul");
+        contextMenuList.className = "context-menu-items";
         contextMenu.append(contextMenuList);
 
         menuEntries.forEach(function(entry) {
-            let contextMenuEntry = document.createElement('a');
-            contextMenuEntry.innerHTML = entry['name'];
+            let contextMenuEntry = document.createElement("a");
+            contextMenuEntry.innerHTML = entry["name"];
             contextMenuEntry.addEventListener("click", function() {
-                entry['func']();
+                entry["func"]();
             });
             contextMenuList.append(contextMenuEntry);
 
@@ -40,7 +40,6 @@ var contextMenuInit = function() {
     }
 
     function appendContextMenuOption(targetElementSelector, entryName, entryFunction) {
-
         var currentItems = menuSpecs.get(targetElementSelector);
 
         if (!currentItems) {
@@ -48,28 +47,14 @@ var contextMenuInit = function() {
             menuSpecs.set(targetElementSelector, currentItems);
         }
         let newItem = {
-            id: targetElementSelector + '_' + uid(),
+            id: targetElementSelector + "_" + uid(),
             name: entryName,
             func: entryFunction,
             isNew: true
         };
 
         currentItems.push(newItem);
-        return newItem['id'];
-    }
-
-    function removeContextMenuOption(uid) {
-        menuSpecs.forEach(function(v) {
-            let index = -1;
-            v.forEach(function(e, ei) {
-                if (e['id'] == uid) {
-                    index = ei;
-                }
-            });
-            if (index >= 0) {
-                v.splice(index, 1);
-            }
-        });
+        return newItem["id"];
     }
 
     function addContextMenuEventListener() {
@@ -81,19 +66,19 @@ var contextMenuInit = function() {
                 return;
             }
 
-            let oldMenu = gradioApp().querySelector('#context-menu');
+            let oldMenu = gradioApp().querySelector("#context-menu");
             if (oldMenu) {
                 oldMenu.remove();
             }
         });
-        ['contextmenu', 'touchstart'].forEach((eventType) => {
+        ["contextmenu", "touchstart"].forEach((eventType) => {
             gradioApp().addEventListener(eventType, function(e) {
                 let ev = e;
-                if (eventType.startsWith('touch')) {
+                if (eventType.startsWith("touch")) {
                     if (e.touches.length !== 2) return;
                     ev = e.touches[0];
                 }
-                let oldMenu = gradioApp().querySelector('#context-menu');
+                let oldMenu = gradioApp().querySelector("#context-menu");
                 if (oldMenu) {
                     oldMenu.remove();
                 }
@@ -106,16 +91,14 @@ var contextMenuInit = function() {
             }, {passive: false});
         });
         eventListenerApplied = true;
-
     }
 
-    return [appendContextMenuOption, removeContextMenuOption, addContextMenuEventListener];
+    return [appendContextMenuOption, addContextMenuEventListener];
 };
 
 var initResponse = contextMenuInit();
 var appendContextMenuOption = initResponse[0];
-var removeContextMenuOption = initResponse[1];
-var addContextMenuEventListener = initResponse[2];
+var addContextMenuEventListener = initResponse[1];
 
 
 (function() {
@@ -127,9 +110,9 @@ var addContextMenuEventListener = initResponse[2];
     let cancel_regen_txt2img = function() {
         opts.generate_forever_t2i = false;
     };
-    appendContextMenuOption('#txt2img_generate', 'Generate forever', generateOnRepeat_txt2img);
-    appendContextMenuOption('#txt2img_interrupt', 'Generate forever', generateOnRepeat_txt2img);
-    appendContextMenuOption('#txt2img_interrupt', 'Cancel generate forever', cancel_regen_txt2img);
+    appendContextMenuOption("#txt2img_generate",  "Generate forever", generateOnRepeat_txt2img);
+    appendContextMenuOption("#txt2img_interrupt", "Generate forever", generateOnRepeat_txt2img);
+    appendContextMenuOption("#txt2img_interrupt", "Cancel generate forever", cancel_regen_txt2img);
 
     let generateOnRepeat_img2img = function() {
         const submit = gradioApp().getElementById("img2img_generate");
@@ -139,9 +122,9 @@ var addContextMenuEventListener = initResponse[2];
     let cancel_regen_img2img = function() {
         opts.generate_forever_i2i = false;
     };
-    appendContextMenuOption('#img2img_generate', 'Generate forever', generateOnRepeat_img2img);
-    appendContextMenuOption('#img2img_interrupt', 'Generate forever', generateOnRepeat_img2img);
-    appendContextMenuOption('#img2img_interrupt', 'Cancel generate forever', cancel_regen_img2img);
+    appendContextMenuOption("#img2img_generate",  "Generate forever", generateOnRepeat_img2img);
+    appendContextMenuOption("#img2img_interrupt", "Generate forever", generateOnRepeat_img2img);
+    appendContextMenuOption("#img2img_interrupt", "Cancel generate forever", cancel_regen_img2img);
 
 })();
 
