@@ -66,12 +66,17 @@ def detect_unet_config(state_dict, key_prefix):
             dit_config["ffn_dim_multiplier"] = (8.0 / 3.0)
             dit_config["rope_theta"] = 256.0
             dit_config["z_modulation"] = True
-            if '{}cap_pad_token'.format(key_prefix) in state_dict_keys:
+
+            cap_pad_key = "{}cap_pad_token".format(key_prefix)
+            if cap_pad_key in state_dict_keys and state_dict[cap_pad_key].ndim == 1:
+                state_dict[cap_pad_key] = state_dict[cap_pad_key].unsqueeze(0)
                 dit_config["pad_tokens_multiple"] = 32
-                state_dict.pop("{}model_sampling.sigmas".format(key_prefix), None)
-            # if '{}edit_key'.format(key_prefix) in state_dict_keys:
-                # dit_config["image_model"] = "ZimageOmni"
-                # dit_config["edit"] = True
+
+            x_pad_key = "{}x_pad_token".format(key_prefix)
+            if x_pad_key in state_dict_keys and state_dict[x_pad_key].ndim == 1:
+                state_dict[x_pad_key] = state_dict[x_pad_key].unsqueeze(0)
+
+            state_dict.pop("{}model_sampling.sigmas".format(key_prefix), None)
             
         return dit_config
 
@@ -207,14 +212,14 @@ def detect_unet_config(state_dict, key_prefix):
             dit_config["flf_pos_embed_token_number"] = flf_weight.shape[1]
         return dit_config
 
-    if '{}nerf_image_embedder.embedder.0.bias'.format(key_prefix) in state_dict_keys: #ChromaDCT
+    if "{}nerf_image_embedder.embedder.0.bias".format(key_prefix) in state_dict_keys: #ChromaDCT
         dit_config = {}
         dit_config["image_model"] = "chromaDCT"
         dit_config["in_channels"] = 3
         dit_config["use_x0"] = True if "{}__x0__".format(key_prefix) in state_dict_keys else False
         return dit_config
 
-    if '{}double_blocks.0.img_attn.norm.key_norm.scale'.format(key_prefix) in state_dict_keys:  # Flux / Chroma / Flux2
+    if "{}double_blocks.0.img_attn.norm.key_norm.scale".format(key_prefix) in state_dict_keys:  # Flux / Chroma / Flux2
         dit_config = {}
         if "{}double_stream_modulation_img.lin.weight".format(key_prefix) in state_dict_keys:
             dit_config["image_model"] = "flux2"
@@ -279,22 +284,23 @@ def detect_unet_config(state_dict, key_prefix):
 
         return dit_config
 
-    if '{}txtfusion.projector.weight'.format(key_prefix) in state_dict_keys:  # Krea 2 (K2)
+    if "{}txtfusion.projector.weight".format(key_prefix) in state_dict_keys:  # Krea 2 (K2)
         dit_config = {}
         dit_config["image_model"] = "krea2"
         head_dim = 128
-        first_w = state_dict['{}first.weight'.format(key_prefix)]  # (features, channels*patch^2)
+        first_w = state_dict["{}first.weight".format(key_prefix)]  # (features, channels*patch^2)
         dit_config["features"] = first_w.shape[0]
         dit_config["in_channels"] = first_w.shape[1] // (2 * 2)  # patch=2
         dit_config["patch"] = 2
-        dit_config["layers"] = count_blocks(state_dict_keys, '{}blocks.'.format(key_prefix) + '{}.')
-        dit_config["heads"] = state_dict['{}blocks.0.attn.wq.weight'.format(key_prefix)].shape[0] // head_dim
-        dit_config["kvheads"] = state_dict['{}blocks.0.attn.wk.weight'.format(key_prefix)].shape[0] // head_dim
-        dit_config["txtlayers"] = state_dict['{}txtfusion.projector.weight'.format(key_prefix)].shape[1]
-        dit_config["txtdim"] = state_dict['{}txtfusion.layerwise_blocks.0.prenorm.scale'.format(key_prefix)].shape[0]
+        dit_config["layers"] = count_blocks(state_dict_keys, "{}blocks.".format(key_prefix) + '{}.')
+        dit_config["heads"] = state_dict["{}blocks.0.attn.wq.weight".format(key_prefix)].shape[0] // head_dim
+        dit_config["kvheads"] = state_dict["{}blocks.0.attn.wk.weight".format(key_prefix)].shape[0] // head_dim
+        dit_config["txtlayers"] = state_dict["{}txtfusion.projector.weight".format(key_prefix)].shape[1]
+        dit_config["txtdim"] = state_dict["{}txtfusion.layerwise_blocks.0.prenorm.scale".format(key_prefix)].shape[0]
+
         return dit_config
 
-    if '{}input_blocks.0.0.weight'.format(key_prefix) not in state_dict_keys:
+    if "{}input_blocks.0.0.weight".format(key_prefix) not in state_dict_keys:
         return None
 
     unet_config = {
