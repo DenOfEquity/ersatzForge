@@ -40,7 +40,8 @@ def load_torch_file(ckpt, safe_load=False, device=None, return_metadata=False):
     elif ckpt.lower().endswith(".gguf"):
         reader = gguf.GGUFReader(ckpt)
         arch = reader.get_field("general.architecture")
-        arch = str(arch.parts[arch.data[-1]], encoding="utf-8").lower()
+        if arch is not None:
+            arch = str(arch.parts[arch.data[-1]], encoding="utf-8").lower()
         
         sd = {}
         for tensor in reader.tensors:
