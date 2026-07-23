@@ -6,7 +6,7 @@ AdaLN-single modulation, GQA + per-head QK-norm + sigmoid-gated attention, SwiGL
 """
 
 from typing import Optional
-
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -239,26 +239,42 @@ class SingleStreamDiT(nn.Module):
 
         x = rearrange(x, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
 
-        end_sigma = getattr(global_variables, "krea2_control_lora_stop_sigma", 1.0) or 1.0
+        end_sigma = getattr(global_variables, "krea2_control_lora_stop_sigma", 0.0) or 0.0
         strength = getattr(global_variables, "krea2_control_lora_strength", 0.0) or 0.0
+        fidelity = getattr(global_variables, "krea2_control_lora_fidelity", 0.0) or 1.0
         if timesteps[0].item() > end_sigma and strength > 0.0:
             ctrl = getattr(global_variables, "krea2_control_lora_latent", None)
         else:
             ctrl = None
             setattr(global_variables, "krea2_control_lora_strength", 0.0)
 
-        if ctrl is None or not self.ctrl_patched:
+        ctrlimg = None
+        ctrlpos = None
+        if ctrl is None:
             img = self.first(x)
         else:
             if patch >= 2:
                 pad_h = (patch - ctrl.shape[-2] % patch) % patch
                 pad_w = (patch - ctrl.shape[-1] % patch) % patch
                 ctrl = torch.nn.functional.pad(ctrl, (0, pad_w, 0, pad_h), mode="circular")
+                ch = ctrl.shape[-1] // patch
+                cw = ctrl.shape[-2] // patch
 
             ctrl = rearrange(ctrl, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
+            if bs > 1:
+                ctrl = ctrl.repeat(bs, 1, 1)
 
-            img = torch.cat([x, ctrl], dim=2).contiguous()
-            img = self.first_ctrl(img)
+            if self.ctrl_patched: # Control LoRA: concat along channels dim (ref must be same size as noise)
+                img = torch.cat([x, ctrl], dim=2)
+                img = self.first_ctrl(img)
+            else:                 # reference: all ctrl stuff could be cached; concat on dim 1, so ref could be different size to noise
+                img = self.first(x)
+                ctrlimg = self.first(ctrl)
+                ctrlids = torch.zeros(ch, cw, 3, device=device, dtype=torch.float32)
+                ctrlids[..., 0] = 1
+                ctrlids[..., 1] = torch.arange(ch, device=device, dtype=torch.float32)[:, None]
+                ctrlids[..., 2] = torch.arange(cw, device=device, dtype=torch.float32)[None, :]
+                ctrlpos = ctrlids.reshape(1, ch * cw, 3).repeat(bs, 1, 1)
 
         t = self.tmlp(timestep_embedding(timesteps, self.tdim).unsqueeze(1).to(img.dtype))
         tvec = self.tproj(t)
@@ -274,8 +290,24 @@ class SingleStreamDiT(nn.Module):
         imgids[..., 2] = torch.arange(w_, device=device, dtype=torch.float32)[None, :]
         imgpos = imgids.reshape(1, h_ * w_, 3).repeat(bs, 1, 1)
 
-        combined = torch.cat((context, img), dim=1)
-        pos = torch.cat((txtpos, imgpos), dim=1)
+        if ctrlimg is not None:
+            ctrllen = ctrlimg.shape[1]
+            combined = torch.cat((context, ctrlimg, img), dim=1)
+            pos = torch.cat((txtpos, ctrlpos, imgpos), dim=1)
+            if fidelity == 1.0:
+                attn_bias = None
+            else:
+                rows = txtlen + ctrllen
+                cols = torch.arange(txtlen, txtlen + ctrllen, device=combined.device)
+                L = rows + imglen
+                attn_bias = torch.zeros(1, 1, L, L, device=combined.device, dtype=combined.dtype)
+
+                attn_bias[:, :, rows:, cols] = math.log(max(fidelity, 1e-4))
+        else:
+            ctrllen = 0
+            combined = torch.cat((context, img), dim=1)
+            pos = torch.cat((txtpos, imgpos), dim=1)
+            attn_bias = None
 
         freqs = self.pe_embedder(pos)
 
@@ -283,10 +315,10 @@ class SingleStreamDiT(nn.Module):
             negpip = negpip[0]
 
         for block in self.blocks:
-            combined = block(combined, negpip, tvec, freqs, None, transformer_options=transformer_options)
+            combined = block(combined, negpip, tvec, freqs, attn_bias, transformer_options=transformer_options)
 
         final = self.last(combined, t)
-        out = final[:, txtlen:txtlen + imglen]
+        out = final[:, txtlen+ctrllen:]
         out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_, w=w_, ph=patch, pw=patch)
         out = out[:, :, :H_orig, :W_orig]  # crop padding back off
         return out
