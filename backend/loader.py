@@ -922,15 +922,19 @@ def replace_state_dict(sd, asd, guess):
         # sd["model.diffusion_model.first_ctrl.weight"] = torch.zeros(6144, 128, dtype=torch.float32, requires_grad=False)
 
 
-# Krea2 (depth) control lora by Tanmay Patil, loaded directly into model
 # faster to load and less memory, and actually works: modifications in operations.ForgeOperations.Linear to handle .A/.B pairs
     if "Krea2" in guess.huggingface_repo:
-        if "first.bias" in asd and "blocks.0.attn.gate.A" in asd:
+        if "first.bias" in asd and "blocks.0.attn.gate.A" in asd: # Krea2 (depth) control lora by Tanmay Patil, loaded directly into model
             sd["model.diffusion_model.first_ctrl.bias"]   = asd.pop("first.bias")     # note different name, to allow bypass
             sd["model.diffusion_model.first_ctrl.weight"] = asd.pop("first.weight")
 
             for k in list(asd.keys()):
                 sd["model.diffusion_model." + k] = asd.pop(k)
+
+        elif "diffusion_model.blocks.0.attn.gate.lora_A.weight" in asd: # generic LoRA, but specifically edit w/ reference
+            for k in list(asd.keys()):
+                _k = "model." + k.replace(".lora_A.weight", ".A", 1).replace(".lora_B.weight", ".B", 1)
+                sd[_k] = asd.pop(k)
 
     return sd
 
@@ -1058,12 +1062,12 @@ def forge_loader(sd, additional_state_dicts=None):
         else:
             huggingface_components["scheduler"].config.prediction_type = prediction_types.get(estimated_config.model_type.name, huggingface_components["scheduler"].config.prediction_type)
 
+    model_filename = sd.lower()
     # SDXL flow models
     backend.args.dynamic_args.update({"SDXL_flow" : False})
-    model_filename = sd.lower()
     flow_names = backend.args.dynamic_args.get("sdxl_flow_models", "").split(",")
     for name in flow_names:
-        n = name.strip()
+        n = name.strip().lower()
         if len(n) >= 4 and n in model_filename:
             backend.args.dynamic_args.update({"SDXL_flow" : True})
             break
