@@ -216,9 +216,12 @@ class ersatzOtherControl(scripts.Script):
                         with gradio.Column():
                             k2_resize = gradio.Dropdown(label="Resize", info="for Depth, resize will be over-ridden to 'to output'", choices=["none", "half", "to output"], value="none", allow_custom_value=True)
                             k2_mask_mode = gradio.Radio(value="unmasked", choices=["masked", "unmasked"], label="Target area")
-                            k2_strength = gradio.Slider(value=1.0, minimum=0.0, maximum=2.0, step=0.01, label="strength")
-                            k2_stop = gradio.Slider(value=0.5, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
-                            k2_fidelity = gradio.Slider(value=1.0, minimum=1.0, maximum=8.0, step=0.1, label="fidelity (reference only)")
+                            with gradio.Row():
+                                k2_strength = gradio.Slider(value=1.0, minimum=0.0, maximum=2.0, step=0.01, label="Strength")
+                                k2_fidelity = gradio.Slider(value=1.0, minimum=1.0, maximum=8.0, step=0.1, label="Fidelity")
+                            with gradio.Row():
+                                k2_start = gradio.Slider(value=1.0, minimum=0.0, maximum=1.0, step=0.01, label="Start sigma")
+                                k2_stop = gradio.Slider(value=0.5, minimum=0.0, maximum=1.0, step=0.01, label="Stop sigma")
                             with gradio.Row():
                                 k2_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 k2_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
@@ -251,17 +254,18 @@ class ersatzOtherControl(scripts.Script):
             (klein_3_str, "klein_3_str"),
             (klein_4_str, "klein_4_str"),
             (k2_strength,  "k2_strength"),
+            (k2_start,     "k2_start"),
             (k2_stop,      "k2_stop"),
             (k2_resize,    "k2_resize"),
             (k2_mask_mode, "k2_mask_mode"),
             (k2_fidelity,  "k2_fidelity")
         ]
 
-        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image.background, k2_image.foreground, k2_resize, k2_mask_mode, k2_strength, k2_stop, k2_fidelity
+        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image.background, k2_image.foreground, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity
 
 
     def process(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_stop, k2_fidelity = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity = script_args
         if enabled:
             if selected_tab == 0 and (kontext_1 is not None or kontext_2 is not None) and params.sd_model.is_flux:
                 params.extra_generation_params.update(dict(
@@ -292,7 +296,17 @@ class ersatzOtherControl(scripts.Script):
                     ))
             elif selected_tab == 3 and k2_image is not None and k2_stop < 1.0 and params.sd_model.is_krea2:
                 if getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
-                    k2_resize = "to output"
+                    message = ""
+                    if k2_resize != "to output":
+                        k2_resize = "to output"
+                        message += " Resize: 'to output'"
+                    if k2_start != 1.0:
+                        k2_start = 1.0
+                        if message:
+                            message += ","
+                        message += " Start sigma: 1.0"
+                    if message:
+                        print (f"Krea2 Control] over-rides:{message}")
 
                 params.extra_generation_params.update(dict(
                     eOC_enabled  = enabled,
@@ -303,12 +317,13 @@ class ersatzOtherControl(scripts.Script):
                 ))
                 if not getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
                     params.extra_generation_params.update(dict(
+                        k2_start    = k2_start,
                         k2_fidelity = k2_fidelity,
                     ))
 
 
     def process_before_every_sampling(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_stop, k2_fidelity = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity = script_args
 
         if not enabled:
             return
@@ -630,6 +645,7 @@ class ersatzOtherControl(scripts.Script):
 
             setattr(global_variables, "krea2_control_lora_fidelity", k2_fidelity)
             setattr(global_variables, "krea2_control_lora_strength", k2_strength)
+            setattr(global_variables, "krea2_control_lora_start_sigma", k2_start)
             setattr(global_variables, "krea2_control_lora_stop_sigma", k2_stop)
 
         return
@@ -651,6 +667,7 @@ class ersatzOtherControl(scripts.Script):
                 case 3:
                     setattr(global_variables, "krea2_control_lora_fidelity", 1.0)
                     setattr(global_variables, "krea2_control_lora_strength", 0.0)
+                    setattr(global_variables, "krea2_control_lora_start_sigma", 0.0)
                     setattr(global_variables, "krea2_control_lora_stop_sigma", 1.0)
                     # setattr(global_variables, "krea2_control_lora_latent", None) # keep it, for repeat use
                     params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
