@@ -74,6 +74,7 @@ class ersatzOtherControl(scripts.Script):
     klein_latent_size = None
     k2_image_hash = None
     k2_latent_size = None
+    k2_resize = None
 
     def __init__(self):
         if ersatzOtherControl.original_kontext_forward is None:
@@ -208,14 +209,16 @@ class ersatzOtherControl(scripts.Script):
                         z_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z_image_dims], outputs=None)
 
                 with gradio.Tab("Krea2 Control LoRA") as krea2:
-                    gradio.Markdown("Select the control model in the **Additional modules** menu. Include pre-processed reference image here.")
+                    gradio.Markdown("Select the control model in the **Additional modules** menu. Include (pre-processed, if necessary) reference image here. NeverOOM recommended for low-VRAM.")
                     with gradio.Row():
                         with gradio.Column():
                             k2_image = ForgeCanvas(height=300, contrast_scribbles=True, scribble_alpha=50)
                         with gradio.Column():
+                            k2_resize = gradio.Dropdown(label="Resize", info="for Depth, resize will be over-ridden to 'to output'", choices=["none", "half", "to output"], value="none", allow_custom_value=True)
                             k2_mask_mode = gradio.Radio(value="unmasked", choices=["masked", "unmasked"], label="Target area")
                             k2_strength = gradio.Slider(value=1.0, minimum=0.0, maximum=2.0, step=0.01, label="strength")
-                            k2_stop = gradio.Slider(value=0.85, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
+                            k2_stop = gradio.Slider(value=0.5, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
+                            k2_fidelity = gradio.Slider(value=1.0, minimum=1.0, maximum=8.0, step=0.1, label="fidelity (reference only)")
                             with gradio.Row():
                                 k2_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 k2_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
@@ -247,16 +250,18 @@ class ersatzOtherControl(scripts.Script):
             (klein_2_str, "klein_2_str"),
             (klein_3_str, "klein_3_str"),
             (klein_4_str, "klein_4_str"),
-            (k2_strength, "k2_strength"),
-            (k2_stop, "k2_stop"),
-            (k2_mask_mode, "k2_mask_mode")
+            (k2_strength,  "k2_strength"),
+            (k2_stop,      "k2_stop"),
+            (k2_resize,    "k2_resize"),
+            (k2_mask_mode, "k2_mask_mode"),
+            (k2_fidelity,  "k2_fidelity")
         ]
 
-        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image.background, k2_image.foreground, k2_mask_mode, k2_strength, k2_stop
+        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image.background, k2_image.foreground, k2_resize, k2_mask_mode, k2_strength, k2_stop, k2_fidelity
 
 
     def process(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_mask_mode, k2_strength, k2_stop = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_stop, k2_fidelity = script_args
         if enabled:
             if selected_tab == 0 and (kontext_1 is not None or kontext_2 is not None) and params.sd_model.is_flux:
                 params.extra_generation_params.update(dict(
@@ -287,16 +292,23 @@ class ersatzOtherControl(scripts.Script):
                     ))
             elif selected_tab == 3 and k2_image is not None and k2_stop < 1.0 and params.sd_model.is_krea2:
                 if getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
+                    k2_resize = "to output"
+
+                params.extra_generation_params.update(dict(
+                    eOC_enabled  = enabled,
+                    k2_resize    = k2_resize,
+                    k2_mask_mode = k2_mask_mode,
+                    k2_strength  = k2_strength,
+                    k2_stop      = k2_stop,
+                ))
+                if not getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
                     params.extra_generation_params.update(dict(
-                        eOC_enabled  = enabled,
-                        k2_mask_mode = k2_mask_mode,
-                        k2_strength  = k2_strength,
-                        k2_stop      = k2_stop,
+                        k2_fidelity = k2_fidelity,
                     ))
 
 
     def process_before_every_sampling(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_mask_mode, k2_strength, k2_stop = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_stop, k2_fidelity = script_args
 
         if not enabled:
             return
@@ -545,22 +557,52 @@ class ersatzOtherControl(scripts.Script):
                 shared.ZITstop = z_stop
 
 
-        elif selected_tab == 3 and k2_image is not None and params.sd_model.is_krea2 and getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
-            k_width = w * 8
-            k_height = h * 8
-            patch_size = 2
-
+        elif selected_tab == 3 and k2_image is not None and params.sd_model.is_krea2:
             if isinstance (k2_image, str):
                 k2_image_hash = hash(k2_image + k2_mask + k2_mask_mode)
             else:
                 k2_image_hash = hash(str(list(k2_image.getdata(band=None))) + str(list(k2_mask.getdata(band=None))) + k2_mask_mode)
             k2_latent_size = (w, h)
 
-            if k2_image_hash == self.k2_image_hash and k2_latent_size == self.k2_latent_size:
+            if k2_image_hash == self.k2_image_hash and k2_latent_size == self.k2_latent_size and k2_resize == self.k2_resize:
                 print ("[Krea2 Control] used cache")
             else:
                 self.k2_image_hash = k2_image_hash
                 self.k2_latent_size = k2_latent_size
+                self.k2_resize = k2_resize
+
+                if getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
+                    k_width = w * 8
+                    k_height = h * 8
+                else:
+                    match k2_resize:
+                        case "to output":
+                            k_width = w*8
+                            k_height = h*8
+                        case "half":
+                            k_width = k2_image.size[0] // 2
+                            k_height = k2_image.size[1] // 2
+                        case "none":
+                            k_width = k2_image.size[0]
+                            k_height = k2_image.size[1]
+                        case _:
+                            if k2_resize.isdigit():
+                                maximum = int(k2_resize)
+                                if k2_image.size[0] > k2_image.size[1]:
+                                    k_width = maximum
+                                    k_height = int(maximum * k2_image.size[1] / k2_image.size[0])
+                                else:
+                                    k_width = int(maximum * k2_image.size[0] / k2_image.size[1])
+                                    k_height = maximum
+                            else:
+                                k_width = k2_image.size[0]
+                                k_height = k2_image.size[1]
+
+                    k_width = 16 * ((k_width + 8) // 16)
+                    k_height = 16 * ((k_height + 8) // 16)
+                    k_width = min(1024, max(256, k_width))
+                    k_height = min(1024, max(256, k_height))
+                patch_size = 2
 
                 if isinstance (k2_mask, str):
                     k2_mask = decode_base64_to_image(k2_mask)
@@ -580,6 +622,13 @@ class ersatzOtherControl(scripts.Script):
                 k2_latent = pil_to_latent(k2_image, k_width, k_height, patch_size, "Krea2 Control", mask=k2_mask)
                 setattr(global_variables, "krea2_control_lora_latent", k2_latent)
 
+                if not getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
+                    extra_mem = k2_latent.shape[1] * k2_latent.shape[2] * k2_latent.shape[3]
+                    extra_mem *= n * x.element_size() * 1024# * 3
+                    print ("[Krea2 Control (reference)] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
+                    params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
+
+            setattr(global_variables, "krea2_control_lora_fidelity", k2_fidelity)
             setattr(global_variables, "krea2_control_lora_strength", k2_strength)
             setattr(global_variables, "krea2_control_lora_stop_sigma", k2_stop)
 
@@ -600,9 +649,11 @@ class ersatzOtherControl(scripts.Script):
                     shared.ZITstrength = 0.0
                     shared.ZITstop = 0.0
                 case 3:
+                    setattr(global_variables, "krea2_control_lora_fidelity", 1.0)
                     setattr(global_variables, "krea2_control_lora_strength", 0.0)
                     setattr(global_variables, "krea2_control_lora_stop_sigma", 1.0)
                     # setattr(global_variables, "krea2_control_lora_latent", None) # keep it, for repeat use
+                    params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
                 case _:
                     pass
         return
