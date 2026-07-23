@@ -239,14 +239,18 @@ class SingleStreamDiT(nn.Module):
 
         x = rearrange(x, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
 
-        end_sigma = getattr(global_variables, "krea2_control_lora_stop_sigma", 0.0) or 0.0
+        start_sigma = getattr(global_variables, "krea2_control_lora_start_sigma", 0.0) or 0.0
+        end_sigma = getattr(global_variables, "krea2_control_lora_stop_sigma", 1.0)
+        if end_sigma is None:
+            end_sigma = 1.0
         strength = getattr(global_variables, "krea2_control_lora_strength", 0.0) or 0.0
-        fidelity = getattr(global_variables, "krea2_control_lora_fidelity", 0.0) or 1.0
-        if timesteps[0].item() > end_sigma and strength > 0.0:
+        fidelity = getattr(global_variables, "krea2_control_lora_fidelity", 1.0) or 1.0
+        if timesteps[0].item() <= start_sigma and timesteps[0].item() > end_sigma and strength > 0.0:
             ctrl = getattr(global_variables, "krea2_control_lora_latent", None)
+            setattr(global_variables, "krea2_control_lora_apply", strength)
         else:
             ctrl = None
-            setattr(global_variables, "krea2_control_lora_strength", 0.0)
+            setattr(global_variables, "krea2_control_lora_apply", 0.0)
 
         ctrlimg = None
         ctrlpos = None
@@ -290,7 +294,12 @@ class SingleStreamDiT(nn.Module):
         imgids[..., 2] = torch.arange(w_, device=device, dtype=torch.float32)[None, :]
         imgpos = imgids.reshape(1, h_ * w_, 3).repeat(bs, 1, 1)
 
-        if ctrlimg is not None:
+        if ctrlimg is None:
+            ctrllen = 0
+            combined = torch.cat((context, img), dim=1)
+            pos = torch.cat((txtpos, imgpos), dim=1)
+            attn_bias = None
+        else:
             ctrllen = ctrlimg.shape[1]
             combined = torch.cat((context, ctrlimg, img), dim=1)
             pos = torch.cat((txtpos, ctrlpos, imgpos), dim=1)
@@ -301,13 +310,7 @@ class SingleStreamDiT(nn.Module):
                 cols = torch.arange(txtlen, txtlen + ctrllen, device=combined.device)
                 L = rows + imglen
                 attn_bias = torch.zeros(1, 1, L, L, device=combined.device, dtype=combined.dtype)
-
                 attn_bias[:, :, rows:, cols] = math.log(max(fidelity, 1e-4))
-        else:
-            ctrllen = 0
-            combined = torch.cat((context, img), dim=1)
-            pos = torch.cat((txtpos, imgpos), dim=1)
-            attn_bias = None
 
         freqs = self.pe_embedder(pos)
 
