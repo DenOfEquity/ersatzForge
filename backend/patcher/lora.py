@@ -166,9 +166,9 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
 
     weight_dtype_backup = None
 
-    if computation_dtype != weight.dtype:
-        # weight = weight.clone()
-    # else:
+    if computation_dtype == weight.dtype:
+        weight = weight.clone()
+    else:
         weight_dtype_backup = weight.dtype
         weight = weight.to(dtype=computation_dtype)
 
