@@ -80,7 +80,7 @@ def refresh_ckpt():
 def refresh_vaete():
     global module_list, module_vae_list, module_te_list
     
-    file_extensions = ['ckpt', 'pt', 'bin', 'safetensors', 'sft', 'gguf']
+    file_extensions = ["ckpt", "pt", "bin", "safetensors", "sft", "gguf"]
 
     module_list.clear()
     module_vae_list.clear()
@@ -122,19 +122,19 @@ _ = refresh_vaete()
 def make_checkpoint_manager_ui():
     global ui_checkpoint, ui_vae, ui_clip_skip, ui_forge_unet_storage_dtype_options, ui_forge_swap, ui_forge_inference_memory, ui_forge_preset, ckpt_list
 
-    if shared.opts.sd_model_checkpoint in [None, 'None', 'none', '']:
+    if shared.opts.sd_model_checkpoint in [None, "None", "none", ""]:
         if len(sd_models.checkpoints_list) == 0:
             sd_models.list_models()
         if len(sd_models.checkpoints_list) > 0:
-            shared.opts.set('sd_model_checkpoint', next(iter(sd_models.checkpoints_list.values())).name)
+            shared.opts.set("sd_model_checkpoint", next(iter(sd_models.checkpoints_list.values())).name)
 
-    ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value='-', 
-                                  choices=['all', 'anima', 'chroma', 'ernie', 'flux', 'klein', 'krea2', 'sd', 'sd3', 'xl', 'zimage'], scale=0, filterable=False)
+    ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value="-", 
+                                  choices=["all", "anima", "chroma", "ernie", "flux", "klein", "krea2", "sd", "sd3", "xl", "zimage"], scale=0, filterable=False)
 
     ui_checkpoint = gr.Dropdown(
         value=lambda: shared.opts.sd_model_checkpoint,
         label="Checkpoint",
-        elem_classes=['model_selection'],
+        elem_classes=["model_selection"],
         choices=ckpt_list
     )
 
@@ -142,27 +142,29 @@ def make_checkpoint_manager_ui():
         value=lambda: [os.path.basename(x) for x in shared.opts.forge_additional_modules],
         multiselect=True,
         label="Additional modules",
-        elem_classes=['module_selection'],
+        elem_classes=["module_selection"],
         choices=list(module_list.keys())
     )
 
     def gr_refresh_models():    # updates HiRes fix checkpoint/modules too
         a, b = refresh_models()
-        return gr.update(choices=a), gr.update(choices=b), gr.update(choices=["Use same checkpoint"] + a), gr.update(choices=["Use same choices"] + list(b))
+        return gr.update(choices=a), gr.update(choices=b), gr.update(choices=["Use same checkpoint"] + a), gr.update(choices=["Use same choices"] + list(b)), gr.update(choices=["", "[STOP]"] + a), gr.update(choices=[""] + a)
 
-    ui_txt2img_hr_checkpoint = get_a1111_ui_component('txt2img', 'HiRes checkpoint')
-    ui_txt2img_hr_vae = get_a1111_ui_component('txt2img', 'HiRes additional modules')
+    ui_txt2img_hr_checkpoint = get_a1111_ui_component("txt2img", "HiRes checkpoint")
+    ui_txt2img_hr_vae = get_a1111_ui_component("txt2img", "HiRes additional modules")
+    ui_txt2img_refiner_checkpoint = get_a1111_ui_component("txt2img", "Refiner")
+    ui_img2img_refiner_checkpoint = get_a1111_ui_component("img2img", "Refiner")
 
     refresh_button = ui_common.ToolButton(value=ui_common.refresh_symbol, elem_id="forge_refresh_checkpoint", tooltip="Refresh")
     refresh_button.click(
         fn=gr_refresh_models,
         inputs=None,
-        outputs=[ui_checkpoint, ui_vae, ui_txt2img_hr_checkpoint, ui_txt2img_hr_vae],
+        outputs=[ui_checkpoint, ui_vae, ui_txt2img_hr_checkpoint, ui_txt2img_hr_vae, ui_txt2img_refiner_checkpoint, ui_img2img_refiner_checkpoint],
         show_progress="hidden",
     )
 
     ui_forge_unet_storage_dtype_options = gr.Dropdown(label="Diffusion in Low Bits", value=lambda: shared.opts.forge_unet_storage_dtype, choices=list(forge_unet_storage_dtype_options.keys()), filterable=False)
-    bind_to_opts(ui_forge_unet_storage_dtype_options, 'forge_unet_storage_dtype', save=True, callback=refresh_model_loading_parameters)
+    bind_to_opts(ui_forge_unet_storage_dtype_options, "forge_unet_storage_dtype", save=True, callback=refresh_model_loading_parameters)
 
 
     ui_forge_swap = gr.Dropdown(label="Swap Location + Method", value=lambda: shared.opts.forge_swap, choices=["CPU + Async", "CPU + Queue", "Shared + Async", "Shared + Queue"], filterable=False)
