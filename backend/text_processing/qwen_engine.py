@@ -180,7 +180,7 @@ class Qwen3TextProcessingEngine:
         if opts.use_negPiP and self.use_negPiP:
             return zs, np
         else:
-            return zs
+            return zs, None
 
     def process_embeds(self, batch_tokens):
         torch_device = memory_management.get_torch_device()
