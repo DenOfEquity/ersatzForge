@@ -1,5 +1,3 @@
-# Only include samplers that are not already in A1111
-
 import torch
 import math
 
@@ -460,5 +458,93 @@ def sample_adaptive_ode(model, x: torch.Tensor, sigmas: torch.Tensor, extra_args
 def sample_fixed_ode(model, x: torch.Tensor, sigmas: torch.Tensor, extra_args=None, callback=None, disable=None):
     solver = shared.opts.fixed_ode_solver
     return sample_ode(model, x, sigmas, extra_args, callback, disable, solver=solver)
-
 #### end ODE
+
+
+#### SSPRK3 (Strong Stability Preserving Runge-Kutta 3rd Order)
+# via https://github.com/MisterChief95/sd-forge-extra-samplers
+# minor modifications/ simplifications; not result altering
+
+# SSPRK3 (Shu-Osher form):
+#   Stage 1: u1 = x_n + h*k1              where k1 = f(x_n)
+#   Stage 2: u2 = (3/4)*x_n + (1/4)*u1 + (1/4)*h*k2   where k2 = f(u1)
+#   Stage 3: x_n+1 = (1/3)*x_n + (2/3)*u2 + (2/3)*h*k3   where k3 = f(u2)
+
+def _to_d(x: torch.Tensor, sigma, denoised: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    sigma = sigma.clamp_min(eps)
+
+    # If sigma is per-batch [B], reshape to [B,1,1,1] for NCHW broadcast
+    if sigma.ndim == 1:
+        sigma = sigma.view(-1, 1, 1, 1)
+
+    return (x - denoised) / sigma
+
+
+@torch.no_grad()
+def sample_ssprk3(model, x: torch.Tensor, *, sigmas=None, extra_args=None, callback=None, disable=False, **kwargs,):
+    """
+    SSPRK3 (Strong Stability Preserving Runge-Kutta 3rd Order) sampler.
+
+    This is a 3rd-order explicit method with excellent stability properties.
+
+    The SSP property ensures the method maintains stability bounds that would
+    hold for forward Euler, making it robust for stiff problems like diffusion.
+    """
+
+    steps = int(sigmas.numel() - 1)
+    if steps <= 0:
+        return x
+
+    s_in = x.new_ones(x.shape[0])
+    eps_sigma = torch.tensor(1e-8).to(x)
+
+    for i in trange(steps, disable=disable):
+        s0 = sigmas[i]
+        s1 = sigmas[i + 1]
+        h = s1 - s0
+
+        # Stage 1: Evaluate at current point
+        den1 = model(x, s0 * s_in, **extra_args)
+
+        # Handle final step to sigma=0 with simple Euler
+        if float(s1) == 0.0:
+            d1 = _to_d(x, s0, den1)
+            x.addcmul_(h, d1)
+
+            if callback is not None:
+                callback({"i": i, "sigma": s0, "sigma_next": s1, "x": x, "denoised": den1})
+            continue
+
+        d1 = _to_d(x, s0, den1)
+
+        # Stage 1: Full Euler step
+        u1 = torch.addcmul(x, h, d1)
+
+        # Evaluate at stage 1
+        # Sigma for u1: since u1 = x + h*d1, we're at s0 + h = s1
+        den2 = model(u1, s1 * s_in, **extra_args)
+        d2 = _to_d(u1, s1, den2)
+
+        # Stage 2: Convex combination
+        u2 = (3.0 / 4.0) * x + (1.0 / 4.0) * u1 + (1.0 / 4.0) * h * d2
+
+        # Sigma for u2: weighted average
+        s2 = s0 + 0.5 * h
+        s2 = torch.maximum(s2, eps_sigma)
+
+        # Evaluate at stage 2
+        den3 = model(u2, s2 * s_in, **extra_args)
+        d3 = _to_d(u2, s2, den3)
+
+        # Stage 3: Final convex combination
+        x = (1.0 / 3.0) * x + (2.0 / 3.0) * u2 + (2.0 / 3.0) * h * d3
+
+        # Safety: handle NaN/Inf
+        if torch.isnan(x).any() or torch.isinf(x).any():
+            x = torch.nan_to_num(x)
+
+        if callback is not None:
+            callback({"i": i, "sigma": s0, "sigma_next": s1, "x": x, "denoised": den3})
+
+    return x
+#### end SSPRK3
