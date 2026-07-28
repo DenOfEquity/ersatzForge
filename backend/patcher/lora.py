@@ -410,10 +410,17 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 # for Q = -Q^T
                 q = blocks - blocks.transpose(1, 2)
                 normed_q = q
-                if alpha > 0: # alpha in oft/boft is for constraint
+
+                constraint_val = alpha * block_num * block_size
+                if constraint_val > 0:
                     q_norm = torch.norm(q) + 1e-8
-                    if q_norm > alpha:
-                        normed_q = q * alpha / q_norm
+                    if q_norm > constraint_val:
+                        normed_q = q * constraint_val / q_norm
+                # if alpha > 0: # alpha in oft/boft is for constraint
+                    # q_norm = torch.norm(q) + 1e-8
+                    # if q_norm > alpha:
+                        # normed_q = q * alpha / q_norm
+
                 # prevent unsupported type in .inverse()
                 r = (I + normed_q) @ (I - normed_q).to(torch.float32).inverse()
                 r = r.to(weight)
@@ -455,10 +462,13 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 # for Q = -Q^T
                 q = blocks - blocks.transpose(-1, -2)
                 normed_q = q
-                if alpha > 0: # alpha in boft/bboft is for constraint
+
+                constraint_val = alpha * block_num * boft_b
+                if constraint_val > 0:
                     q_norm = torch.norm(q) + 1e-8
-                    if q_norm > alpha:
-                        normed_q = q * alpha / q_norm
+                    if q_norm > constraint_val:
+                        normed_q = q * constraint_val / q_norm
+
                 # prevent unsupported type in .inverse()
                 r = (I + normed_q) @ (I - normed_q).to(torch.float32).inverse()
                 r = r.to(weight)
