@@ -47,7 +47,7 @@ def patch_freeu_v2(unet_patcher, b1, b2, s1, s2):
                     try:
                         hsp = Fourier_filter(hsp, threshold=1, scale=scale[1])
                     except:
-                        print("Device", hsp.device, "does not support the torch.fft functions used in the FreeU node, switching to CPU.")
+                        print(f"Device {hsp.device} does not support the torch.fft functions used in the FreeU node, switching to CPU.")
                         on_cpu_devices[hsp.device] = True
                         hsp = Fourier_filter(hsp.cpu(), threshold=1, scale=scale[1]).to(hsp.device)
                 else:
@@ -65,11 +65,11 @@ class FreeUForForge(scripts.Script):
 
     presets_builtin = [
         #   name, b1, b2, s1, s2, start step, end step
-        ('Forge default', 1.01, 1.02, 0.99, 0.95, 0.0, 1.0),
-        ('SD 1.4', 1.3, 1.4, 0.9, 0.2, 0.0, 1.0),
-        ('SD 1.5', 1.5, 1.6, 0.9, 0.2, 0.0, 1.0),
-        ('SD 2.1', 1.4, 1.6, 0.9, 0.2, 0.0, 1.0),
-        ('SDXL', 1.3, 1.4, 0.9, 0.2, 0.0, 1.0),
+        ("Forge default", 1.01, 1.02, 0.99, 0.95, 0.0, 1.0),
+        ("SD 1.4", 1.3, 1.4, 0.9, 0.2, 0.0, 1.0),
+        ("SD 1.5", 1.5, 1.6, 0.9, 0.2, 0.0, 1.0),
+        ("SD 2.1", 1.4, 1.6, 0.9, 0.2, 0.0, 1.0),
+        ("SDXL", 1.3, 1.4, 0.9, 0.2, 0.0, 1.0),
     ]
     try:
         import freeu_presets
@@ -84,29 +84,26 @@ class FreeUForForge(scripts.Script):
         return scripts.AlwaysVisible
 
     def ui(self, *args, **kwargs):
-        
-        with InputAccordion(False, label=self.title(),
-                          elem_id="extensions-freeu",
-                          elem_classes=["extensions-freeu"]) as freeu_enabled:
+        with InputAccordion(False, label=self.title()) as freeu_enabled:
             with gr.Row():
-                freeu_b1 = gr.Slider(label='B1', minimum=0, maximum=2, step=0.01, value=1.01)
-                freeu_b2 = gr.Slider(label='B2', minimum=0, maximum=2, step=0.01, value=1.02)
+                freeu_b1 = gr.Slider(label="B1", minimum=0, maximum=2, step=0.01, value=1.01)
+                freeu_b2 = gr.Slider(label="B2", minimum=0, maximum=2, step=0.01, value=1.02)
             with gr.Row():
-                freeu_s1 = gr.Slider(label='S1', minimum=0, maximum=4, step=0.01, value=0.99)
-                freeu_s2 = gr.Slider(label='S2', minimum=0, maximum=4, step=0.01, value=0.95)
+                freeu_s1 = gr.Slider(label="S1", minimum=0, maximum=4, step=0.01, value=0.99)
+                freeu_s2 = gr.Slider(label="S2", minimum=0, maximum=4, step=0.01, value=0.95)
             with gr.Row():
-                freeu_start = gr.Slider(label='Start step', minimum=0.0, maximum=1.0, step=0.01, value=0.0)
-                freeu_end   = gr.Slider(label='End step', minimum=0.0, maximum=1.0, step=0.01, value=1.0)
+                freeu_start = gr.Slider(label="Start step", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                freeu_end   = gr.Slider(label="End step", minimum=0.0, maximum=1.0, step=0.01, value=1.0)
             with gr.Row():
-                freeu_preset = gr.Dropdown(label='', choices=[x[0] for x in FreeUForForge.presets], value='(presets)', type='index', scale=0, allow_custom_value=True)
+                freeu_preset = gr.Dropdown(label="", choices=[x[0] for x in FreeUForForge.presets], value="(presets)", type="index", scale=0, allow_custom_value=True)
 
         def setParams (preset):
             if preset < len(FreeUForForge.presets):
                 return  FreeUForForge.presets[preset][1], FreeUForForge.presets[preset][2], \
                         FreeUForForge.presets[preset][3], FreeUForForge.presets[preset][4], \
-                        FreeUForForge.presets[preset][5], FreeUForForge.presets[preset][6], '(presets)'
+                        FreeUForForge.presets[preset][5], FreeUForForge.presets[preset][6], "(presets)"
             else:
-                return 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, '(presets)'
+                return 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, "(presets)"
 
         freeu_preset.input( fn=setParams,
                             inputs=[freeu_preset],
