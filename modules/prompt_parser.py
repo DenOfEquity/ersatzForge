@@ -339,8 +339,12 @@ def stack_conds(tensors):
                 token_count = max([len(x) for x in tensors])
             case 2: # crossattn or vector
                 token_count = max([x.shape[0] for x in tensors])
-            case 3: # Anima crossattn (already padded to 512)
-                token_count = max([x.shape[1] for x in tensors])
+            case 3:
+                if tensors[0].shape[1] == 12: # krea2:
+                    target_dim = 0
+                else:                         # Anima crossattn (already padded to 512)
+                    target_dim = 1
+                token_count = max([x.shape[target_dim] for x in tensors])
             case _:
                 pass
 
@@ -359,9 +363,12 @@ def stack_conds(tensors):
                         vector_repeated = tensors[i].new_zeros([missing, tensors[i].shape[1]])
                         tensors[i] = torch.vstack([tensors[i], vector_repeated])
                 case 3:
-                    missing = token_count - tensors[i].shape[1]
+                    missing = token_count - tensors[i].shape[target_dim]
                     if missing:
-                        vector_repeated = tensors[i].new_zeros([1, missing, tensors[i].shape[2]])
+                        if target_dim == 0:
+                            vector_repeated = tensors[i].new_zeros([missing, tensors[i].shape[1], tensors[i].shape[2]])
+                        elif target_dim ==1:
+                            vector_repeated = tensors[i].new_zeros([1, missing, tensors[i].shape[2]])
                         tensors[i] = torch.vstack([tensors[i], vector_repeated])
                 case _:
                     pass
