@@ -53,14 +53,14 @@ class ParameterGGUF(torch.nn.Parameter):
         return self.copy_with_data(self.data.to(*args, **kwargs))
 
     def pin_memory(self, device=None):
-        return self.copy_with_data(torch.Tensor.pin_memory(self, device=device))
+        return self.copy_with_data(self.data.pin_memory(device=device))
 
 
 def dequantize_tensor(tensor):
     if tensor is None:
         return None
 
-    if (gguf_cls := getattr(tensor, 'gguf_cls', None)) is None:
+    if (gguf_cls := getattr(tensor, "gguf_cls", None)) is None:
         return tensor
 
     return gguf_cls.dequantize_pytorch(tensor)
