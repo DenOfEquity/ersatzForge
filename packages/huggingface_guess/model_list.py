@@ -58,7 +58,9 @@ class BASE:
         return {}
 
     def inpaint_model(self):
-        return self.unet_config["in_channels"] > 4
+        if self.latent_format.__class__.__name__ in ["SD15", "SDXL"]:
+            return self.unet_config["in_channels"] > 4
+        return False
 
     def __init__(self, unet_config):
         self.unet_config = unet_config.copy()
@@ -338,9 +340,6 @@ class Mugen(SDXL):
         "use_temporal_attention": False,
         "in_channels": 32,
     }
-    
-    def inpaint_model(self):
-        return False
 
 
 class SSD1B(SDXL):
