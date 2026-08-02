@@ -17,7 +17,6 @@ class Flux(ForgeDiffusionEngine):
 
     def __init__(self, estimated_config, huggingface_components):
         super().__init__(estimated_config, huggingface_components)
-        self.is_inpaint = False
 
         clip = CLIP(
             model_dict={
@@ -98,15 +97,3 @@ class Flux(ForgeDiffusionEngine):
     def get_prompt_lengths_on_ui(self, prompt):
         token_count = self.text_processing_engine_t5.tokenize_for_UI(prompt)
         return token_count, max(255, token_count)
-
-    @torch.inference_mode()
-    def encode_first_stage(self, x):
-        sample = self.forge_objects.vae.encode(x.movedim(1, -1) * 0.5 + 0.5)
-        sample = self.forge_objects.vae.first_stage_model.process_in(sample)
-        return sample.to(x)
-
-    @torch.inference_mode()
-    def decode_first_stage(self, x):
-        sample = self.forge_objects.vae.first_stage_model.process_out(x)
-        sample = self.forge_objects.vae.decode(sample).movedim(-1, 1) * 2.0 - 1.0
-        return sample.to(x)

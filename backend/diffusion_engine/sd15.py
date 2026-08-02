@@ -13,6 +13,8 @@ import safetensors.torch as sf
 from backend import utils
 
 from modules import shared
+from modules_forge.shared import diffusers_dir
+
 from spaces import download_single_file
 
 ## ELLA
@@ -266,8 +268,8 @@ class StableDiffusion(ForgeDiffusionEngine):
 
             #use diffusers for t5xl, auto-download and nothing else uses it
             from transformers import T5EncoderModel, T5Tokenizer
-            T5model = T5EncoderModel.from_pretrained("QQGYLab/ELLA", subfolder="models--google--flan-t5-xl--text_encoder", local_files_only=True)
-            T5tokenizer = T5Tokenizer.from_pretrained("QQGYLab/ELLA", subfolder="models--google--flan-t5-xl--text_encoder", legacy=True, local_files_only=True)
+            T5model = T5EncoderModel.from_pretrained("QQGYLab/ELLA", subfolder="models--google--flan-t5-xl--text_encoder", local_files_only=True, cache_dir=diffusers_dir)
+            T5tokenizer = T5Tokenizer.from_pretrained("QQGYLab/ELLA", subfolder="models--google--flan-t5-xl--text_encoder", legacy=True, local_files_only=True, cache_dir=diffusers_dir)
 
             last_step = max(1, end_steps[-1] - 1)
 
@@ -338,18 +340,6 @@ class StableDiffusion(ForgeDiffusionEngine):
     def get_prompt_lengths_on_ui(self, prompt):
         _, token_count = self.text_processing_engine.process_texts([prompt])
         return token_count, self.text_processing_engine.get_target_prompt_token_count(token_count)
-
-    @torch.inference_mode()
-    def encode_first_stage(self, x):
-        sample = self.forge_objects.vae.encode(x.movedim(1, -1) * 0.5 + 0.5)
-        sample = self.forge_objects.vae.first_stage_model.process_in(sample)
-        return sample.to(x)
-
-    @torch.inference_mode()
-    def decode_first_stage(self, x):
-        sample = self.forge_objects.vae.first_stage_model.process_out(x)
-        sample = self.forge_objects.vae.decode(sample).movedim(-1, 1) * 2.0 - 1.0
-        return sample.to(x)
 
     def save_checkpoint(self, filename):
         sd = {}

@@ -70,18 +70,6 @@ class StableDiffusion2(ForgeDiffusionEngine):
         _, token_count = self.text_processing_engine.process_texts([prompt])
         return token_count, self.text_processing_engine.get_target_prompt_token_count(token_count)
 
-    @torch.inference_mode()
-    def encode_first_stage(self, x):
-        sample = self.forge_objects.vae.encode(x.movedim(1, -1) * 0.5 + 0.5)
-        sample = self.forge_objects.vae.first_stage_model.process_in(sample)
-        return sample.to(x)
-
-    @torch.inference_mode()
-    def decode_first_stage(self, x):
-        sample = self.forge_objects.vae.first_stage_model.process_out(x)
-        sample = self.forge_objects.vae.decode(sample).movedim(-1, 1) * 2.0 - 1.0
-        return sample.to(x)
-
     def save_checkpoint(self, filename):
         sd = {}
         sd.update(

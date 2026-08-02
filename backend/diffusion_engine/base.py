@@ -1,3 +1,4 @@
+import torch
 import safetensors.torch as sf
 
 from backend import utils
@@ -43,12 +44,6 @@ class ForgeDiffusionEngine:
     def get_learned_conditioning(self, prompt: list[str]):
         pass
 
-    def encode_first_stage(self, x):
-        pass
-
-    def decode_first_stage(self, x):
-        pass
-
     def get_prompt_lengths_on_ui(self, prompt):
         return 0, 75
 
@@ -73,6 +68,18 @@ class ForgeDiffusionEngine:
         self.is_krea2 = False
 
         return
+
+    @torch.inference_mode()
+    def encode_first_stage(self, x):
+        sample = self.forge_objects.vae.encode(x.movedim(1, -1) * 0.5 + 0.5)
+        sample = self.forge_objects.vae.first_stage_model.process_in(sample)
+        return sample.to(x)
+
+    @torch.inference_mode()
+    def decode_first_stage(self, x):
+        sample = self.forge_objects.vae.first_stage_model.process_out(x)
+        sample = self.forge_objects.vae.decode(sample).movedim(-1, 1) * 2.0 - 1.0
+        return sample.to(x)
 
     def save_unet(self, filename):
         sd = utils.get_state_dict_after_quant(self.forge_objects.unet.model.diffusion_model)
