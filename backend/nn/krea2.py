@@ -161,8 +161,8 @@ class SingleStreamBlock(nn.Module):
 
     def forward(self, x, negpip, vec, freqs, mask=None, transformer_options={}):
         prescale, preshift, pregate, postscale, postshift, postgate = self.mod(vec)
-        x.addcmul_(pregate, self.attn(torch.addcmul(preshift, 1 + prescale, self.prenorm(x)), negpip, freqs, mask, transformer_options=transformer_options))
-        x.addcmul_(postgate, self.mlp(torch.addcmul(postshift, 1 + postscale, self.postnorm(x))))
+        x.addcmul_(pregate, self.attn(torch.addcmul(preshift, prescale.add_(1), self.prenorm(x)), negpip, freqs, mask, transformer_options=transformer_options))
+        x.addcmul_(postgate, self.mlp(torch.addcmul(postshift, postscale.add_(1), self.postnorm(x))))
         return x
 
 
@@ -175,7 +175,7 @@ class LastLayer(nn.Module):
 
     def forward(self, x, tvec):
         scale, shift = self.modulation(tvec)
-        x = torch.addcmul(shift, 1 + scale, self.norm(x))
+        x = torch.addcmul(shift, scale.add_(1), self.norm(x))
         return self.linear(x)
 
 
@@ -257,12 +257,8 @@ class SingleStreamDiT(nn.Module):
         if ctrl is None:
             img = self.first(x)
         else:
-            if patch >= 2:
-                pad_h = (patch - ctrl.shape[-2] % patch) % patch
-                pad_w = (patch - ctrl.shape[-1] % patch) % patch
-                ctrl = torch.nn.functional.pad(ctrl, (0, pad_w, 0, pad_h), mode="circular")
-                ch = ctrl.shape[-1] // patch
-                cw = ctrl.shape[-2] // patch
+            ch = ctrl.shape[-1] // patch
+            cw = ctrl.shape[-2] // patch
 
             ctrl = rearrange(ctrl, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
             if bs > 1:
@@ -271,7 +267,7 @@ class SingleStreamDiT(nn.Module):
             if self.ctrl_patched: # Control LoRA: concat along channels dim (ref must be same size as noise)
                 img = torch.cat([x, ctrl], dim=2)
                 img = self.first_ctrl(img)
-            else:                 # reference: all ctrl stuff could be cached; concat on dim 1, so ref could be different size to noise
+            else:                 # reference: all ctrl stuff could be cached; concat on dim 1, so ref can be different size to noise
                 img = self.first(x)
                 ctrlimg = self.first(ctrl)
                 ctrlids = torch.zeros(ch, cw, 3, device=device, dtype=torch.float32)
@@ -294,12 +290,21 @@ class SingleStreamDiT(nn.Module):
         imgids[..., 2] = torch.arange(w_, device=device, dtype=torch.float32)[None, :]
         imgpos = imgids.reshape(1, h_ * w_, 3).repeat(bs, 1, 1)
 
-        if ctrlimg is None:
+        if ctrlimg is None:# TanmayPatil depth
             ctrllen = 0
             combined = torch.cat((context, img), dim=1)
             pos = torch.cat((txtpos, imgpos), dim=1)
             attn_bias = None
-        else:
+        elif 0: # m-f'ing m-fers all doing their own thing: Ostris edit
+            ctrllen = ctrlimg.shape[1]
+            combined = torch.cat((context, img, ctrlimg), dim=1)
+            pos = torch.cat((txtpos, imgpos, ctrlpos), dim=1)
+            t_emb_zero = self.tmlp(timestep_embedding(torch.zeros_like(timesteps), self.tdim).unsqueeze(1).to(img.dtype))
+            tvec_ref = self.tproj(t_emb_zero)
+            tvec = torch.cat([tvec.expand(-1, txtlen+imglen, -1),
+                              tvec_ref.expand(-1, ctrllen, -1)], dim=1)
+            attn_bias = None
+        else: # ConradLocke identity edit
             ctrllen = ctrlimg.shape[1]
             combined = torch.cat((context, ctrlimg, img), dim=1)
             pos = torch.cat((txtpos, ctrlpos, imgpos), dim=1)
@@ -321,7 +326,10 @@ class SingleStreamDiT(nn.Module):
             combined = block(combined, negpip, tvec, freqs, attn_bias, transformer_options=transformer_options)
 
         final = self.last(combined, t)
-        out = final[:, txtlen+ctrllen:]
+        if 0:
+            out = final[:, txtlen:txtlen+imglen]
+        else:
+            out = final[:, txtlen+ctrllen:]
         out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_, w=w_, ph=patch, pw=patch)
         out = out[:, :, :H_orig, :W_orig]  # crop padding back off
         return out
