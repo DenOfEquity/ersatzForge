@@ -312,6 +312,8 @@ class SingleStreamDiT(nn.Module):
             ctrllen = 0
             combined = torch.cat((context, img), dim=1)
             pos = torch.cat((txtpos, imgpos), dim=1)
+            # override for cropping of final, later
+            edit_lora_type = ""
         elif edit_lora_type == "Ostris": # m-f'ing m-fers all doing their own thing: Ostris edit
             ctrllen = ctrlimg.shape[1]
             combined = torch.cat((context, img, ctrlimg), dim=1)
