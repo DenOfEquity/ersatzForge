@@ -159,10 +159,25 @@ class SingleStreamBlock(nn.Module):
         self.attn = Attention(features, heads, kvheads=kvheads, bias=bias)
         self.mlp = SwiGLU(features, multiplier, bias)
 
-    def forward(self, x, negpip, vec, freqs, mask=None, transformer_options={}):
-        prescale, preshift, pregate, postscale, postshift, postgate = self.mod(vec)
-        x.addcmul_(pregate, self.attn(torch.addcmul(preshift, prescale.add_(1), self.prenorm(x)), negpip, freqs, mask, transformer_options=transformer_options))
-        x.addcmul_(postgate, self.mlp(torch.addcmul(postshift, postscale.add_(1), self.postnorm(x))))
+    def forward(self, x, negpip, vec, vec_ref, freqs, mask=None, transformer_options={}):
+        if vec_ref is not None:
+            m = self.mod(vec)
+            r = self.mod(vec_ref[0])
+            vec_split = vec_ref[1]
+
+            def mod(h, scale, shift):
+                return torch.cat( (torch.addcmul(m[shift], m[scale].add_(1), h[:, :vec_split]),
+                                   torch.addcmul(r[shift], r[scale].add_(1), h[:, vec_split:]) ), dim=1)
+
+            def gate(h, g):
+                return torch.cat((m[g] * h[:, :vec_split], r[g] * h[:, vec_split:]), dim=1)
+
+            x.add_(gate(self.attn(mod(self.prenorm(x), 0, 1), negpip, freqs, mask, transformer_options=transformer_options), 2))
+            x.add_(gate(self.mlp(mod(self.postnorm(x), 3, 4)), 5))
+        else:
+            prescale, preshift, pregate, postscale, postshift, postgate = self.mod(vec)
+            x.addcmul_(pregate, self.attn(torch.addcmul(preshift, prescale.add_(1), self.prenorm(x)), negpip, freqs, mask, transformer_options=transformer_options))
+            x.addcmul_(postgate, self.mlp(torch.addcmul(postshift, postscale.add_(1), self.postnorm(x))))
         return x
 
 
@@ -244,13 +259,14 @@ class SingleStreamDiT(nn.Module):
         if end_sigma is None:
             end_sigma = 1.0
         strength = getattr(global_variables, "krea2_control_lora_strength", 0.0) or 0.0
-        fidelity = getattr(global_variables, "krea2_control_lora_fidelity", 1.0) or 1.0
         if timesteps[0].item() <= start_sigma and timesteps[0].item() > end_sigma and strength > 0.0:
             ctrl = getattr(global_variables, "krea2_control_lora_latent", None)
             setattr(global_variables, "krea2_control_lora_apply", strength)
         else:
             ctrl = None
             setattr(global_variables, "krea2_control_lora_apply", 0.0)
+
+        edit_lora_type = getattr(global_variables, "krea2_control_lora_type", "") 
 
         ctrlimg = None
         ctrlpos = None
@@ -290,24 +306,24 @@ class SingleStreamDiT(nn.Module):
         imgids[..., 2] = torch.arange(w_, device=device, dtype=torch.float32)[None, :]
         imgpos = imgids.reshape(1, h_ * w_, 3).repeat(bs, 1, 1)
 
-        if ctrlimg is None:# TanmayPatil depth
+        tvec_ref = None
+        attn_bias = None
+        if ctrlimg is None: # default (no control), and TanmayPatil depth
             ctrllen = 0
             combined = torch.cat((context, img), dim=1)
             pos = torch.cat((txtpos, imgpos), dim=1)
-            attn_bias = None
-        elif 0: # m-f'ing m-fers all doing their own thing: Ostris edit
+        elif edit_lora_type == "Ostris": # m-f'ing m-fers all doing their own thing: Ostris edit
             ctrllen = ctrlimg.shape[1]
             combined = torch.cat((context, img, ctrlimg), dim=1)
             pos = torch.cat((txtpos, imgpos, ctrlpos), dim=1)
             t_emb_zero = self.tmlp(timestep_embedding(torch.zeros_like(timesteps), self.tdim).unsqueeze(1).to(img.dtype))
-            tvec_ref = self.tproj(t_emb_zero)
-            tvec = torch.cat([tvec.expand(-1, txtlen+imglen, -1),
-                              tvec_ref.expand(-1, ctrllen, -1)], dim=1)
-            attn_bias = None
-        else: # ConradLocke identity edit
+            tvec_ref = (self.tproj(t_emb_zero), txtlen + imglen)
+        else: # edit_lora_type == "ConradLocke": # ConradLocke identity edit
             ctrllen = ctrlimg.shape[1]
             combined = torch.cat((context, ctrlimg, img), dim=1)
             pos = torch.cat((txtpos, ctrlpos, imgpos), dim=1)
+
+            fidelity = getattr(global_variables, "krea2_control_lora_fidelity", 1.0) or 1.0
             if fidelity == 1.0:
                 attn_bias = None
             else:
@@ -323,10 +339,10 @@ class SingleStreamDiT(nn.Module):
             negpip = negpip[0]
 
         for block in self.blocks:
-            combined = block(combined, negpip, tvec, freqs, attn_bias, transformer_options=transformer_options)
+            combined = block(combined, negpip, tvec, tvec_ref, freqs, attn_bias, transformer_options=transformer_options)
 
         final = self.last(combined, t)
-        if 0:
+        if edit_lora_type == "Ostris":
             out = final[:, txtlen:txtlen+imglen]
         else:
             out = final[:, txtlen+ctrllen:]
