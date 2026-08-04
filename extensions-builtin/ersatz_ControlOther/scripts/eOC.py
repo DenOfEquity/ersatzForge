@@ -105,7 +105,7 @@ class ersatzOtherControl(scripts.Script):
                 sh = r * ((h + r - 1) // r)
                 return f"{image.size[0]} × {image.size[1]} ({sw} × {sh})", gradio.update(interactive=True, variant="secondary"), f"{sw},{sh}"
             else:
-                return  "", gradio.update(interactive=False, variant='tertiary'), "0"
+                return  "", gradio.update(interactive=False, variant="tertiary"), "0"
 
         with InputAccordion(False, label=self.title()) as enabled:
             with gradio.Tabs():
@@ -116,15 +116,15 @@ class ersatzOtherControl(scripts.Script):
                             k_image1 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                             with gradio.Row():
                                 k_image1_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
-                                k_image1_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
-                                k_image1_dims = gradio.Textbox(visible=False, value='0')
+                                k_image1_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                k_image1_dims = gradio.Textbox(visible=False, value="0")
                         with gradio.Column():
                             k_image2 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                             with gradio.Row():
                                 swap12 = ToolButton("\U000021C4")
                                 k_image2_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
-                                k_image2_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
-                                k_image2_dims = gradio.Textbox(visible=False, value='0')
+                                k_image2_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                k_image2_dims = gradio.Textbox(visible=False, value="0")
 
                         k_image1.change(fn=get_dims, inputs=[k_image1, selected_tab], outputs=[k_image1_info, k_image1_send, k_image1_dims], show_progress="hidden")
                         k_image2.change(fn=get_dims, inputs=[k_image2, selected_tab], outputs=[k_image2_info, k_image2_send, k_image2_dims], show_progress="hidden")
@@ -146,8 +146,8 @@ class ersatzOtherControl(scripts.Script):
                             klein_1 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                             with gradio.Row():
                                 klein_1_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
-                                klein_1_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
-                                klein_1_dims = gradio.Textbox(visible=False, value='0')
+                                klein_1_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                klein_1_dims = gradio.Textbox(visible=False, value="0")
                             with gradio.Row():
                                 klein_1_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                 klein_1_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
@@ -155,8 +155,8 @@ class ersatzOtherControl(scripts.Script):
                             klein_2 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                             with gradio.Row():
                                 klein_2_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
-                                klein_2_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
-                                klein_2_dims = gradio.Textbox(visible=False, value='0')
+                                klein_2_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                klein_2_dims = gradio.Textbox(visible=False, value="0")
                             with gradio.Row():
                                 klein_2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                 klein_2_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
@@ -166,8 +166,8 @@ class ersatzOtherControl(scripts.Script):
                                 klein_3 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                                 with gradio.Row():
                                     klein_3_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
-                                    klein_3_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
-                                    klein_3_dims = gradio.Textbox(visible=False, value='0')
+                                    klein_3_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                    klein_3_dims = gradio.Textbox(visible=False, value="0")
                                 with gradio.Row():
                                     klein_3_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                     klein_3_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
@@ -175,8 +175,8 @@ class ersatzOtherControl(scripts.Script):
                                 klein_4 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                                 with gradio.Row():
                                     klein_4_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
-                                    klein_4_send = ToolButton(value='\U0001F4D0', interactive=False, variant='tertiary')
-                                    klein_4_dims = gradio.Textbox(visible=False, value='0')
+                                    klein_4_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                    klein_4_dims = gradio.Textbox(visible=False, value="0")
                                 with gradio.Row():
                                     klein_4_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                     klein_4_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
@@ -214,14 +214,18 @@ class ersatzOtherControl(scripts.Script):
                         with gradio.Column():
                             k2_image = ForgeCanvas(height=300, contrast_scribbles=True, scribble_alpha=50)
                         with gradio.Column():
-                            k2_resize = gradio.Dropdown(label="Resize", info="for Depth, resize will be over-ridden to 'to output'", choices=["none", "half", "to output"], value="none", allow_custom_value=True)
+                            with gradio.Row():
+                                k2_edit_type = gradio.Dropdown(label="Edit LoRA type", choices=["", "ConradLocke", "Ostris"], value="")
+                                k2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True)
                             k2_mask_mode = gradio.Radio(value="unmasked", choices=["masked", "unmasked"], label="Target area")
                             with gradio.Row():
                                 k2_strength = gradio.Slider(value=1.0, minimum=0.0, maximum=2.0, step=0.01, label="Strength")
                                 k2_fidelity = gradio.Slider(value=1.0, minimum=1.0, maximum=8.0, step=0.1, label="Fidelity")
                             with gradio.Row():
                                 k2_start = gradio.Slider(value=1.0, minimum=0.0, maximum=1.0, step=0.01, label="Start sigma")
+                                # id reference: delayed start minimises composition change due to reference
                                 k2_stop = gradio.Slider(value=0.5, minimum=0.0, maximum=1.0, step=0.01, label="Stop sigma")
+                                # Pose: stop early (0.95-0.90), 1-2 steps is enough with Turbo; more steps introduces artefacts
                             with gradio.Row():
                                 k2_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 k2_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
@@ -258,14 +262,15 @@ class ersatzOtherControl(scripts.Script):
             (k2_stop,      "k2_stop"),
             (k2_resize,    "k2_resize"),
             (k2_mask_mode, "k2_mask_mode"),
-            (k2_fidelity,  "k2_fidelity")
+            (k2_fidelity,  "k2_fidelity"),
+            (k2_edit_type, "k2_edit_type")
         ]
 
-        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image.background, k2_image.foreground, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity
+        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image.background, k2_image.foreground, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity, k2_edit_type
 
 
     def process(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity, k2_edit_type = script_args
         if enabled:
             if selected_tab == 0 and (kontext_1 is not None or kontext_2 is not None) and params.sd_model.is_flux:
                 params.extra_generation_params.update(dict(
@@ -317,13 +322,17 @@ class ersatzOtherControl(scripts.Script):
                 ))
                 if not getattr(shared.sd_model.forge_objects.unet.model.diffusion_model, "ctrl_patched", False):
                     params.extra_generation_params.update(dict(
-                        k2_start    = k2_start,
-                        k2_fidelity = k2_fidelity,
+                        k2_start     = k2_start,
+                        k2_edit_type = k2_edit_type,
                     ))
+                    if k2_edit_type == "ConradLocke":
+                        params.extra_generation_params.update(dict(
+                            k2_fidelity = k2_fidelity,
+                        ))
 
 
     def process_before_every_sampling(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity, k2_edit_type = script_args
 
         if not enabled:
             return
@@ -339,7 +348,7 @@ class ersatzOtherControl(scripts.Script):
         def pil_to_latent(image, width, height, pad, mode_text, mask=None):
             if isinstance (image, str):
                 image = decode_base64_to_image(image)
-            image = numpy.array(image.convert('RGB')) / 255.0
+            image = numpy.array(image.convert("RGB")) / 255.0
             image = numpy.transpose(image, (2, 0, 1))
             image = torch.tensor(image).unsqueeze(0)
 
@@ -565,7 +574,7 @@ class ersatzOtherControl(scripts.Script):
                         z_mask = torch.nn.functional.interpolate(1.0 - z_mask[:, 0:1, :, :], size=(h, w), mode="nearest")
                         z_latent = torch.cat([z_control.to(x), z_mask.to(x), z_inpaint.to(x)], dim=1)
 
-                z_latent = rearrange(z_latent, 'b c (h ph) (w pw) -> b (h w) (ph pw c)', ph=2, pw=2)
+                z_latent = rearrange(z_latent, "b c (h ph) (w pw) -> b (h w) (ph pw c)", ph=2, pw=2)
 
                 shared.ZITlatent = z_latent.contiguous().to(input_device, input_dtype)
                 shared.ZITstrength = z_strength
@@ -594,6 +603,9 @@ class ersatzOtherControl(scripts.Script):
                         case "to output":
                             k_width = w*8
                             k_height = h*8
+                        case "half output":
+                            k_width = w*4
+                            k_height = w*4
                         case "half":
                             k_width = k2_image.size[0] // 2
                             k_height = k2_image.size[1] // 2
@@ -647,6 +659,7 @@ class ersatzOtherControl(scripts.Script):
             setattr(global_variables, "krea2_control_lora_strength", k2_strength)
             setattr(global_variables, "krea2_control_lora_start_sigma", k2_start)
             setattr(global_variables, "krea2_control_lora_stop_sigma", k2_stop)
+            setattr(global_variables, "krea2_control_lora_type", k2_edit_type)
 
         return
 
@@ -669,6 +682,7 @@ class ersatzOtherControl(scripts.Script):
                     setattr(global_variables, "krea2_control_lora_strength", 0.0)
                     setattr(global_variables, "krea2_control_lora_start_sigma", 0.0)
                     setattr(global_variables, "krea2_control_lora_stop_sigma", 1.0)
+                    setattr(global_variables, "krea2_control_lora_type", "")
                     # setattr(global_variables, "krea2_control_lora_latent", None) # keep it, for repeat use
                     params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
                 case _:
