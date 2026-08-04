@@ -1,22 +1,17 @@
-from __future__ import annotations
-
 import os
-import re
+# import re
 import torch
 import network
 
 from backend.args import dynamic_args
-from modules import shared, sd_models, errors, scripts
+from modules import shared, errors, scripts
 from backend.utils import load_torch_file
 from backend.patcher.lora import model_lora_keys_clip, model_lora_keys_unet, load_lora
 
 import modules_forge.colour_code as cc
 
 
-def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filename='default', online_mode=False):
-    unet_keys = model_lora_keys_unet(model.model) if model is not None else {}
-    clip_keys = model_lora_keys_clip(clip.cond_stage_model) if clip is not None else {}
-
+def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filename="", online_mode=False):
     if model is not None and model.model.diffusion_model.__class__.__name__ == "MiniTrainDIT":
         # Anima LLMAdapter was moved from transformer to text_encoder
         keys = list(lora.keys())
@@ -26,17 +21,25 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
             elif k.startswith("lora_unet_llm_adapter"):
                 lora[k.replace("lora_unet_llm_adapter", "lora_te_llm_adapter", 1)] = lora.pop(k)
 
-    lora_unmatch = lora
-    lora_unet, lora_unmatch = load_lora(lora_unmatch, unet_keys)
-    lora_clip, lora_unmatch = load_lora(lora_unmatch, clip_keys)
+    if model is not None:
+        unet_keys = model_lora_keys_unet(model.model)
+        lora_unet, lora = load_lora(lora, unet_keys)
+    else:
+        lora_unet = {}
 
-    if len(lora_unmatch) == 0:
+    if clip is not None:
+        clip_keys = model_lora_keys_clip(clip.cond_stage_model) 
+        lora_clip, lora = load_lora(lora, clip_keys)
+    else:
+        lora_clip = {}
+
+    if len(lora) == 0:
         print(f"{cc.LOAD2}[LORA] Loaded {filename}{cc.RESET}")
     else:
-        print(f"{cc.LOAD2}[LORA] {cc.WARNING}apparent version mismatch {cc.LOAD2}{filename} {cc.MINOR}ignoring {len(lora_unmatch)} keys{cc.RESET}")
-    del lora, lora_unmatch
+        print(f"{cc.LOAD2}[LORA] {cc.WARNING}apparent version mismatch {cc.LOAD2}{filename} {cc.MINOR}ignoring {len(lora)} keys{cc.RESET}")
+    del lora
 
-    if model is not None and len(lora_unet) > 0:
+    if len(lora_unet) > 0:
         new_model = model.clone()
         loaded_keys = new_model.add_patches(filename=filename, patches=lora_unet, strength_patch=strength_model, online_mode=online_mode)
         loaded = len(loaded_keys)
@@ -47,7 +50,7 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
         if loaded > 0:
             model = new_model
 
-    if clip is not None and len(lora_clip) > 0:
+    if len(lora_clip) > 0:
         new_clip = clip.clone()
         loaded_keys = new_clip.add_patches(filename=filename, patches=lora_clip, strength_patch=strength_clip, online_mode=online_mode)
         loaded = len(loaded_keys)
@@ -61,23 +64,11 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
     return model, clip
 
 
-def load_lora_state_dict(filename):
-    return load_torch_file(filename, safe_load=True)
-
-
-def load_network(name, network_on_disk):
-    net = network.Network(name, network_on_disk)
-    net.mtime = os.path.getmtime(network_on_disk.filename)
-
-    return net
-
-
 def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=None):
-    current_sd = sd_models.model_data.get_sd_model()
-    if current_sd is None:
+    if shared.sd_model is None:
         return
 
-    loaded_networks.clear()
+    loaded_networks = []
 
     unavailable_networks = []
     for name in names:
@@ -99,7 +90,8 @@ def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=No
             print(f"{cc.ERROR}[LoRA] Not found:{cc.RESET} {names[i]}")
             continue
         try:
-            net = load_network(names[i], networks_on_disk[i])
+            net = network.Network(names[i], networks_on_disk[i])
+            net.mtime = os.path.getmtime(networks_on_disk[i].filename)
             net.mentioned_name = names[i]
             networks_on_disk[i].read_hash()
             loaded_networks.append(net)
@@ -108,7 +100,7 @@ def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=No
             networks_on_disk[i] = None
 
     online_mode = dynamic_args.get("online_lora", False)
-    if current_sd.forge_objects.unet.model.storage_dtype in [torch.float32, torch.float16, torch.bfloat16]:
+    if shared.sd_model.forge_objects.unet.model.storage_dtype in [torch.float32, torch.float16, torch.bfloat16]:
         online_mode = False
 
     compiled_lora_targets = []
@@ -118,20 +110,20 @@ def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=No
 
     compiled_lora_targets_hash = str(compiled_lora_targets)
 
-    if current_sd.current_lora_hash == compiled_lora_targets_hash:
+    if shared.sd_model.current_lora_hash == compiled_lora_targets_hash:
         return
 
-    current_sd.current_lora_hash = compiled_lora_targets_hash
-    current_sd.forge_objects.unet = current_sd.forge_objects_original.unet
-    current_sd.forge_objects.clip = current_sd.forge_objects_original.clip
+    shared.sd_model.current_lora_hash = compiled_lora_targets_hash
+    shared.sd_model.forge_objects.unet = shared.sd_model.forge_objects_original.unet # cloned, if necessary, in load_lora_for_models()
+    shared.sd_model.forge_objects.clip = shared.sd_model.forge_objects_original.clip
 
     for filename, strength_model, strength_clip, online_mode in compiled_lora_targets:
-        lora_sd = load_lora_state_dict(filename)
-        current_sd.forge_objects.unet, current_sd.forge_objects.clip = load_lora_for_models(
-            current_sd.forge_objects.unet, current_sd.forge_objects.clip, lora_sd, strength_model, strength_clip,
+        lora_sd = load_torch_file(filename, safe_load=True)
+        shared.sd_model.forge_objects.unet, shared.sd_model.forge_objects.clip = load_lora_for_models(
+            shared.sd_model.forge_objects.unet, shared.sd_model.forge_objects.clip, lora_sd, strength_model, strength_clip,
             filename=filename, online_mode=online_mode)
 
-    current_sd.forge_objects_after_applying_lora = current_sd.forge_objects.shallow_copy()
+    shared.sd_model.forge_objects_after_applying_lora = shared.sd_model.forge_objects.shallow_copy()
     return
 
 
@@ -175,38 +167,7 @@ def list_available_networks():
     process_network_files()
 
 
-re_network_name = re.compile(r"(.*)\s*\([0-9a-fA-F]+\)")
-
-
-def infotext_pasted(infotext, params):
-    if "AddNet Module 1" in [x[1] for x in scripts.scripts_txt2img.infotext_fields]:
-        return  # if the other extension is active, it will handle those fields, no need to do anything
-
-    added = []
-
-    for k in params:
-        if not k.startswith("AddNet Model "):
-            continue
-
-        num = k[13:]
-
-        if params.get("AddNet Module " + num) != "LoRA":
-            continue
-
-        name = params.get("AddNet Model " + num)
-        if name is None:
-            continue
-
-        m = re_network_name.match(name)
-        if m:
-            name = m.group(1)
-
-        multiplier = params.get("AddNet Weight A " + num, "1.0")
-
-        added.append(f"<lora:{name}:{multiplier}>")
-
-    if added:
-        params["Prompt"] += "\n" + "".join(added)
+# re_network_name = re.compile(r"(.*)\s*\([0-9a-fA-F]+\)")
 
 
 extra_network_lora = None
@@ -214,8 +175,6 @@ extra_network_lora = None
 available_networks = {}
 available_network_aliases = {}
 loaded_networks = []
-loaded_bundle_embeddings = {}
-networks_in_memory = {}
 available_network_hash_lookup = {}
 forbidden_network_aliases = {}
 
