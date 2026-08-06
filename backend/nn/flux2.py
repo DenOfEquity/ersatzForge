@@ -7,17 +7,15 @@
 
 
 from dataclasses import dataclass
-import math
 import torch
 from torch import nn
 from einops import rearrange, repeat
 
-from backend.attention import attention_function
 from backend.utils import fp16_fix
 
 from modules import shared
 
-from .flux import attention, rope, apply_rope, timestep_embedding
+from .flux import attention, timestep_embedding
 from .flux import EmbedND, RMSNorm, QKNorm
 
 
@@ -68,7 +66,6 @@ def build_mlp(hidden_size: int, mlp_hidden_dim: int, mlp_silu_act: bool = False,
 class SelfAttention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, proj_bias=True):
         super().__init__()
-        self.num_heads = num_heads
         head_dim = dim // num_heads
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.norm = QKNorm(head_dim)
