@@ -21,10 +21,11 @@ BLOCKIDKLEIN = ["QWEN", "IN"] + ["D{:002}".format(x) for x in range(8)] + ["S{:0
 BLOCKIDZIT = ["J{:002}".format(x) for x in range(30)]
 BLOCKIDANIMA = ["B{:002}".format(x) for x in range(28)] + ["OUT"] # 29 total
 BLOCKIDERNIE = ["L{:002}".format(x) for x in range(36)] # 36 total + TE?
+BLOCKIDKREA2 = ["IN", "PROJECTOR"] + ["B{:002}".format(x) for x in range(28)] + ["T{:002}".format(x) for x in range(12)] + ["OUT", "MISC"] #44
 #todo chroma
 
-BLOCKNUMS = [12, 17, 20, 26, len(BLOCKIDZIT), len(BLOCKIDFLUX), len(BLOCKIDKLEIN), len(BLOCKIDANIMA), len(BLOCKIDERNIE)]
-BLOCKIDS=[BLOCKID12, BLOCKID17, BLOCKID20, BLOCKID26, BLOCKIDZIT, BLOCKIDFLUX, BLOCKIDANIMA, BLOCKIDERNIE]
+BLOCKNUMS = [12, 17, 20, 26, len(BLOCKIDZIT), len(BLOCKIDFLUX), len(BLOCKIDKLEIN), len(BLOCKIDANIMA), len(BLOCKIDERNIE), len(BLOCKIDKREA2)]
+BLOCKIDS=[BLOCKID12, BLOCKID17, BLOCKID20, BLOCKID26, BLOCKIDZIT, BLOCKIDFLUX, BLOCKIDANIMA, BLOCKIDERNIE, BLOCKIDKREA2]
 
 BLOCKS=["encoder",
 "diffusion_model_input_blocks_0_",
@@ -132,6 +133,8 @@ class ersatzLBW(scripts.Script):
                 self.model = "anima"
             elif getattr(shared.sd_model, 'is_ernie', False):
                 self.model = "ernie"
+            elif getattr(shared.sd_model, 'is_krea2', False):
+                self.model = "krea2"
 
             lratios = {}
             elementals = {}
@@ -301,6 +304,8 @@ def loradealer(self, prompts, lratios, elementals, extra_network_data = None):
                         ratios = [1] * 29
                     case "ernie":
                         ratios = [1] * 36
+                    case "krea2":
+                        ratios = [1] * 44
                     case _:
                         ratios = [1] * 26
 
@@ -448,6 +453,11 @@ def ratiodealer(key, lwei, elemental:str, model="sd"):
             if block in BLOCKIDERNIE:
                 ratio = lwei[BLOCKIDERNIE.index(block)]
                 picked = True
+        case "krea2":
+            block = elemkey = get_krea2_blocks(key)
+            if block in BLOCKIDKREA2:
+                ratio = lwei[BLOCKIDKREA2.index(block)]
+                picked = True
         case _:
             for i,block in enumerate(BLOCKS):
                 if block in key:
@@ -590,5 +600,21 @@ def get_ernie_blocks(key):
     match = re.search(r'\_(\d+)\_', key)
     if "diffusion_model_layers" in key:
         return f"L{match.group(1).zfill(2)}"
+    return "Not Merge"
+
+def get_krea2_blocks(key):
+    match = re.search(r'\_(\d+)\_', key)
+    if "layerwise_blocks" in key:
+        return f"T{match.group(1).zfill(2)}"
+    if "blocks" in key:
+        return f"B{match.group(1).zfill(2)}"
+    if "first" in key:
+        return "IN"
+    if "last" in key:
+        return "OUT"
+    if "projector" in key:
+        return "PROJECTOR"
+    if "tmlp" in key or "txtmlp" in key or "tproj" in key:
+        return "MISC"
     return "Not Merge"
 
