@@ -31,12 +31,12 @@ categories.register_category("ui", "User Interface")
 categories.register_category("system", "System")
 categories.register_category("postprocessing", "Postprocessing")
 
-options_templates.update(options_section(('saving-images', "Saving images/grids", "saving"), {
+options_templates.update(options_section(("saving-images", "Saving images/grids", "saving"), {
     "samples_save": OptionInfo(True, "Always save all generated images"),
-    "samples_format": OptionInfo('png', 'File format for images'),
+    "samples_format": OptionInfo("png", "File format for images"),
     "samples_filename_pattern": OptionInfo("", "Images filename pattern", component_args=hide_dirs).link("wiki", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Custom-Images-Filename-Name-and-Subdirectory"),
     "grid_save": OptionInfo(True, "Always save all generated image grids"),
-    "grid_format": OptionInfo('png', 'File format for grids'),
+    "grid_format": OptionInfo("png", "File format for grids"),
     "grid_filename_pattern": OptionInfo("", "Grids filename pattern", component_args=hide_dirs),
     "grid_only_if_multiple": OptionInfo(True, "Do not save grids consisting of one picture"),
     "grid_prevent_empty_spots": OptionInfo(False, "Prevent empty spots in grid (when set to autodetect)"),
@@ -61,24 +61,24 @@ options_templates.update(options_section(('saving-images', "Saving images/grids"
     "clean_temp_dir_at_start": OptionInfo(False, "Cleanup non-default temporary directory when starting webui"),
 }))
 
-options_templates.update(options_section(('saving-paths', "Paths for saving", "saving"), {
+options_templates.update(options_section(("saving-paths", "Paths for saving", "saving"), {
     "outdir_samples": OptionInfo("", "Output directory for images; if empty, defaults to three directories below", component_args=hide_dirs),
-    "outdir_txt2img_samples": OptionInfo(util.truncate_path(os.path.join(default_output_dir, 'txt2img-images')), 'Output directory for txt2img images', component_args=hide_dirs),
-    "outdir_img2img_samples": OptionInfo(util.truncate_path(os.path.join(default_output_dir, 'img2img-images')), 'Output directory for img2img images', component_args=hide_dirs),
-    "outdir_extras_samples": OptionInfo(util.truncate_path(os.path.join(default_output_dir, 'extras-images')), 'Output directory for images from extras tab', component_args=hide_dirs),
+    "outdir_txt2img_samples": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "txt2img-images")), "Output directory for txt2img images", component_args=hide_dirs),
+    "outdir_img2img_samples": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "img2img-images")), "Output directory for img2img images", component_args=hide_dirs),
+    "outdir_extras_samples": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "extras-images")), "Output directory for images from extras tab", component_args=hide_dirs),
     "outdir_grids": OptionInfo("", "Output directory for grids; if empty, defaults to two directories below", component_args=hide_dirs),
-    "outdir_txt2img_grids": OptionInfo(util.truncate_path(os.path.join(default_output_dir, 'txt2img-grids')), 'Output directory for txt2img grids', component_args=hide_dirs),
-    "outdir_img2img_grids": OptionInfo(util.truncate_path(os.path.join(default_output_dir, 'img2img-grids')), 'Output directory for img2img grids', component_args=hide_dirs),
+    "outdir_txt2img_grids": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "txt2img-grids")), "Output directory for txt2img grids", component_args=hide_dirs),
+    "outdir_img2img_grids": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "img2img-grids")), "Output directory for img2img grids", component_args=hide_dirs),
 }))
 
-options_templates.update(options_section(('saving-to-dirs', "Saving to a directory", "saving"), {
+options_templates.update(options_section(("saving-to-dirs", "Saving to a directory", "saving"), {
     "save_to_dirs": OptionInfo(True, "Save images to a subdirectory"),
     "grid_save_to_dirs": OptionInfo(True, "Save grids to a subdirectory"),
     "directories_filename_pattern": OptionInfo("[date]", "Directory name pattern", component_args=hide_dirs).link("wiki", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Custom-Images-Filename-Name-and-Subdirectory"),
     "directories_max_prompt_words": OptionInfo(8, "Max prompt words for [prompt_words] pattern", gr.Slider, {"minimum": 1, "maximum": 20, "step": 1, **hide_dirs}),
 }))
 
-options_templates.update(options_section(('upscaling', "Upscaling", "postprocessing"), {
+options_templates.update(options_section(("upscaling", "Upscaling", "postprocessing"), {
     "ESRGAN_tile": OptionInfo(192, "Tile size for ESRGAN upscalers.", gr.Slider, {"minimum": 0, "maximum": 512, "step": 16}).info("0 = no tiling"),
     "ESRGAN_tile_overlap": OptionInfo(8, "Tile overlap for ESRGAN upscalers.", gr.Slider, {"minimum": 0, "maximum": 48, "step": 1}).info("Low values = visible seam"),
     "realesrgan_enabled_models": OptionInfo(["R-ESRGAN 4x+", "R-ESRGAN 4x+ Anime6B"], "Select which Real-ESRGAN models to show in the web UI.", gr.CheckboxGroup, lambda: {"choices": shared_items.realesrgan_models_names()}),
@@ -91,13 +91,13 @@ options_templates.update(options_section(('upscaling', "Upscaling", "postprocess
 #can these tile size/overlap be shared?
 }))
 
-options_templates.update(options_section(('face-restoration', "Face restoration", "postprocessing"), {
+options_templates.update(options_section(("face-restoration", "Face restoration", "postprocessing"), {
     "face_restoration_model": OptionInfo("None", "Face restoration model", gr.Dropdown, lambda: {"choices": ["None"] + [x.name() for x in shared.face_restorers], "filterable": False}),
     "face_restoration_before_scripts": OptionInfo(True, "Apply face restoration before running postprocess scripts. Disabled = apply after scripts."),
     "code_former_weight": OptionInfo(0.5, "CodeFormer weight", gr.Slider, {"minimum": 0, "maximum": 1, "step": 0.01}).info("0 = maximum effect; 1 = minimum effect"),
 }))
 
-options_templates.update(options_section(('system', "System", "system"), {
+options_templates.update(options_section(("system", "System", "system"), {
     "auto_launch_browser": OptionInfo("Local", "Automatically open webui in browser on startup", gr.Radio, lambda: {"choices": ["Disable", "Local", "Remote"]}),
     "show_warnings": OptionInfo(False, "Show warnings in console.").needs_reload_ui(),
     "show_gradio_deprecation_warnings": OptionInfo(True, "Show gradio deprecation warnings in console.").needs_reload_ui(),
@@ -110,7 +110,7 @@ options_templates.update(options_section(('system', "System", "system"), {
     "use_real_SHA256": OptionInfo(False, "Use SHA256 to hash checkpoints, done on first use only. Warning: this can take a significant amount of time on large checkpoints."),
 }))
 
-options_templates.update(options_section(('profiler', "Profiler", "system"), {
+options_templates.update(options_section(("profiler", "Profiler", "system"), {
     "profiling_explanation": OptionHTML("""
 Those settings allow you to enable torch profiler when generating pictures.
 Profiling allows you to see which code uses how much of computer's resources during generation.
@@ -126,13 +126,13 @@ Warning: writing profile can take a lot of time, up to 30 seconds, and the file 
     "profiling_filename": OptionInfo("trace.json", "Profile filename"),
 }))
 
-options_templates.update(options_section(('API', "API", "system"), {
+options_templates.update(options_section(("API", "API", "system"), {
     "api_enable_requests": OptionInfo(True, "Allow http:// and https:// URLs for input images in API", restrict_api=True),
     "api_forbid_local_requests": OptionInfo(True, "Forbid URLs to local resources", restrict_api=True),
     "api_useragent": OptionInfo("", "User agent for requests", restrict_api=True),
 }))
 
-options_templates.update(options_section(('sd', "Stable Diffusion", "sd"), {
+options_templates.update(options_section(("sd", "Stable Diffusion", "sd"), {
     "sd_model_checkpoint": OptionInfo(None, "(Managed by Forge)", gr.State, infotext="Model"),
     "emphasis": OptionInfo("Original", "Emphasis mode", gr.Radio, lambda: {"choices": [x.name for x in emphasis.options]}, infotext="Emphasis").info("makes it possible to make model to pay (more:1.1) or (less:0.9) attention to text when you use the syntax in prompt; " + emphasis.get_options_descriptions()),
     "comma_padding_backtrack": OptionInfo(20, "Prompt word wrap length limit", gr.Slider, {"minimum": 0, "maximum": 74, "step": 1}).info("in tokens - for texts shorter than specified, if they don't fit into 75 token limit, move them to the next 75 token chunk"),
@@ -143,7 +143,7 @@ options_templates.update(options_section(('sd', "Stable Diffusion", "sd"), {
     "perlin_octaves": OptionInfo(1, "Perlin noise octaves", gr.Slider, {"minimum": 1, "maximum": 7, "step": 1}, infotext="Perlin octaves"),
     "perlin_persist": OptionInfo(1.0, "Perlin noise persistence", gr.Slider, {"minimum": 0.01, "maximum": 3, "step": 0.01}, infotext="Perlin persistence").info("Persistence is the influence of successive octaves of noise."),
 
-    "tiling": OptionInfo("None", "Tiling", gr.Radio, {"choices": ["None", "X", "Y", "X and Y"]}, infotext='Tiling').info("produce a tileable picture"),
+    "tiling": OptionInfo("None", "Tiling", gr.Radio, {"choices": ["None", "X", "Y", "X and Y"]}, infotext="Tiling").info("produce a tileable picture"),
     "hires_fix_refiner_pass": OptionInfo("second pass", "Hires fix: which pass to enable refiner for", gr.Radio, {"choices": ["first pass", "second pass", "both passes"]}, infotext="Hires refiner"),
     "use_ELLA": OptionInfo("CLIP (normal)", "Use ELLA for SD1.5", gr.Radio, {"choices": ["CLIP (normal)", "ELLA only", "ELLA (per step) only", "CLIP + ELLA", "CLIP + ELLA (per step)"]}, infotext="ELLA").info("ELLA text encoder and ELLA model will be automatically downloaded. Info: https://github.com/TencentQQGYLab/ELLA"),
     "epsilon_scaling": OptionInfo(1.0, "Epsilon scaling factor", gr.Slider, {"minimum": 0.8, "maximum": 1.2, "step": 0.001}, infotext="Epsilon scaling").info("'Elucidating the Exposure Bias in Diffusion Models' https://openreview.net/pdf?id=xEJMoj1SpX"),
@@ -156,16 +156,16 @@ options_templates.update(options_section(('sd', "Stable Diffusion", "sd"), {
 
 }))
 
-options_templates.update(options_section(('sdxl', "Stable Diffusion XL", "sd"), {
+options_templates.update(options_section(("sdxl", "Stable Diffusion XL", "sd"), {
     "sdxl_crop_top": OptionInfo(0, "crop top coordinate", gr.Number, {"minimum": 0, "maximum": 1024, "step": 1}),
     "sdxl_crop_left": OptionInfo(0, "crop left coordinate", gr.Number, {"minimum": 0, "maximum": 1024, "step": 1}),
     "sdxl_refiner_low_aesthetic_score": OptionInfo(2.5, "SDXL low aesthetic score", gr.Slider, {"minimum": 0, "maximum": 10, "step": 0.1}).info("used for refiner model negative prompt"),
     "sdxl_refiner_high_aesthetic_score": OptionInfo(6.0, "SDXL high aesthetic score", gr.Slider, {"minimum": 0, "maximum": 10, "step": 0.1}).info("used for refiner model prompt"),
     "sdxl_flow_shift": OptionInfo(3.0, "Flow Shift for SDXL flow match models. Relevant models are detected by name.", gr.Slider, {"minimum": 0.01, "maximum": 12.0, "step": 0.01}, infotext="SDXL Shift"),
-    "sdxl_flow_models": OptionInfo("bigaspv25, nyaflow, snakebite2, snakelite, mugen", "Name filtering for SDXL flow match models. Options separated by commas. Names can be fragments or the exact model name. Minimum length: four characters.", gr.Textbox, {"max_lines": 1}),
+    "sdxl_flow_models": OptionInfo("bigaspv25, nyaflow, snakebite2, snakelite, mugen", "Name filtering for SDXL flow match models. Options separated by commas. Names can be fragments or the exact model name. Minimum length: four characters.", gr.Textbox, {"max_lines": 1}).info("Setting is relevant when model is loaded."),
 }))
 
-options_templates.update(options_section(('dyPE', "dynamicPE", "sd"), {
+options_templates.update(options_section(("dyPE", "dynamicPE", "sd"), {
     "dynamicPE_explanation": OptionHTML("""
 <strong>Dynamic Position Extrapolation for Ultra High Resolution Diffusion</strong> allows generating at higher resolutions before repetitions / distortions / multi-images appear in the output. <a href="https://noamissachar.github.io/DyPE/">official webpage</a>
 <br />
@@ -180,48 +180,48 @@ It's not magic, distortions are still possible.
     "scalePE_ernie": OptionInfo(0, "Base resolution for Position Embedding Scaling for ERNIE", gr.Slider, {"minimum": 0, "maximum": 2048, "step": 64}, infotext="scalePE ernie").info("This Setting applies when the model is used; model reload not required after change. 0: disabled"),
 }))
 
-options_templates.update(options_section(('vae', "VAE", "sd"), {
+options_templates.update(options_section(("vae", "VAE", "sd"), {
     "sd_vae_explanation": OptionHTML("""
 <abbr title='Variational autoencoder'>VAE</abbr> is a neural network that transforms a standard <abbr title='red/green/blue'>RGB</abbr>
 image into latent space representation and back. Latent space representation is what stable diffusion is working on during sampling
 (i.e. when the progress bar is between empty and full). For txt2img, VAE is used to create a resulting image after the sampling is finished.
 For img2img, VAE is used to process user's input image before the sampling, and to create an image after sampling.
 """),
-    "sd_vae": OptionInfo("Automatic", "(Managed by Forge)", gr.State, infotext='VAE'),
+    "sd_vae": OptionInfo("Automatic", "(Managed by Forge)", gr.State, infotext="VAE"),
     "sd_vae_overrides_per_model_preferences": OptionInfo(True, "Auto-select Additional modules per model").info("you can set per-model VAE / Text Encoder / other by editing user metadata for checkpoints"),
-    "sd_vae_encode_method": OptionInfo("Full", "VAE type for encode", gr.Radio, {"choices": ["Full", "TAESD"]}, infotext='VAE Encoder').info("method to encode image to latent (use in img2img, hires-fix or inpaint mask)"),
-    "sd_vae_decode_method": OptionInfo("Full", "VAE type for decode", gr.Radio, {"choices": ["Full", "TAESD"]}, infotext='VAE Decoder').info("method to decode latent to image"),
+    "sd_vae_encode_method": OptionInfo("Full", "VAE type for encode", gr.Radio, {"choices": ["Full", "TAESD"]}, infotext="VAE Encoder").info("method to encode image to latent (use in img2img, hires-fix or inpaint mask)"),
+    "sd_vae_decode_method": OptionInfo("Full", "VAE type for decode", gr.Radio, {"choices": ["Full", "TAESD"]}, infotext="VAE Decoder").info("method to decode latent to image"),
 }))
 
-options_templates.update(options_section(('img2img', "img2img", "sd"), {
+options_templates.update(options_section(("img2img", "img2img", "sd"), {
     "upscaler_for_img2img": OptionInfo(None, "Upscaler for img2img", gr.Dropdown, lambda: {"choices": [x.name for x in shared.sd_upscalers]}),
-    "inpainting_mask_weight": OptionInfo(1.0, "Inpainting conditioning mask strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext='Conditional mask weight'),
-    "initial_noise_multiplier": OptionInfo(1.0, "Noise multiplier for img2img", gr.Slider, {"minimum": 0.0, "maximum": 1.5, "step": 0.001}, infotext='Noise multiplier'),
-    "img2img_extra_noise": OptionInfo(0.0, "Extra noise multiplier for img2img and hires fix", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext='Extra noise').info("0 = disabled (default); value will be clamped to <= 0.5 * denoising strength"),
+    "inpainting_mask_weight": OptionInfo(1.0, "Inpainting conditioning mask strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="Conditional mask weight"),
+    "initial_noise_multiplier": OptionInfo(1.0, "Noise multiplier for img2img", gr.Slider, {"minimum": 0.0, "maximum": 1.5, "step": 0.001}, infotext="Noise multiplier"),
+    "img2img_extra_noise": OptionInfo(0.0, "Extra noise multiplier for img2img and hires fix", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="Extra noise").info("0 = disabled (default); value will be clamped to <= 0.5 * denoising strength"),
     "img2img_color_correction": OptionInfo(False, "Apply color correction to img2img results to match original colors."),
     "img2img_background_color": OptionInfo("#ffffff", "With img2img, fill transparent parts of the input image with this color.", ui_components.FormColorPicker, {}),
     # "img2img_inpaint_sketch_default_brush_color": OptionInfo("#ffffff", "Inpaint sketch initial brush color", ui_components.FormColorPicker, {}).info("default brush color of img2img inpaint sketch").needs_reload_ui(),
-    "img2img_batch_show_results_limit": OptionInfo(32, "Show the first N batch img2img results in UI", gr.Slider, {"minimum": -1, "maximum": 1000, "step": 1}).info('0: disable, -1: show all images. Too many images can cause lag'),
+    "img2img_batch_show_results_limit": OptionInfo(32, "Show the first N batch img2img results in UI", gr.Slider, {"minimum": -1, "maximum": 1000, "step": 1}).info("0: disable, -1: show all images. Too many images can cause lag"),
     "overlay_inpaint": OptionInfo(True, "Overlay original for inpaint").info("when inpainting, overlay the original image over the areas that weren't inpainted."),
     "img2img_autosize": OptionInfo(False, "After loading into Img2img, automatically update Width and Height"),
     "img2img_batch_use_original_name": OptionInfo(False, "Save using original filename in img2img batch. Applies to 'Upload' and 'From directory' tabs.").info("Note: if saving to same directory as source, numerical suffix will be added to avoid overwriting existing images."),
 }))
 
-options_templates.update(options_section(('optimizations', "Optimizations", "sd"), {
-    "s_min_uncond": OptionInfo(0.0, "Negative Guidance minimum sigma", gr.Slider, {"minimum": 0.0, "maximum": 15.0, "step": 0.01}, infotext='NGMS').link("PR", "https://github.com/AUTOMATIC1111/stablediffusion-webui/pull/9177").info("skip negative prompt for some steps when the image is almost ready; 0=disable, higher=faster"),
-    "token_merging_ratio": OptionInfo(0.0, "Token merging ratio", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}, infotext='Token merging ratio').link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/9256").info("0=disable, higher=faster"),
+options_templates.update(options_section(("optimizations", "Optimizations", "sd"), {
+    "s_min_uncond": OptionInfo(0.0, "Negative Guidance minimum sigma", gr.Slider, {"minimum": 0.0, "maximum": 15.0, "step": 0.01}, infotext="NGMS").link("PR", "https://github.com/AUTOMATIC1111/stablediffusion-webui/pull/9177").info("skip negative prompt for some steps when the image is almost ready; 0=disable, higher=faster"),
+    "token_merging_ratio": OptionInfo(0.0, "Token merging ratio", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}, infotext="Token merging ratio").link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/9256").info("0=disable, higher=faster"),
     "token_merging_ratio_img2img": OptionInfo(0.0, "Token merging ratio for img2img", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}).info("only applies if non-zero and overrides above"),
-    "token_merging_ratio_hr": OptionInfo(0.0, "Token merging ratio for high-res pass", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}, infotext='Token merging ratio hr').info("only applies if non-zero and overrides above"),
+    "token_merging_ratio_hr": OptionInfo(0.0, "Token merging ratio for high-res pass", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}, infotext="Token merging ratio hr").info("only applies if non-zero and overrides above"),
     "persistent_cond_cache": OptionInfo(True, "Persistent cond cache").info("do not recalculate conds from prompts if prompts have not changed since previous calculation"),
 }))
 
-options_templates.update(options_section(('compatibility', "Compatibility", "sd"), {
-    "use_old_karras_scheduler_sigmas": OptionInfo(False, "Use old karras scheduler sigmas (0.1 to 10).", infotext='Old Karras sigmas'),
+options_templates.update(options_section(("compatibility", "Compatibility", "sd"), {
+    "use_old_karras_scheduler_sigmas": OptionInfo(False, "Use old karras scheduler sigmas (0.1 to 10).", infotext="Old Karras sigmas"),
     "hires_fix_use_firstpass_conds": OptionInfo(False, "For hires fix, calculate conds of second pass using extra networks of first pass."),
     "use_old_scheduling": OptionInfo(False, "Use old prompt editing timelines.", infotext="Old prompt editing timelines").info("For [red:green:N]; OLD: If N < 1, it's a fraction of steps (hires fix uses range from 0 to 1), if N >= 1, it's an absolute number of steps; NEW: If N has a decimal point in it, it's a fraction of steps (hires fix uses range from 1 to 2), otherwise it's an absolute number of steps"),
 }))
 
-options_templates.update(options_section(('interrogate', "Interrogate"), {
+options_templates.update(options_section(("interrogate", "Interrogate"), {
     "interrogate_return_ranks": OptionInfo(False, "Include ranks of model tags matches in results.").info("booru only"),
     "interrogate_deepbooru_score_threshold": OptionInfo(0.5, "deepbooru: score threshold", gr.Slider, {"minimum": 0, "maximum": 1, "step": 0.01}),
     "deepbooru_sort_alpha": OptionInfo(True, "deepbooru: sort tags alphabetically").info("if not: sort by score"),
@@ -230,9 +230,9 @@ options_templates.update(options_section(('interrogate', "Interrogate"), {
     "deepbooru_filter_tags": OptionInfo("", "deepbooru: filter out those tags").info("separate by comma"),
 }))
 
-options_templates.update(options_section(('extra_networks', "Extra Networks", "sd"), {
+options_templates.update(options_section(("extra_networks", "Extra Networks", "sd"), {
     "extra_networks_show_hidden_directories": OptionInfo(True, "Show hidden directories").info("directory is hidden if its name starts with \".\"."),
-    "extra_networks_hidden_models": OptionInfo("When searched", "Show cards for models in hidden directories", gr.Radio, {"choices": ["Always", "When searched", "Never"]}).info('"When searched" option will only show the item when the search string has 4 characters or more'),
+    "extra_networks_hidden_models": OptionInfo("When searched", "Show cards for models in hidden directories", gr.Radio, {"choices": ["Always", "When searched", "Never"]}).info("'When searched' option will only show the item when the search string has 4 characters or more"),
     "extra_networks_card_width": OptionInfo(0, "Card width for Extra Networks").info("in pixels"),
     "extra_networks_card_height": OptionInfo(0, "Card height for Extra Networks").info("in pixels"),
     "extra_networks_card_text_scale": OptionInfo(1.0, "Card text scale", gr.Slider, {"minimum": 0.0, "maximum": 2.0, "step": 0.01}).info("1 = original size"),
@@ -245,7 +245,7 @@ options_templates.update(options_section(('extra_networks', "Extra Networks", "s
     "textual_inversion_print_at_load": OptionInfo(False, "Print a list of Textual Inversion embeddings when loading model"),
 }))
 
-options_templates.update(options_section(('ui_prompt_editing', "Prompt editing", "ui"), {
+options_templates.update(options_section(("ui_prompt_editing", "Prompt editing", "ui"), {
     "keyedit_precision_attention": OptionInfo(0.1, "Precision for (attention:1.1) when editing the prompt with Ctrl+up/down", gr.Slider, {"minimum": 0.01, "maximum": 0.2, "step": 0.001}),
     "keyedit_precision_extra": OptionInfo(0.05, "Precision for <extra networks:0.9> when editing the prompt with Ctrl+up/down", gr.Slider, {"minimum": 0.01, "maximum": 0.2, "step": 0.001}),
     "keyedit_delimiters": OptionInfo(r".,\/!?%^*;:{}=`~() ", "Word delimiters when editing the prompt with Ctrl+up/down"),
@@ -253,7 +253,7 @@ options_templates.update(options_section(('ui_prompt_editing', "Prompt editing",
     "disable_token_counters": OptionInfo(False, "Disable prompt token counters").needs_reload_ui(),
 }))
 
-options_templates.update(options_section(('ui_gallery', "Gallery", "ui"), {
+options_templates.update(options_section(("ui_gallery", "Gallery", "ui"), {
     "return_grid": OptionInfo(True, "Show grid in gallery"),
     "do_not_show_images": OptionInfo(False, "Do not show any images in gallery"), # who wants this?
     "js_modal_lightbox_initially_zoomed": OptionInfo(True, "Full page image viewer: show images zoomed in by default"),
@@ -261,12 +261,12 @@ options_templates.update(options_section(('ui_gallery', "Gallery", "ui"), {
     "open_dir_button_choice": OptionInfo("Subdirectory", "What directory the [📂] button opens", gr.Radio, {"choices": ["Output Root", "Subdirectory", "Subdirectory (even temp dir)"]}),
 }))
 
-options_templates.update(options_section(('ui_alternatives', "UI alternatives", "ui"), {
+options_templates.update(options_section(("ui_alternatives", "UI alternatives", "ui"), {
     "use_ui_config_json": OptionInfo(False, "Use 'ui-config.json' to store UI settings").needs_reload_ui(),
     "sd_checkpoint_dropdown_use_short": OptionInfo(False, "Checkpoint dropdown: use filenames without paths").info("models in subdirectories like photo/sd15.ckpt will be listed as just sd15.ckpt"),
 }))
 
-options_templates.update(options_section(('ui', "User interface", "ui"), {
+options_templates.update(options_section(("ui", "User interface", "ui"), {
     "localization": OptionInfo("None", "Localization", gr.Dropdown, lambda: {"choices": ["None"] + list(localization.localizations.keys())}, refresh=lambda: localization.list_localizations(cmd_opts.localizations_dir)).needs_reload_ui(),
     "quick_setting_list": OptionInfo([], "Quicksettings list", ui_components.DropdownMulti, lambda: {"choices": list(shared.opts.data_labels.keys())}).js("info", "settingsHintsShowQuicksettings").info("setting entries that appear at the top of page rather than in settings tab").needs_reload_ui(),
 #make a 'useful' list for quicksettings?
@@ -287,7 +287,7 @@ options_templates.update(options_section(('ui', "User interface", "ui"), {
 }))
 
 
-options_templates.update(options_section(('infotext', "Infotext", "ui"), {
+options_templates.update(options_section(("infotext", "Infotext", "ui"), {
     "infotext_explanation": OptionHTML("""
 Infotext is what this software calls the text that contains generation parameters and can be used to generate the same picture again.
 It is displayed in UI below the image. To use infotext, paste it into the prompt and click the ↙️ paste button.
@@ -308,7 +308,7 @@ It is displayed in UI below the image. To use infotext, paste it into the prompt
 
 }))
 
-options_templates.update(options_section(('ui', "Live previews", "ui"), {
+options_templates.update(options_section(("ui", "Live previews", "ui"), {
     "show_progressbar": OptionInfo(True, "Show progressbar"),
     "live_previews_image_format": OptionInfo("png", "Live preview file format", gr.Radio, {"choices": ["jpeg", "png", "webp"]}),
     "show_progress_grid": OptionInfo(True, "Show previews of all images generated in a batch as a grid"),
@@ -319,22 +319,22 @@ options_templates.update(options_section(('ui', "Live previews", "ui"), {
     "prevent_screen_sleep_during_generation": OptionInfo(True, "Prevent screen sleep during generation"),
 }))
 
-options_templates.update(options_section(('sampler-params', "Sampler parameters", "sd"), {
+options_templates.update(options_section(("sampler-params", "Sampler parameters", "sd"), {
     "hide_samplers": OptionInfo([], "Hide samplers in user interface", gr.CheckboxGroup, lambda: {"choices": [x.name for x in shared_items.list_samplers()]}).needs_reload_ui(),
     "hide_schedulers": OptionInfo([], "Hide schedulers in user interface", gr.CheckboxGroup, lambda: {"choices": [x.label for x in shared_items.list_schedulers()]}).needs_reload_ui(),
-    "eta_ddim": OptionInfo(0.0, "Eta for DDIM", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext='Eta DDIM').info("noise multiplier; higher = more unpredictable results"),
-    "eta_ancestral": OptionInfo(1.0, "Eta for k-diffusion samplers", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext='Eta').info("noise multiplier; currently only applies to ancestral samplers (i.e. Euler a) and SDE samplers"),
-    "ddim_discretize": OptionInfo('uniform', "img2img DDIM discretize", gr.Radio, {"choices": ['uniform', 'quad']}),
-    's_churn': OptionInfo(0.0, "sigma churn", gr.Slider, {"minimum": 0.0, "maximum": 100.0, "step": 0.01}, infotext='Sigma churn').info('amount of stochasticity; only applies to Euler, Heun, and DPM2'),
-    's_tmin':  OptionInfo(0.0, "sigma tmin",  gr.Slider, {"minimum": 0.0, "maximum": 10.0, "step": 0.01}, infotext='Sigma tmin').info('enable stochasticity; start value of the sigma range; only applies to Euler, Heun, and DPM2'),
-    's_tmax':  OptionInfo(0.0, "sigma tmax",  gr.Slider, {"minimum": 0.0, "maximum": 999.0, "step": 0.01}, infotext='Sigma tmax').info("0 = inf; end value of the sigma range; only applies to Euler, Heun, and DPM2"),
-    's_noise': OptionInfo(1.0, "sigma noise", gr.Slider, {"minimum": 0.0, "maximum": 1.1, "step": 0.001}, infotext='Sigma noise').info('amount of additional noise to counteract loss of detail during sampling'),
-    'sigma_min': OptionInfo(0.0, "sigma min", gr.Slider, {"minimum": 0.0, "maximum": 2.0, "step": 0.001}, infotext='Sigma min').info("0 = default (~0.03); minimum noise strength for k-diffusion noise scheduler"),
-    'sigma_max': OptionInfo(0.0, "sigma max", gr.Slider, {"minimum": 0.0, "maximum": 120.0, "step": 0.001}, infotext='Sigma max').info("0 = default (~14.6); maximum noise strength for k-diffusion noise scheduler"),
-    'rho':  OptionInfo(0.0, "rho", gr.Number, infotext='Schedule rho').info("0 = default (7 for karras, 1 for polyexponential); higher values result in a steeper noise schedule (decreases faster)"),
-    'eta_noise_seed_delta': OptionInfo(0, "Eta noise seed delta", gr.Number, {"precision": 0}, infotext='ENSD').info("ENSD; does not improve anything, just produces different results for ancestral samplers - only useful for reproducing images"),
-    'always_discard_next_to_last_sigma': OptionInfo(False, "Always discard next-to-last sigma", infotext='Discard penultimate sigma').link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/6044"),
-    'sgm_noise_multiplier': OptionInfo(False, "SGM noise multiplier", infotext='SGM noise multiplier').link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/12818").info("Match initial noise to official SDXL implementation - only useful for reproducing images"),
+    "eta_ddim": OptionInfo(0.0, "Eta for DDIM", gr.Slider, {"minimum": 0.0, "maximum": 4.0, "step": 0.01}, infotext="Eta DDIM").info("noise multiplier; higher = more unpredictable results"),
+    "eta_ancestral": OptionInfo(1.0, "Eta for k-diffusion samplers", gr.Slider, {"minimum": 0.0, "maximum": 4.0, "step": 0.01}, infotext="Eta").info("noise multiplier; currently only applies to ancestral samplers (i.e. Euler a) and SDE samplers"),
+    "ddim_discretize": OptionInfo("uniform", "img2img DDIM discretize", gr.Radio, {"choices": ["uniform", "quad"]}),
+    "s_churn": OptionInfo(0.0, "sigma churn", gr.Slider, {"minimum": 0.0, "maximum": 100.0, "step": 0.01}, infotext="Sigma churn").info("amount of stochasticity; only applies to Euler, Heun, and DPM2"),
+    "s_tmin":  OptionInfo(0.0, "sigma tmin",  gr.Slider, {"minimum": 0.0, "maximum": 10.0, "step": 0.01}, infotext="Sigma tmin").info("enable stochasticity; start value of the sigma range; only applies to Euler, Heun, and DPM2"),
+    "s_tmax":  OptionInfo(0.0, "sigma tmax",  gr.Slider, {"minimum": 0.0, "maximum": 999.0, "step": 0.01}, infotext="Sigma tmax").info("0 = inf; end value of the sigma range; only applies to Euler, Heun, and DPM2"),
+    "s_noise": OptionInfo(1.0, "sigma noise", gr.Slider, {"minimum": 0.0, "maximum": 1.1, "step": 0.001}, infotext="Sigma noise").info("amount of additional noise to counteract loss of detail during sampling"),
+    "sigma_min": OptionInfo(0.0, "sigma min", gr.Slider, {"minimum": 0.0, "maximum": 2.0, "step": 0.001}, infotext="Sigma min").info("0 = default (~0.03); minimum noise strength for k-diffusion noise scheduler"),
+    "sigma_max": OptionInfo(0.0, "sigma max", gr.Slider, {"minimum": 0.0, "maximum": 120.0, "step": 0.001}, infotext="Sigma max").info("0 = default (~14.6); maximum noise strength for k-diffusion noise scheduler"),
+    "rho":  OptionInfo(0.0, "rho", gr.Number, infotext="Schedule rho").info("0 = default (7 for karras, 1 for polyexponential); higher values result in a steeper noise schedule (decreases faster)"),
+    "eta_noise_seed_delta": OptionInfo(0, "Eta noise seed delta", gr.Number, {"precision": 0}, infotext="ENSD").info("ENSD; does not improve anything, just produces different results for ancestral samplers - only useful for reproducing images"),
+    "always_discard_next_to_last_sigma": OptionInfo(False, "Always discard next-to-last sigma", infotext="Discard penultimate sigma").link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/6044"),
+    "sgm_noise_multiplier": OptionInfo(False, "SGM noise multiplier", infotext="SGM noise multiplier").link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/12818").info("Match initial noise to official SDXL implementation - only useful for reproducing images"),
 
     "adaptive_ode_explanation": OptionHTML("""
 <h3>Adaptive-ODE relative and absolute tolerances need tuning to the solver</h3>
@@ -344,38 +344,38 @@ options_templates.update(options_section(('sampler-params', "Sampler parameters"
 <li><i>fehlberg2</i> recommended: -4.0, -6.0</li>
 </ul>
 """),
-    'adaptive_ode_solver': OptionInfo("bosh3", "Adaptive-ODE solver", gr.Radio, {"choices": ["adaptive_heun", "bosh3", "fehlberg2"]}, infotext='Adaptive-ODE solver'),
-    'adaptive_ode_rtol': OptionInfo(-2.5, "Adaptive-ODE log relative tolerance", gr.Slider, {"minimum": -7, "maximum": -1, "step": 0.01}, infotext='Adaptive-ODE rtol'),
-    'adaptive_ode_atol': OptionInfo(-3.5, "Adaptive-ODE log absolute tolerance", gr.Slider, {"minimum": -7, "maximum": -1, "step": 0.01}, infotext='Adaptive-ODE atol'),
+    "adaptive_ode_solver": OptionInfo("bosh3", "Adaptive-ODE solver", gr.Radio, {"choices": ["adaptive_heun", "bosh3", "fehlberg2"]}, infotext="Adaptive-ODE solver"),
+    "adaptive_ode_rtol": OptionInfo(-2.5, "Adaptive-ODE log relative tolerance", gr.Slider, {"minimum": -7, "maximum": -1, "step": 0.01}, infotext="Adaptive-ODE rtol"),
+    "adaptive_ode_atol": OptionInfo(-3.5, "Adaptive-ODE log absolute tolerance", gr.Slider, {"minimum": -7, "maximum": -1, "step": 0.01}, infotext="Adaptive-ODE atol"),
 
-    'fixed_ode_solver': OptionInfo("rk4", "Fixed-ODE solver", gr.Radio, {"choices": ["implicit_adams", "heun3", "midpoint", "rk4"]}, infotext='Fixed-ODE solver'),
+    "fixed_ode_solver": OptionInfo("rk4", "Fixed-ODE solver", gr.Radio, {"choices": ["implicit_adams", "heun3", "midpoint", "rk4"]}, infotext="Fixed-ODE solver"),
 
-    'deis_mode': OptionInfo("tab", "DEIS variant", gr.Radio, {"choices": ["tab", "rhoab"]}, infotext='DEIS variant'),
-    'deis_order': OptionInfo(3, "DEIS order", gr.Slider, {"minimum": 1, "maximum": 4, "step": 1}, infotext='DEIS order').info("must be < sampling steps"),
+    "deis_mode": OptionInfo("tab", "DEIS variant", gr.Radio, {"choices": ["tab", "rhoab"]}, infotext="DEIS variant"),
+    "deis_order": OptionInfo(3, "DEIS order", gr.Slider, {"minimum": 1, "maximum": 4, "step": 1}, infotext="DEIS order").info("must be < sampling steps"),
 
-    'dpmpp_2m_sde_mode': OptionInfo("midpoint", "DPM++ 2M SDE variant", gr.Radio, {"choices": ["heun", "midpoint"]}, infotext="2M SDE variant"),
+    "dpmpp_2m_sde_mode": OptionInfo("midpoint", "DPM++ 2M SDE variant", gr.Radio, {"choices": ["heun", "midpoint"]}, infotext="2M SDE variant"),
 
-    'lcm_order': OptionInfo(1, "LCM order", gr.Slider, {"minimum": 1, "maximum": 5, "step": 1}, infotext='LCM order').info("limited by number of sampling steps"),
-    'lcm_noise': OptionInfo(1.0, "LCM noise scaling", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext='LCM noise').info("applies to sigmas > 1.0; this is a power scaling, reducing the noise added at the end of each sampling step"),
+    "lcm_order": OptionInfo(1, "LCM order", gr.Slider, {"minimum": 1, "maximum": 5, "step": 1}, infotext="LCM order").info("limited by number of sampling steps"),
+    "lcm_noise": OptionInfo(1.0, "LCM noise scaling", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="LCM noise").info("applies to sigmas > 1.0; this is a power scaling, reducing the noise added at the end of each sampling step"),
 
-    'uni_pc_variant': OptionInfo("bh1", "UniPC variant", gr.Radio, {"choices": ["bh1", "bh2", "vary_coeff"]}, infotext='UniPC variant'),
-    'uni_pc_skip_type': OptionInfo("time_uniform", "UniPC skip type", gr.Radio, {"choices": ["time_uniform", "time_quadratic", "logSNR"]}, infotext='UniPC skip type'),
-    'uni_pc_order': OptionInfo(3, "UniPC order", gr.Slider, {"minimum": 1, "maximum": 5, "step": 1}, infotext='UniPC order').info("must be < sampling steps"),
-    'uni_pc_lower_order_final': OptionInfo(True, "UniPC lower order final", infotext='UniPC lower order final'),
+    "uni_pc_variant": OptionInfo("bh1", "UniPC variant", gr.Radio, {"choices": ["bh1", "bh2", "vary_coeff"]}, infotext="UniPC variant"),
+    "uni_pc_skip_type": OptionInfo("time_uniform", "UniPC skip type", gr.Radio, {"choices": ["time_uniform", "time_quadratic", "logSNR"]}, infotext="UniPC skip type"),
+    "uni_pc_order": OptionInfo(3, "UniPC order", gr.Slider, {"minimum": 1, "maximum": 5, "step": 1}, infotext="UniPC order").info("must be < sampling steps"),
+    "uni_pc_lower_order_final": OptionInfo(True, "UniPC lower order final", infotext="UniPC lower order final"),
 
-    'sd_noise_schedule': OptionInfo("Default", "Noise schedule for sampling", gr.Radio, {"choices": ["Default", "Zero Terminal SNR"]}, infotext="Noise Schedule").info("for use with zero terminal SNR trained models"),
-    'skip_early_cond': OptionInfo(0.0, "Ignore negative prompt during early sampling", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="Skip Early CFG").info("disables CFG on a proportion of steps at the beginning of generation; 0=skip none; 1=skip all; can both improve sample diversity/quality and speed up sampling"),
-    'beta_dist_alpha': OptionInfo(0.6, "Beta scheduler - alpha", gr.Slider, {"minimum": 0.01, "maximum": 1.0, "step": 0.01}, infotext='Beta alpha').info('Default = 0.6; the alpha parameter of the beta distribution used in Beta sampling'),
-    'beta_dist_beta': OptionInfo(0.6, "Beta scheduler - beta", gr.Slider, {"minimum": 0.01, "maximum": 1.0, "step": 0.01}, infotext='Beta beta').info('Default = 0.6; the beta parameter of the beta distribution used in Beta sampling'),
-    'sigmoid_base_c': OptionInfo(0.5, "Sigmoid offset scheduler - base c", gr.Slider, {"minimum": -50.0, "maximum": 50.0, "step": 0.01}, infotext='base c').info('Default = 0.5; the base c parameter of the Sigmoid offset scheduler sampling'),
-    'sigmoid_square_k': OptionInfo(1.0, "Sigmoid offset scheduler - square k", gr.Slider, {"minimum": 0.01, "maximum": 10.0, "step": 0.01}, infotext='square k').info('Default = 1.0; the square k parameter of the Sigmoid offset scheduler sampling'),
+    "sd_noise_schedule": OptionInfo("Default", "Noise schedule for sampling", gr.Radio, {"choices": ["Default", "Zero Terminal SNR"]}, infotext="Noise Schedule").info("for use with zero terminal SNR trained models"),
+    "skip_early_cond": OptionInfo(0.0, "Ignore negative prompt during early sampling", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="Skip Early CFG").info("disables CFG on a proportion of steps at the beginning of generation; 0=skip none; 1=skip all; can both improve sample diversity/quality and speed up sampling"),
+    "beta_dist_alpha": OptionInfo(0.6, "Beta scheduler - alpha", gr.Slider, {"minimum": 0.01, "maximum": 1.0, "step": 0.01}, infotext="Beta alpha").info("Default = 0.6; the alpha parameter of the beta distribution used in Beta sampling"),
+    "beta_dist_beta": OptionInfo(0.6, "Beta scheduler - beta", gr.Slider, {"minimum": 0.01, "maximum": 1.0, "step": 0.01}, infotext="Beta beta").info("Default = 0.6; the beta parameter of the beta distribution used in Beta sampling"),
+    "sigmoid_base_c": OptionInfo(0.5, "Sigmoid offset scheduler - base c", gr.Slider, {"minimum": -50.0, "maximum": 50.0, "step": 0.01}, infotext="base c").info("Default = 0.5; the base c parameter of the Sigmoid offset scheduler sampling"),
+    "sigmoid_square_k": OptionInfo(1.0, "Sigmoid offset scheduler - square k", gr.Slider, {"minimum": 0.01, "maximum": 10.0, "step": 0.01}, infotext="square k").info("Default = 1.0; the square k parameter of the Sigmoid offset scheduler sampling"),
 }))
 
-options_templates.update(options_section(('postprocessing', "Postprocessing", "postprocessing"), {
-    'postprocessing_enable_in_main_ui': OptionInfo([], "Enable postprocessing operations in txt2img and img2img tabs", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()]}).needs_reload_ui(),
-    'postprocessing_disable_in_extras': OptionInfo([], "Disable postprocessing operations in extras tab", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()]}).needs_reload_ui(),
-    'postprocessing_operation_order': OptionInfo([], "Postprocessing operation order", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()]}),
-    'upscaling_max_images_in_cache': OptionInfo(5, "Maximum number of images in upscaling cache", gr.Slider, {"minimum": 0, "maximum": 10, "step": 1}),
+options_templates.update(options_section(("postprocessing", "Postprocessing", "postprocessing"), {
+    "postprocessing_enable_in_main_ui": OptionInfo([], "Enable postprocessing operations in txt2img and img2img tabs", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()]}).needs_reload_ui(),
+    "postprocessing_disable_in_extras": OptionInfo([], "Disable postprocessing operations in extras tab", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()]}).needs_reload_ui(),
+    "postprocessing_operation_order": OptionInfo([], "Postprocessing operation order", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()]}),
+    "upscaling_max_images_in_cache": OptionInfo(5, "Maximum number of images in upscaling cache", gr.Slider, {"minimum": 0, "maximum": 10, "step": 1}),
 }))
 
 options_templates.update(options_section((None, "Hidden options"), {
