@@ -261,7 +261,7 @@ def sample_sa_solver(model, x, sigmas, extra_args=None, callback=None, disable=F
 
 
 #### ER-SDE
-def sample_er_sde(model, x, sigmas, extra_args=None, callback=None, disable=None, s_noise=1.0, noise_sampler=None):
+def sample_er_sde(model, x, sigmas, extra_args=None, callback=None, disable=None, eta=1.0, s_noise=1.0, noise_sampler=None):
     """Extended Reverse-Time SDE solver (VP ER-SDE-Solver-3). arXiv: https://arxiv.org/abs/2309.06169.
     Code reference: https://github.com/QinpengCui/ER-SDE-Solver/blob/main/er_sde_solver.py.
     """
@@ -270,7 +270,7 @@ def sample_er_sde(model, x, sigmas, extra_args=None, callback=None, disable=None
     s_in = x.new_ones([x.shape[0]])
 
     def noise_scaler(x):
-        return x * ((x ** 0.3).exp() + 10.0)
+        return x * ((x ** 0.3).exp() + 10.0) ** eta
 
     num_integration_points = 200.0
     point_indice = torch.arange(0, num_integration_points, dtype=torch.float32, device=x.device)
