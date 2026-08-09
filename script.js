@@ -152,30 +152,32 @@ document.addEventListener('keydown', function(e) {
     const skipButton = get_uiCurrentTabContent().querySelector('button[id$=_skip]');
 
     if (isCtrlKey && isEnter) {
-        if (interruptButton.style.display === 'none') {
+        if (interruptButton.style.display === "none" || interruptButton.style.display === "") {
             generateButton.click();
+            e.preventDefault();
         }
-        e.preventDefault();
     }
 
     if (isAltKey && isEnter) {
-        skipButton.click();
-        e.preventDefault();
+        if (skipButton.style.display === "block") {
+            skipButton.click();
+            e.preventDefault();
+        }
     }
 
     if (isEsc) {
-        const globalPopup = document.querySelector('.global-popup');
-        const lightboxModal = document.querySelector('#lightboxModal');
-        if (!globalPopup || globalPopup.style.display === 'none') {
+        const globalPopup = document.querySelector(".global-popup");
+        const lightboxModal = document.querySelector("#lightboxModal");
+        if (!globalPopup || globalPopup.style.display === "none") {
             if (document.activeElement === lightboxModal) return;
-            if (interruptButton.style.display === 'block') {
+            if (interruptButton.style.display === "block") {
                 interruptButton.click();
                 e.preventDefault();
             }
         }
-		else {
-			globalPopup.style.display = "none";
-		}
+        else {
+            globalPopup.style.display = "none";
+        }
     }
 });
 
