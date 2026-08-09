@@ -672,35 +672,35 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
         "CFG scale": p.cfg_scale
     }
 
-    if p.sampler_name == 'DEIS':
-        generation_params['DEIS variant'] = opts.deis_mode
-        generation_params['DEIS order'] = opts.deis_order
+    if p.sampler_name == "DEIS":
+        generation_params["DEIS variant"] = opts.deis_mode
+        generation_params["DEIS order"] = opts.deis_order
     elif p.sampler_name == 'DPM++ 2M SDE':
-        generation_params['2M SDE variant'] = opts.dpmpp_2m_sde_mode
-    elif p.sampler_name == 'LCM':
-        generation_params['LCM order'] = opts.lcm_order
-        generation_params['LCM noise'] = opts.lcm_noise if opts.lcm_noise < 1.0 else None
-    elif p.sampler_name == 'UniPC':
-        generation_params['UniPC variant'] = opts.uni_pc_variant
-        generation_params['UniPC order'] = opts.uni_pc_order
-        generation_params['UniPC skip type'] = opts.uni_pc_skip_type
-        generation_params['UniPC lower order final'] = opts.uni_pc_lower_order_final
-    elif p.sampler_name == 'Adaptive-ODE':
-        generation_params['Adaptive-ODE solver'] = opts.adaptive_ode_solver
-        generation_params['Adaptive-ODE rtol'] = opts.adaptive_ode_rtol
-        generation_params['Adaptive-ODE atol'] = opts.adaptive_ode_atol
-    elif p.sampler_name == 'Fixed-ODE':
-        generation_params['Fixed-ODE solver'] = opts.fixed_ode_solver
+        generation_params["2M SDE variant"] = opts.dpmpp_2m_sde_mode
+    elif p.sampler_name == "LCM":
+        generation_params["LCM order"] = opts.lcm_order
+        generation_params["LCM noise"] = opts.lcm_noise if opts.lcm_noise < 1.0 else None
+    elif p.sampler_name == "UniPC":
+        generation_params["UniPC variant"] = opts.uni_pc_variant
+        generation_params["UniPC order"] = opts.uni_pc_order
+        generation_params["UniPC skip type"] = opts.uni_pc_skip_type
+        generation_params["UniPC lower order final"] = opts.uni_pc_lower_order_final
+    elif p.sampler_name == "Adaptive-ODE":
+        generation_params["Adaptive-ODE solver"] = opts.adaptive_ode_solver
+        generation_params["Adaptive-ODE rtol"] = opts.adaptive_ode_rtol
+        generation_params["Adaptive-ODE atol"] = opts.adaptive_ode_atol
+    elif p.sampler_name == "Fixed-ODE":
+        generation_params["Fixed-ODE solver"] = opts.fixed_ode_solver
 
     # if HiRes fix was used, p.firstpass_use_distilled_cfg_scale is appropriately set, otherwise it doesn't exist
-    firstpass_use_distilled_cfg_scale = getattr(p,'firstpass_use_distilled_cfg_scale', p.sd_model.use_distilled_cfg_scale)
+    firstpass_use_distilled_cfg_scale = getattr(p,"firstpass_use_distilled_cfg_scale", p.sd_model.use_distilled_cfg_scale)
     if firstpass_use_distilled_cfg_scale:
-        generation_params['Distilled CFG scale'] = p.distilled_cfg_scale
+        generation_params["Distilled CFG scale"] = p.distilled_cfg_scale
 
     noise_source_type = rng.get_noise_source_type()
 
     generation_params.update({
-        "Image CFG scale": getattr(p, 'image_cfg_scale', None),
+        "Image CFG scale": getattr(p, "image_cfg_scale", None),
         "Seed": p.all_seeds[0] if use_main_prompt else all_seeds[index],
         "Face restoration": opts.face_restoration_model if opts.face_restoration_model not in ["None", None] else None,
         "Size": f"{p.width}x{p.height}",
@@ -713,7 +713,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
         "Conditional mask weight": getattr(p, "inpainting_mask_weight", opts.inpainting_mask_weight) if p.is_using_inpainting_conditioning else None,
         "Clip skip": None if clip_skip <= 1 else clip_skip,
         "ENSD": opts.eta_noise_seed_delta if uses_ensd else None,
-        "Init image hash": getattr(p, 'init_img_hash', None),
+        "Init image hash": getattr(p, "init_img_hash", None),
         "Tiling": p.tiling if p.tiling != "None" and (shared.sd_model.is_sd1 or shared.sd_model.is_sd2 or shared.sd_model.is_sdxl) else None,
         **p.extra_generation_params,
         "ELLA": opts.use_ELLA if ("ELLA" in opts.use_ELLA and shared.sd_model.is_sd1) else None,
@@ -723,7 +723,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
         "CFG normalization": opts.cfg_normalization if opts.cfg_normalization > 0.0 else None,
         "CFG rescale": opts.cfg_rescale if opts.cfg_rescale > 0.0 else None,
         "negPiP": opts.use_negPiP if opts.use_negPiP and (shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_krea2 or shared.sd_model.is_flux2 or shared.sd_model.is_lumina2) else None,
-        "SDXL Shift": opts.sdxl_flow_shift if dynamic_args.get('SDXL_flow', False) else None,
+        "SDXL Shift": opts.sdxl_flow_shift if dynamic_args.get("SDXL_flow", False) else None,
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
     })
     if noise_source_type in ["Perlin", "Perlin (GPU)"]:
@@ -938,7 +938,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             if state.interrupted or state.stopping_generation:
                 break
 
-            if not getattr(p, 'txt2img_upscale', False) or p.hr_checkpoint_name is None:
+            if not getattr(p, "txt2img_upscale", False) or p.hr_checkpoint_name is None:
                 # hiresfix quickbutton may not need reload of firstpass model
                 manage_model(p)
 
@@ -972,7 +972,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             if p.scripts is not None:
                 p.scripts.process_batch(p, batch_number=n, prompts=p.prompts, seeds=p.seeds, subseeds=p.subseeds)
 
-            if getattr(p, 'txt2img_upscale', False):
+            if getattr(p, "txt2img_upscale", False):
                 pass # conds will be done later - doing it now uses the firstpass model which could be incorrect
             else:
                 p.setup_conds()
@@ -981,7 +981,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 shared.state.job = f"Batch {n+1} out of {p.n_iter}"
 
             sigmas_backup = None
-            if opts.sd_noise_schedule == "Zero Terminal SNR" or getattr(p.sd_model.model_config, 'ztsnr', False):
+            if opts.sd_noise_schedule == "Zero Terminal SNR" or getattr(p.sd_model.model_config, "ztsnr", False):
                 p.extra_generation_params["Noise Schedule"] = "Zero Terminal SNR"
                 sigmas_backup = p.sd_model.forge_objects.unet.model.predictor.sigmas
                 p.sd_model.forge_objects.unet.model.predictor.set_sigmas(rescale_zero_terminal_snr_sigmas(p.sd_model.forge_objects.unet.model.predictor.sigmas))
@@ -1008,7 +1008,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 p.scripts.post_sample(p, ps)
                 samples_ddim = ps.samples
 
-            if getattr(samples_ddim, 'already_decoded', False):
+            if getattr(samples_ddim, "already_decoded", False):
                 x_samples_ddim = samples_ddim
             else:
                 devices.test_for_nans(samples_ddim, "unet")
@@ -1078,6 +1078,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
                     if p.scripts is not None:
                         pp = scripts.PostprocessImageArgs(image, i + p.iteration * p.batch_size)
+                        pp.info = {}
                         p.scripts.postprocess_image(p, pp)
                         image = pp.image
                         pp_params_text = "\n" + ", ".join([f"{k}: {v}" for k, v in pp.info.items() if v is not None])

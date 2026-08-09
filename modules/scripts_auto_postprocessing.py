@@ -25,11 +25,7 @@ class ScriptPostprocessingForMainUI(scripts.Script):
         self.script.process(pp, **args_dict)
 
         script_pp.image = pp.image
-
-        if not hasattr(script_pp, "info"):
-            script_pp.info = pp.info
-        else:
-            script_pp.info.update(pp.info)
+        script_pp.info.update(pp.info)
 
 
 def create_auto_preprocessing_script_data():
