@@ -158,7 +158,7 @@ replace_torchsde_browinan()
 
 
 def apply_refiner(cfg_denoiser, x):
-    if getattr(cfg_denoiser, 'refiner_applied', False):
+    if getattr(cfg_denoiser, "refiner_applied", False):
         return True
 
     completed_ratio = cfg_denoiser.step / cfg_denoiser.total_steps
@@ -180,10 +180,10 @@ def apply_refiner(cfg_denoiser, x):
             return False
 
         if opts.hires_fix_refiner_pass != "second pass":
-            cfg_denoiser.p.extra_generation_params['Hires refiner'] = opts.hires_fix_refiner_pass
+            cfg_denoiser.p.extra_generation_params["Hires refiner"] = opts.hires_fix_refiner_pass
 
-    cfg_denoiser.p.extra_generation_params['Refiner'] = refiner_checkpoint_info.name
-    cfg_denoiser.p.extra_generation_params['Refiner switch at'] = refiner_switch_at
+    cfg_denoiser.p.extra_generation_params["Refiner"] = refiner_checkpoint_info.name
+    cfg_denoiser.p.extra_generation_params["Refiner switch at"] = refiner_switch_at
 
     cfg_denoiser.refiner_applied = True
 
@@ -242,7 +242,6 @@ class Sampler:
         self.func = funcname
         self.extra_params = []
         self.sampler_noises = None
-        self.stop_at = None
         self.eta = None
         self.config: SamplerData = None  # set by the function calling the constructor
         self.s_min_uncond = None
@@ -262,13 +261,10 @@ class Sampler:
         self.sampler_extra_args = None
         self.options = {}
 
-    def callback_state(self, d):
+    def callback_state(self, d): # this is called after sampler runs model, so d['i'] is always one step behind
         step = d['i']
 
-        if self.stop_at is not None and step > self.stop_at:
-            raise InterruptedException
-
-        state.sampling_step = step
+        state.sampling_step = step + 1
         shared.total_tqdm.update()
 
     def launch_sampling(self, steps, func):
