@@ -11,7 +11,7 @@ create_or_modify_pyi_org = gradio.component_meta.create_or_modify_pyi
 
 def create_or_modify_pyi_org_patched(component_class, class_name, events):
     try:
-        if component_class.__name__ == 'LogicalImage':
+        if component_class.__name__ == "LogicalImage":
             return
         return create_or_modify_pyi_org(component_class, class_name, events)
     except:
@@ -49,10 +49,10 @@ def web_css(file_name):
 
 DEBUG_MODE = False
 
-canvas_html = open(os.path.join(canvas_js_root_path, 'canvas.html'), encoding='utf-8').read()
-canvas_head = ''
-canvas_head += web_css('canvas.css')
-canvas_head += web_js('canvas.js')
+canvas_html = open(os.path.join(canvas_js_root_path, "canvas.html"), encoding="utf-8").read()
+canvas_head = ""
+canvas_head += web_css("canvas.css")
+canvas_head += web_js("canvas.js")
 
 
 def image_to_base64(image_array, numpy=True):
@@ -60,32 +60,18 @@ def image_to_base64(image_array, numpy=True):
     image = image.convert("RGBA")
     buffered = BytesIO()
     image.save(buffered, format="PNG")
-    image_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+    image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
     return f"data:image/png;base64,{image_base64}"
-
-
-def base64_to_image(base64_str, numpy=True):
-    if base64_str.startswith("data:image/png;base64,"):
-        base64_str = base64_str.replace("data:image/png;base64,", "")
-    image_data = base64.b64decode(base64_str)
-    image = Image.open(BytesIO(image_data))
-    image = image.convert("RGBA")
-    image_array = np.array(image) if numpy else image
-    return image_array
 
 
 class LogicalImage(gr.Textbox):
     @wraps(gr.Textbox.__init__)
     def __init__(self, *args, numpy=True, **kwargs):
         self.numpy = numpy
-        self.infotext = dict()
 
-        if 'value' in kwargs:
-            initial_value = kwargs['value']
-            if initial_value is not None:
-                kwargs['value'] = self.image_to_base64(initial_value)
-            else:
-                del kwargs['value']
+        initial_value = kwargs.pop("value", None)
+        if initial_value is not None:
+            kwargs["value"] = self.image_to_base64(initial_value)
 
         super().__init__(*args, **kwargs)
 
@@ -96,18 +82,16 @@ class LogicalImage(gr.Textbox):
         if not payload.startswith("data:image/png;base64,"):
             return None
 
-        image = base64_to_image(payload, numpy=self.numpy)
-        if hasattr(image, 'info'):
-            image.info = self.infotext
-        
-        return image
+        image_data = base64.b64decode(payload[22:])
+        image = Image.open(BytesIO(image_data))
+
+        image = image.convert("RGBA")
+        image_array = np.array(image) if self.numpy else image
+        return image_array
 
     def postprocess(self, value):
         if value is None:
             return None
-            
-        if hasattr(value, 'info'):
-            self.infotext = value.info
 
         return image_to_base64(value, numpy=self.numpy)
 
