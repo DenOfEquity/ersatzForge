@@ -416,10 +416,6 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                     q_norm = torch.norm(q) + 1e-8
                     if q_norm > constraint_val:
                         normed_q = q * constraint_val / q_norm
-                # if alpha > 0: # alpha in oft/boft is for constraint
-                    # q_norm = torch.norm(q) + 1e-8
-                    # if q_norm > alpha:
-                        # normed_q = q * alpha / q_norm
 
                 # prevent unsupported type in .inverse()
                 r = (I + normed_q) @ (I - normed_q).to(torch.float32).inverse()
@@ -437,9 +433,9 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                     # lora_diff = lora_diff * rescale
 
                 if dora_scale is not None:
-                    weight = weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype, function)
+                    weight = weight_decompose(dora_scale, weight, lora_diff, alpha, 1.0, computation_dtype, function)
                 else:
-                    lora_diff.mul_(strength*alpha)
+                    lora_diff.mul_(alpha)
                     weight.add_(function(lora_diff.type(weight.dtype)))
             except Exception as e:
                 print("ERROR {} {} {}".format(self.name, key, e))
@@ -499,9 +495,9 @@ def merge_lora_to_weight(patches, weight, key="online_lora", computation_dtype=t
                 lora_diff = inp - org
                 lora_diff = memory_management.cast_to_device(lora_diff, weight.device, computation_dtype)
                 if dora_scale is not None:
-                    weight = weight_decompose(dora_scale, weight, lora_diff, alpha, strength, computation_dtype, function)
+                    weight = weight_decompose(dora_scale, weight, lora_diff, alpha, 1.0, computation_dtype, function)
                 else:
-                    lora_diff.mul_(strength*alpha)
+                    lora_diff.mul_(alpha)
                     weight.add_(function(lora_diff.type(weight.dtype)))
             except Exception as e:
                 print("ERROR {} {} {}".format(self.name, key, e))
