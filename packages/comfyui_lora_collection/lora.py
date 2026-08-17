@@ -128,7 +128,7 @@ def load_lora(lora, to_load):
             patch_dict[to_load[x]] = ("lora", (lora[A_name], lora[B_name], alpha, mid, dora_scale))
             loaded_keys.add(A_name)
             loaded_keys.add(B_name)
-
+            continue
 
         ######## loha
         hada_w1_a_name = "{}.hada_w1_a".format(x)
@@ -151,7 +151,7 @@ def load_lora(lora, to_load):
             loaded_keys.add(hada_w1_b_name)
             loaded_keys.add(hada_w2_a_name)
             loaded_keys.add(hada_w2_b_name)
-
+            continue
 
         ######## lokr
         lokr_w1_name = "{}.lokr_w1".format(x)
@@ -199,6 +199,7 @@ def load_lora(lora, to_load):
 
         if (lokr_w1 is not None) or (lokr_w2 is not None) or (lokr_w1_a is not None) or (lokr_w2_a is not None):
             patch_dict[to_load[x]] = ("lokr", (lokr_w1, lokr_w2, alpha, lokr_w1_a, lokr_w1_b, lokr_w2_a, lokr_w2_b, lokr_t2, dora_scale))
+            continue
 
         #glora
         a1_name = "{}.a1.weight".format(x)
@@ -211,11 +212,11 @@ def load_lora(lora, to_load):
             loaded_keys.add(a2_name)
             loaded_keys.add(b1_name)
             loaded_keys.add(b2_name)
+            continue
 
-        #oft (3), boft(4)
+        #oft, boft
         blocks_name = "{}.oft_blocks".format(x)
         rescale_name = "{}.rescale".format(x)
-
         if blocks_name in lora.keys():
             blocks = lora[blocks_name]
             if blocks.ndim in [3, 4]:
@@ -226,6 +227,7 @@ def load_lora(lora, to_load):
                 else:
                     rescale = None
                 patch_dict[to_load[x]] = ("oft" if blocks.ndim == 3 else "boft", (blocks, rescale, alpha, dora_scale))
+                continue
 
         #oftv2 - untested
         oft_r_weight_name = "{}.oft_R.weight".format(x)
@@ -233,6 +235,7 @@ def load_lora(lora, to_load):
             oft_r_weight = lora[oft_r_weight_name]
             loaded_keys.add(oft_r_weight_name)
             patch_dict[to_load[x]] = ("oftv2", (oft_r_weight, alpha, dora_scale))
+            continue
 
 
         w_norm_name = "{}.w_norm".format(x)
@@ -246,6 +249,7 @@ def load_lora(lora, to_load):
             if b_norm is not None:
                 loaded_keys.add(b_norm_name)
                 patch_dict["{}.bias".format(to_load[x][:-len(".weight")])] = ("diff", (b_norm,))
+            continue
 
         diff_name = "{}.diff".format(x)
         diff_weight = lora.get(diff_name, None)
