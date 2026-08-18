@@ -12,14 +12,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-from backend.nn.flux import EmbedND, timestep_embedding, apply_rope
+from backend.nn.flux import EmbedND, timestep_embedding
 from backend.attention import attention_function
 from backend.shared import global_variables
 
 
 class RMSNorm(nn.Module):
-    """RMSNorm with the reference ``(1 + scale)`` weight convention (scale stored zero-centered)."""
-
     def __init__(self, features: int, eps: float = 1e-5):
         super().__init__()
         self.eps = eps
@@ -31,48 +29,41 @@ class RMSNorm(nn.Module):
         return F.rms_norm(x.to(torch.float32), (x.shape[-1],), weight=weight, eps=self.eps).to(dtype)
 
 
-class QKNorm(nn.Module):
-    def __init__(self, dim: int):
-        super().__init__()
-        self.qnorm = RMSNorm(dim)
-        self.knorm = RMSNorm(dim)
-
-    def forward(self, q, k):
-        return self.qnorm(q), self.knorm(k)
-
-
-class SwiGLU(nn.Module):
-    def __init__(self, features: int, multiplier: int, bias: bool = False, multiple: int = 128):
-        super().__init__()
-        mlpdim = int(2 * features / 3) * multiplier
-        mlpdim = multiple * ((mlpdim + multiple - 1) // multiple)
-        self.gate = nn.Linear(features, mlpdim, bias=bias)
-        self.up = nn.Linear(features, mlpdim, bias=bias)
-        self.down = nn.Linear(mlpdim, features, bias=bias)
-
-    def forward(self, x):
-        return self.down(F.silu(self.gate(x)).mul_(self.up(x)))
-
-
 class Attention(nn.Module):
     def __init__(self, dim: int, heads: int, kvheads: Optional[int] = None, bias: bool = False):
         super().__init__()
         self.heads = heads
         self.kvheads = kvheads if kvheads is not None else heads
-        self.headdim = dim // self.heads
-        self.wq = nn.Linear(dim, self.headdim * self.heads, bias=bias)
-        self.wk = nn.Linear(dim, self.headdim * self.kvheads, bias=bias)
-        self.wv = nn.Linear(dim, self.headdim * self.kvheads, bias=bias)
+        headdim = dim // self.heads
+        self.wq = nn.Linear(dim, headdim * self.heads, bias=bias)
+        self.wk = nn.Linear(dim, headdim * self.kvheads, bias=bias)
+        self.wv = nn.Linear(dim, headdim * self.kvheads, bias=bias)
         self.gate = nn.Linear(dim, dim, bias=bias)
-        self.qknorm = QKNorm(self.headdim)
+
+        class QKNormContainer(nn.Module):
+            def __init__(self, dim):
+                super().__init__()
+                self.qnorm = RMSNorm(dim)
+                self.knorm = RMSNorm(dim)
+        self.qknorm = QKNormContainer(headdim)
+
         self.wo = nn.Linear(dim, dim, bias=bias)
 
     def forward(self, x, negpip=None, freqs=None, mask=None, transformer_options={}):
+        dtype = x.dtype
         q = rearrange(self.wq(x), "B L (H D) -> B H L D", H=self.heads)
-        k = rearrange(self.wk(x), "B L (H D) -> B H L D", H=self.kvheads)
-        q, k = self.qknorm(q, k)
+        q = self.qknorm.qnorm(q).to(torch.float32)
         if freqs is not None:
-            q, k = apply_rope(q, k, freqs)
+            _q = q.reshape(*q.shape[:-1], -1, 1, 2)
+            q = (freqs[..., 0] * _q[..., 0] + freqs[..., 1] * _q[..., 1]).reshape(q.shape).to(dtype)
+            del _q
+
+        k = rearrange(self.wk(x), "B L (H D) -> B H L D", H=self.kvheads)
+        k = self.qknorm.knorm(k).to(torch.float32)
+        if freqs is not None:
+            _k = k.reshape(*k.shape[:-1], -1, 1, 2)
+            k = (freqs[..., 0] * _k[..., 0] + freqs[..., 1] * _k[..., 1]).reshape(k.shape).to(dtype)
+            del _k
 
         v = rearrange(self.wv(x), "B L (H D) -> B H L D", H=self.kvheads)
         if negpip is not None:
@@ -109,6 +100,19 @@ class DoubleSharedModulation(nn.Module):
     def forward(self, vec):
         out = vec + self.lin.to(vec)
         return out.chunk(6, dim=-1)
+
+
+class SwiGLU(nn.Module):
+    def __init__(self, features: int, multiplier: int, bias: bool = False, multiple: int = 128):
+        super().__init__()
+        mlpdim = int(2 * features / 3) * multiplier
+        mlpdim = multiple * ((mlpdim + multiple - 1) // multiple)
+        self.gate = nn.Linear(features, mlpdim, bias=bias)
+        self.up = nn.Linear(features, mlpdim, bias=bias)
+        self.down = nn.Linear(mlpdim, features, bias=bias)
+
+    def forward(self, x):
+        return self.down(F.silu(self.gate(x)).mul_(self.up(x)))
 
 
 class TextFusionBlock(nn.Module):
