@@ -558,7 +558,7 @@ def save_image_with_geninfo(image, geninfo, filename, extension=None, existing_p
 
     image_format = Image.registered_extensions()[extension]
 
-    if extension.lower() == '.png':
+    if extension.lower() == ".png":
         existing_pnginfo = existing_pnginfo or {}
         if opts.enable_pnginfo:
             existing_pnginfo[pnginfo_section_name] = geninfo
@@ -573,9 +573,9 @@ def save_image_with_geninfo(image, geninfo, filename, extension=None, existing_p
         image.save(filename, format=image_format, quality=opts.jpeg_quality, pnginfo=pnginfo_data)
 
     elif extension.lower() in (".jpg", ".jpeg", ".webp"):
-        if image.mode == 'RGBA':
+        if image.mode == "RGBA":
             image = image.convert("RGB")
-        elif image.mode == 'I;16':
+        elif image.mode == "I;16":
             image = image.point(lambda p: p * 0.0038910505836576).convert("RGB" if extension.lower() == ".webp" else "L")
 
         image.save(filename, format=image_format, quality=opts.jpeg_quality, lossless=opts.webp_lossless)
@@ -605,7 +605,7 @@ def save_image_with_geninfo(image, geninfo, filename, extension=None, existing_p
         image.save(filename, format=image_format, quality=opts.jpeg_quality)
 
 
-def save_image(image, path, basename, seed=None, prompt=None, extension='png', info=None, short_filename=False, no_prompt=False, grid=False, pnginfo_section_name='parameters', p=None, existing_info=None, forced_filename=None, suffix="", save_to_dirs=None):
+def save_image(image, path, basename, seed=None, prompt=None, extension="png", info=None, short_filename=False, no_prompt=False, grid=False, pnginfo_section_name="parameters", p=None, existing_info=None, forced_filename=None, suffix="", save_to_dirs=None):
     """Save an image.
 
     Args:
@@ -767,7 +767,7 @@ IGNORED_INFO_KEYS = {
 def read_info_from_image(image: Image.Image) -> tuple[str | None, dict]:
     items = (image.info or {}).copy()
 
-    geninfo = items.pop('parameters', None)
+    geninfo = items.pop("parameters", None)
 
     if "exif" in items:
         exif_data = items["exif"]
@@ -808,35 +808,32 @@ Steps: {json_info["steps"]}, Sampler: {sampler}, CFG scale: {json_info["scale"]}
 
 
 def image_data(data):
-    import gradio as gr
-
     try:
         image = read(io.BytesIO(data))
         textinfo, _ = read_info_from_image(image)
-        return textinfo, None
+        return textinfo
     except Exception:
         pass
 
     try:
-        text = data.decode('utf8')
-        assert len(text) < 10000
-        return text, None
-
+        text = data.decode("utf8")
+        if len(text) < 10000:   # arbitrary length check
+            return text
     except Exception:
         pass
 
-    return gr.skip(), None
+    return None
 
 
 def flatten(img, bgcolor):
     """replaces transparency with bgcolor (example: "#ffffff"), returning an RGB mode image with no transparency"""
 
     if img.mode == "RGBA":
-        background = Image.new('RGBA', img.size, bgcolor)
+        background = Image.new("RGBA", img.size, bgcolor)
         background.paste(img, mask=img)
         img = background
 
-    return img.convert('RGB')
+    return img.convert("RGB")
 
 
 def read(fp, **kwargs):
@@ -847,21 +844,12 @@ def read(fp, **kwargs):
 
 
 def fix_image(image: Image.Image):
-    if image is None:
-        return None
+    if image is not None:
+        try:
+            image = ImageOps.exif_transpose(image)
+            if image.mode in ("RGB", "P") and isinstance(image.info.get("transparency"), bytes):
+                image = image.convert("RGBA")
+        except Exception:
+            pass
 
-    try:
-        image = ImageOps.exif_transpose(image)
-        image = fix_png_transparency(image)
-    except Exception:
-        pass
-
-    return image
-
-
-def fix_png_transparency(image: Image.Image):
-    if image.mode not in ("RGB", "P") or not isinstance(image.info.get("transparency"), bytes):
-        return image
-
-    image = image.convert("RGBA")
     return image
