@@ -130,7 +130,7 @@ class UiCheckpointMerger:
     vae_list = [""] + list(module_vae_list.keys())
 
     def refresh_additional():
-        _ = refresh_vaete()
+        refresh_vaete()
 
         te_list = list(module_te_list.keys())
         vae_list = [""] + list(module_vae_list.keys())

@@ -39,6 +39,7 @@ ckpt_list = []
 module_list = {}        # vae + te + other
 module_vae_list = {}
 module_te_list = {}
+module_display = []
 
 
 def bind_to_opts(comp, k, save=False, callback=None):
@@ -78,13 +79,14 @@ def refresh_ckpt():
     
     
 def refresh_vaete():
-    global module_list, module_vae_list, module_te_list
+    global module_list, module_vae_list, module_te_list, module_display
     
     file_extensions = ["ckpt", "pt", "bin", "safetensors", "sft", "gguf"]
 
     module_list.clear()
     module_vae_list.clear()
     module_te_list.clear()
+    module_display = []
 
     # VAE
     vae_files = find_files_with_extensions(os.path.abspath(os.path.join(models_path, "VAE")), file_extensions)
@@ -93,6 +95,7 @@ def refresh_vaete():
         vae_files = find_files_with_extensions(os.path.abspath(shared.cmd_opts.vae_dir), file_extensions)
         module_vae_list.update(vae_files)
     module_list.update(module_vae_list)
+    module_display.extend(("🟧" + x, x) for x in module_vae_list.keys())
 
     # TE
     te_files = find_files_with_extensions(os.path.abspath(os.path.join(models_path, "text_encoder")), file_extensions)
@@ -101,26 +104,20 @@ def refresh_vaete():
         te_files = find_files_with_extensions(os.path.abspath(shared.cmd_opts.text_encoder_dir), file_extensions)
         module_te_list.update(te_files)
     module_list.update(module_te_list)
+    module_display.extend(("🟨" + x, x) for x in module_te_list.keys())
 
     # other
     other_list = find_files_with_extensions(os.path.abspath(os.path.join(models_path, "other_module")), file_extensions)
     module_list.update(other_list)
+    module_display.extend(("🟦" + x, x) for x in other_list.keys())
 
-    return module_list.keys()
-
-
-def refresh_models():
-    global ckpt_list
-    refresh_ckpt()
-    modules_list = refresh_vaete()
-
-    return ckpt_list, modules_list
 
 refresh_ckpt()
-_ = refresh_vaete()
+refresh_vaete()
+
 
 def make_checkpoint_manager_ui():
-    global ui_checkpoint, ui_vae, ui_clip_skip, ui_forge_unet_storage_dtype_options, ui_forge_swap, ui_forge_inference_memory, ui_forge_preset, ckpt_list
+    global ui_checkpoint, ui_vae, ui_clip_skip, ui_forge_unet_storage_dtype_options, ui_forge_swap, ui_forge_inference_memory, ui_forge_preset, ckpt_list, module_display
 
     if shared.opts.sd_model_checkpoint in [None, "None", "none", ""]:
         if len(sd_models.checkpoints_list) == 0:
@@ -143,12 +140,15 @@ def make_checkpoint_manager_ui():
         multiselect=True,
         label="Additional modules",
         elem_classes=["module_selection"],
-        choices=list(module_list.keys())
+        choices=module_display
     )
 
-    def gr_refresh_models():    # updates HiRes fix checkpoint/modules too
-        a, b = refresh_models()
-        return gr.update(choices=a), gr.update(choices=b), gr.update(choices=["Use same checkpoint"] + a), gr.update(choices=["Use same choices"] + list(b)), gr.update(choices=["", "[STOP]"] + a), gr.update(choices=[""] + a)
+    def gr_refresh_models():    # updates HiRes fix checkpoint/modules lists and Refiner checkpoint list too
+        global ckpt_list, module_display
+        refresh_ckpt()
+        refresh_vaete()
+
+        return gr.update(choices=ckpt_list), gr.update(choices=module_display), gr.update(choices=["Use same checkpoint"] + ckpt_list), gr.update(choices=["Use same choices"] + module_display), gr.update(choices=["", "[STOP]"] + ckpt_list), gr.update(choices=[""] + ckpt_list)
 
     ui_txt2img_hr_checkpoint = get_a1111_ui_component("txt2img", "HiRes checkpoint")
     ui_txt2img_hr_vae = get_a1111_ui_component("txt2img", "HiRes additional modules")
@@ -515,7 +515,7 @@ shared.options_templates.update(shared.options_section(('ui_sd', "UI defaults 's
     "sd_i2i_height": shared.OptionInfo(512,  "img2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd_i2i_cfg":    shared.OptionInfo(7,    "img2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
     "sd_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
-    "sd_vae_te":     shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
+    "sd_vae_te":     shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": module_display}),
     "sd_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
     "sd_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
@@ -528,7 +528,7 @@ shared.options_templates.update(shared.options_section(('ui_xl', "UI defaults 'x
     "xl_i2i_height": shared.OptionInfo(1024, "img2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "xl_i2i_cfg":    shared.OptionInfo(5,    "img2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
     "xl_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
-    "xl_vae_te":     shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
+    "xl_vae_te":     shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": module_display}),
     "xl_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
     "xl_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
@@ -541,7 +541,7 @@ shared.options_templates.update(shared.options_section(('ui_sd3', "UI defaults '
     "sd3_i2i_height": shared.OptionInfo(1024, "img2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 16}),
     "sd3_i2i_cfg":    shared.OptionInfo(5,    "img2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
     "sd3_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
-    "sd3_vae_te":     shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
+    "sd3_vae_te":     shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": module_display}),
     "sd3_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
     "sd3_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
@@ -557,7 +557,7 @@ shared.options_templates.update(shared.options_section(('ui_flux', "UI defaults 
     "flux_i2i_cfg":      shared.OptionInfo(1,    "img2img CFG",                  gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
     "flux_i2i_d_cfg":    shared.OptionInfo(3.5,  "img2img Distilled CFG",        gr.Slider, {"minimum": 0,   "maximum": 30,   "step": 0.1}),
     "flux_GPU_MB":       shared.OptionInfo(0,    "Reserve VRAM (MB)",            gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
-    "flux_vae_te":       shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": list(module_list.keys())}),
+    "flux_vae_te":       shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": module_display}),
     "flux_unet_dtype":   shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
     "flux_steps":        shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
