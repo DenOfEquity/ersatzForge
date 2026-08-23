@@ -325,17 +325,17 @@ input[type="checkbox"].input-accordion-checkbox{
 .generate-box{
     position: relative;
 }
-.gradio-button.generate-box-skip, .gradio-button.generate-box-interrupt, .gradio-button.generate-box-interrupting{
+.gradio-button.generate-box-skip, .gradio-button.generate-box-interrupt{
     position: absolute;
     width: 50%;
     height: 100%;
     display: none;
     background: #b4c0cc;
 }
-.gradio-button.generate-box-skip:hover, .gradio-button.generate-box-interrupt:hover, .gradio-button.generate-box-interrupting:hover{
+.gradio-button.generate-box-skip:hover, .gradio-button.generate-box-interrupt:hover{
     background: #c2cfdb;
 }
-.gradio-button.generate-box-interrupt, .gradio-button.generate-box-interrupting{
+.gradio-button.generate-box-interrupt{
     left: 0;
     border-radius: 0.5rem 0 0 0.5rem;
 }
@@ -404,6 +404,17 @@ div.toprow-compact-stylerow{
 div.toprow-compact-tools{
     min-width: fit-content !important;
     max-width: fit-content;
+}
+
+
+/* HighRes fix checkpoint and modules, set size to max element*/
+#hr_checkpoint li{
+    overflow-x: visible !important;
+    width: 100% !important;
+}
+#hr_vae_te li{
+    overflow-x: visible !important;
+    width: 100% !important;
 }
 
 
