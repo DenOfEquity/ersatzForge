@@ -45,12 +45,12 @@ def apply_color_correction(correction, original_image):
 
     image = blendLayers(image, original_image, BlendType.LUMINOSITY)
 
-    return image.convert('RGB')
+    return image.convert("RGB")
 
 
 def uncrop(image, dest_size, paste_loc):
     x, y, w, h = paste_loc
-    base_image = Image.new('RGBA', dest_size)
+    base_image = Image.new("RGBA", dest_size)
     image = images.resize_image(1, image, w, h)
     base_image.paste(image, (x, y))
     image = base_image
@@ -62,25 +62,23 @@ def apply_overlay(image, paste_loc, overlay):
     if paste_loc is not None:
         image = uncrop(image, (overlay.width, overlay.height), paste_loc)
 
-    image = image.convert('RGBA')
+    image = image.convert("RGBA")
     image.alpha_composite(overlay)
-    image = image.convert('RGB')
+    image = image.convert("RGB")
 
     return image
 
 def create_binary_mask(image, round=True):
-    if image.mode == 'RGBA' and image.getextrema()[-1] != (255, 255):
+    if image.mode == "RGBA" and image.getextrema()[-1] != (255, 255):
+        image = image.split()[-1].convert("L")
         if round:
-            image = image.split()[-1].convert("L").point(lambda x: 255 if x > 128 else 0)
-        else:
-            image = image.split()[-1].convert("L")
+            image = image.point(lambda x: 255 if x > 128 else 0)
     else:
-        image = image.convert('L')
+        image = image.convert("L")
     return image
 
 def txt2img_image_conditioning(sd_model, x, width, height):
     if sd_model.is_inpaint:  # Inpainting models
-
         # The "masked-image" in this case will just be all 0.5 since the entire image is masked.
         image_conditioning = torch.ones(x.shape[0], 3, height, width, device=x.device) * 0.5
         image_conditioning = sd_samplers_common.images_tensor_to_samples(image_conditioning, sd_samplers_common.approximation_indexes.get(opts.sd_vae_encode_method))
@@ -92,8 +90,6 @@ def txt2img_image_conditioning(sd_model, x, width, height):
         return image_conditioning
     else:
         # Dummy zero conditioning if we're not using inpainting or unclip models.
-        # Still takes up a bit of memory, but no encoder call.
-        # Pretty sure we can just make this a 1x1 image since its not going to be used besides its batch size.
         return x.new_zeros(x.shape[0], 5, 1, 1, dtype=x.dtype, device=x.device)
 
 
@@ -110,7 +106,7 @@ class StableDiffusionProcessing:
     subseed_strength: float = 0
     seed_resize_from_h: int = -1
     seed_resize_from_w: int = -1
-    seed_enable_extras: bool = True
+    # seed_enable_extras: bool = True # ignored: needs to stay for back compatibility?
     sampler_name: str = None
     scheduler: str = None
     batch_size: int = 1
@@ -199,12 +195,6 @@ class StableDiffusionProcessing:
         self.script_args = self.script_args or {}
 
         self.refiner_checkpoint_info = None
-
-        if not self.seed_enable_extras:
-            self.subseed = -1
-            self.subseed_strength = 0
-            self.seed_resize_from_h = 0
-            self.seed_resize_from_w = 0
 
         self.extra_result_images = []
         self.modified_noise = None
