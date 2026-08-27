@@ -398,7 +398,7 @@ def model_lora_keys_unet(model, key_map={}):
                     diffusers_lora_key = diffusers_lora_key[:-2]
                 key_map[diffusers_lora_key] = unet_key
 
-    if 'stable-diffusion-3' in model.config.huggingface_repo.lower(): #Diffusers lora SD3
+    if "stable-diffusion-3" in model.config.huggingface_repo.lower(): #Diffusers lora SD3
         diffusers_keys = utils.mmdit_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
         for k in diffusers_keys:
             if k.endswith(".weight"):
@@ -406,7 +406,7 @@ def model_lora_keys_unet(model, key_map={}):
                 key_lora = "transformer.{}".format(k[:-len(".weight")]) #regular diffusers sd3 lora format
                 key_map[key_lora] = to
     
-                key_lora = "base_model.model.{}".format(k[:-len(".weight")]) #format for flash-sd3 lora and others?
+                key_lora = "diffusion_model.{}".format(k[:-len(".weight")])
                 key_map[key_lora] = to
     
                 key_lora = "lora_transformer_{}".format(k[:-len(".weight")].replace(".", "_")) #OneTrainer lora
@@ -422,7 +422,7 @@ def model_lora_keys_unet(model, key_map={}):
                 key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to
                 key_map["transformer.{}".format(key_lora)] = to
 
-    if 'flux' in model.config.huggingface_repo.lower() or 'Chroma' == model.config.huggingface_repo: #Diffusers lora Flux
+    if "flux" in model.config.huggingface_repo.lower() or "Chroma" == model.config.huggingface_repo: #Diffusers lora Flux
         diffusers_keys = utils.flux_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
         for k in diffusers_keys:
             if k.endswith(".weight"):
@@ -431,14 +431,14 @@ def model_lora_keys_unet(model, key_map={}):
                 key_map["lycoris_{}".format(k[:-len(".weight")].replace(".", "_"))] = to  # simpletrainer lycoris
                 key_map["lora_transformer_{}".format(k[:-len(".weight")].replace(".", "_"))] = to  # onetrainer
 
-    if 'ernie' in model.config.huggingface_repo.lower():
+    if "ernie" in model.config.huggingface_repo.lower():
         for k in sdk:
             if k.startswith("diffusion_model.") and k.endswith(".weight"):
                 key_lora = k[len("diffusion_model."):-len(".weight")]
                 key_map["transformer.{}".format(key_lora)] = k
 
 
-    if 'krea2' in model.config.huggingface_repo.lower():
+    if "krea2" in model.config.huggingface_repo.lower():
         diffusers_keys = utils.krea2_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
         for k in diffusers_keys:
             if k.endswith(".weight"):
