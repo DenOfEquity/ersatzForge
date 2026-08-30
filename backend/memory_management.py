@@ -728,7 +728,7 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
 
             # clone check fails if model is partially loaded
             if (x.is_clone(current_loaded_models[i].model) or x_uuid == c_uuid) and \
-                    getattr(x, "lora_patches", {}) == getattr(current_loaded_models[i].model, "lora_patches", {}):
+                    x.lora_patches.keys() == current_loaded_models[i].model.lora_patches.keys():
                 models_already_loaded.append(current_loaded_models[i])
                 matched = True
 
