@@ -21,50 +21,98 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
             elif k.startswith("lora_unet_llm_adapter"):
                 lora[k.replace("lora_unet_llm_adapter", "lora_te_llm_adapter", 1)] = lora.pop(k)
 
-        if model.model.diffusion_model.num_blocks == 40: # model is 2.9B variant
-            from packages.huggingface_guess.detection import count_blocks
 
-            lora_blocks_count_1 = count_blocks(lora, "lora_unet_blocks_" + "{}_")
-            lora_blocks_count_2 = count_blocks(lora, "diffusion_model.blocks." + "{}.")
-            if 0 < lora_blocks_count_1 <= 28 or 0 < lora_blocks_count_2 <= 28: # lora is for standard Anima
-                if lora_blocks_count_1:
-                    prefix = "lora_unet_blocks_"
-                else:
-                    prefix = "diffusion_model.blocks."
-                split_c = prefix[-1]
-                len_prefix = len(prefix)
+        # can't assume start at zero
+        def count_blocks(state_dict_keys, prefix):
+            split_c = prefix[-1]
+            len_prefix = len(prefix)
 
-                keys = list(lora.keys())
+            max_idx = -1
+            for k in state_dict_keys:
+                if k.startswith(prefix):
+                    bne = k.index(split_c, len_prefix)
+                    bn = k[len_prefix:bne]          # lora block number as string
 
-                if 1: # method 0: adjust block indices with duplication, seems slightly better
-                    lora_copy = lora.copy()
-                    MAPPING = {
-                         "0":[0],        "1":[1, 2],     "2":[3],        "3":[4, 5],
-                         "4":[6],        "5":[7, 8],     "6":[9],        "7":[10, 11],
-                         "8":[12],       "9":[13, 14],  "10":[15],      "11":[16, 17],
-                        "12":[18],      "13":[19],      "14":[20, 21],  "15":[22],
-                        "16":[23, 24],  "17":[25],      "18":[26, 27],  "19":[28],
-                        "20":[29, 30],  "21":[31],      "22":[32, 33],  "23":[34],
-                        "24":[35, 36],  "25":[37],      "26":[38],      "27":[39]
-                    }
-                    for k in keys:
-                        if k.startswith(prefix):
-                            bne = k.index(split_c, len_prefix)
-                            bn = k[len_prefix:bne]          # lora block number as string
-                            for m in MAPPING[bn]:
-                                lora[f"{prefix}{m}{k[bne:]}"] = lora_copy[k].clone()
-                    del lora_copy
-                else: # method 1: adjust block indices to new positions only
-                    new_lora = {}
-                    MAPPING = [0, 1, 3, 4, 6, 7, 9, 10, 12, 13, 15, 16, 18, 19, 20, 22, 23, 25, 26, 28, 29, 31, 32, 34, 35, 37, 38, 39]
-                    for k in keys:
-                        if k.startswith(prefix):
-                            bne = k.index(split_c, len_prefix)
-                            bn = int(k[len_prefix:bne])     # lora block number as integer
-                            new_lora[f"{prefix}{MAPPING[bn]}{k[bne:]}"] = lora[k].clone()
-                        else:
-                            new_lora[k] = lora[k].clone()
-                    lora = new_lora
+                    idx = int(bn)
+                    if idx > max_idx:
+                        max_idx = idx
+
+            return max_idx + 1 if max_idx >= 0 else 0
+
+
+        keys = list(lora.keys())
+        if (lora_blocks_count := count_blocks(keys, "lora_unet_blocks_")) > 0:
+            prefix = "lora_unet_blocks_"
+        else:
+            lora_blocks_count = count_blocks(keys, "diffusion_model.blocks.")
+            prefix = "diffusion_model.blocks."
+
+        MAPPING = None
+        if lora_blocks_count == model.model.diffusion_model.num_blocks:
+            pass
+        elif 0 < lora_blocks_count <= 28: # lora is probably for standard Anima
+            if model.model.diffusion_model.num_blocks == 40: # map to 2.9B
+                MAPPING = {
+                     "0":[0],        "1":[1, 2],     "2":[3],        "3":[4, 5],
+                     "4":[6],        "5":[7, 8],     "6":[9],        "7":[10, 11],
+                     "8":[12],       "9":[13, 14],  "10":[15],      "11":[16, 17],
+                    "12":[18],      "13":[19],      "14":[20, 21],  "15":[22],
+                    "16":[23, 24],  "17":[25],      "18":[26, 27],  "19":[28],
+                    "20":[29, 30],  "21":[31],      "22":[32, 33],  "23":[34],
+                    "24":[35, 36],  "25":[37],      "26":[38],      "27":[39]
+                }
+            elif model.model.diffusion_model.num_blocks == 52: # map to 3.8B
+                MAPPING = {
+                     "0":[0],           "1":[1, 2, 3],     "2":[4],            "3":[5, 6, 7],
+                     "4":[8],           "5":[9, 10, 11],   "6":[12],           "7":[13, 14, 15],
+                     "8":[16],          "9":[17, 18, 19],  "10":[20],          "11":[21, 22, 23],
+                    "12":[24],          "13":[25],         "14":[26, 27, 28],  "15":[29],
+                    "16":[30, 31, 32],  "17":[33],         "18":[34, 35, 36],  "19":[37],
+                    "20":[38, 39, 40],  "21":[41],         "22":[42, 43, 44],  "23":[45],
+                    "24":[46, 47, 48],  "25":[49],         "26":[50],          "27":[51]
+                }
+        elif lora_blocks_count <= 40: # lora is probably for 2.9B variant
+            if model.model.diffusion_model.num_blocks == 28: # map to base
+                MAPPING = {
+                     "0":[0],   "1":[1],    "2":[],     "3":[2],
+                     "4":[3],   "5":[],     "6":[4],    "7":[5],
+                     "8":[],    "9":[6],    "10":[7],   "11":[],
+                    "12":[8],   "13":[9],   "14":[],    "15":[10],
+                    "16":[11],  "17":[],    "18":[12],  "19":[13],
+                    "20":[14],  "21":[],    "22":[15],  "23":[16],
+                    "24":[],    "25":[17],  "26":[18],  "27":[],
+                    "28":[19],  "29":[20],  "30":[],    "31":[21],
+                    "32":[22],  "33":[],    "34":[23],  "35":[24],
+                    "36":[],    "37":[25],  "38":[26],  "39":[27]
+                }
+            elif model.model.diffusion_model.num_blocks == 52: # map to 3.8B
+                MAPPING = {
+                     "0":[0],       "1":[1],        "2":[2, 3],     "3":[4],
+                     "4":[5],       "5":[6, 7],     "6":[8],        "7":[9],
+                     "8":[10, 11],  "9":[12],       "10":[13],      "11":[14, 15],
+                    "12":[16],      "13":[17],      "14":[18, 19],  "15":[20],
+                    "16":[21],      "17":[22, 23],  "18":[24],      "19":[25],
+                    "20":[26, 27],  "21":[28],      "22":[29],      "23":[30, 31],
+                    "24":[32],      "25":[33],      "26":[34, 35],  "27":[36],
+                    "28":[37],      "29":[38, 39],  "30":[40],      "31":[41],
+                    "32":[42, 43],  "33":[44],      "34":[45],      "35":[46, 47],
+                    "36":[48],      "37":[49],      "38":[50],      "39":[51]
+                }
+        # elif lora_blocks_count <= 52: # lora is for 3.8B variant
+
+        if MAPPING:
+            # method 0: adjust block indices with duplication, seems slightly better (tested 28->40)
+            split_c = prefix[-1]
+            len_prefix = len(prefix)
+
+            new_lora = {}
+            for k in list(lora.keys()):
+                if k.startswith(prefix):
+                    bne = k.index(split_c, len_prefix)
+                    bn = k[len_prefix:bne]          # lora block number as string
+                    for m in MAPPING[bn]:
+                        new_lora[f"{prefix}{m}{k[bne:]}"] = lora[k].clone()
+            lora = new_lora
 
     if model is not None:
         unet_keys = model_lora_keys_unet(model.model)
