@@ -438,9 +438,6 @@ class StableDiffusionProcessing:
 
         self.c = self.get_conds_with_caching(prompt_parser.get_multicond_learned_conditioning, prompts, total_steps, self.extra_network_data)
 
-    def get_conds(self):
-        return self.c, self.uc
-
     def parse_extra_network_prompts(self):
         self.prompts, self.extra_network_data = extra_networks.parse_prompts(self.prompts)
 
@@ -1626,12 +1623,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
                 with devices.autocast(): ##? why this?
                     extra_networks.activate(self, self.extra_network_data)
-
-    def get_conds(self):
-        if self.is_hr_pass:
-            return self.hr_c, self.hr_uc
-
-        return super().get_conds()
 
     def parse_extra_network_prompts(self):
         res = super().parse_extra_network_prompts()
