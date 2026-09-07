@@ -20,7 +20,7 @@ def build_tags(metadata):
     tags = {}
 
     ss_tag_frequency = metadata.get("ss_tag_frequency", {})
-    if ss_tag_frequency is not None and hasattr(ss_tag_frequency, 'items'):
+    if ss_tag_frequency is not None and hasattr(ss_tag_frequency, "items"):
         for _, tags_dict in ss_tag_frequency.items():
             for tag, tag_count in tags_dict.items():
                 tag = tag.strip()
@@ -48,16 +48,15 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         super().__init__(ui, tabname, page)
 
         self.select_sd_version = None
-
         self.taginfo = None
         self.edit_activation_text = None
-        self.slider_preferred_weight = None
+        self.preferred_weight = None
         self.edit_notes = None
 
     def save_lora_user_metadata(self, name, desc, sd_version, activation_text, preferred_weight, negative_text, notes):
         user_metadata = self.get_user_metadata(name)
         user_metadata["description"] = desc
-        user_metadata["sd_version_str"] = 'SdVersion.' + sd_version
+        user_metadata["sd_version_str"] = "SdVersion." + sd_version
         user_metadata["activation text"] = activation_text
         user_metadata["preferred weight"] = preferred_weight
         user_metadata["negative text"] = negative_text
@@ -71,10 +70,10 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         metadata = item.get("metadata") or {}
 
         keys = {
-            'ss_output_name': "Output name",
-            'ss_sd_model_name': "Model",
-            'ss_clip_skip': "Clip skip",
-            'ss_network_module': "Kohya module",
+            "ss_output_name": "Output name",
+            "ss_sd_model_name": "Model",
+            "ss_clip_skip": "Clip skip",
+            "ss_network_module": "Kohya module",
         }
 
         for key, label in keys.items():
@@ -82,23 +81,23 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
             if value is not None and str(value) != "None":
                 table.append((label, value))
 
-        ss_training_started_at = metadata.get('ss_training_started_at')
+        ss_training_started_at = metadata.get("ss_training_started_at")
         if ss_training_started_at:
-            table.append(("Date trained", datetime.datetime.utcfromtimestamp(float(ss_training_started_at)).strftime('%Y-%m-%d %H:%M')))
+            table.append(("Date trained", datetime.datetime.utcfromtimestamp(float(ss_training_started_at)).strftime("%Y-%m-%d %H:%M")))
 
         ss_bucket_info = metadata.get("ss_bucket_info")
         if ss_bucket_info and "buckets" in ss_bucket_info:
             resolutions = {}
             for _, bucket in ss_bucket_info["buckets"].items():
                 resolution = bucket["resolution"]
-                resolution = f'{resolution[1]}x{resolution[0]}'
+                resolution = f"{resolution[1]}x{resolution[0]}"
 
                 resolutions[resolution] = resolutions.get(resolution, 0) + int(bucket["count"])
 
             resolutions_list = sorted(resolutions.keys(), key=resolutions.get, reverse=True)
             resolutions_text = ", ".join(resolutions_list)
 
-            table.append(('Resolutions' if len(resolutions_list) > 1 else 'Resolution', resolutions_text))
+            table.append(("Resolutions", resolutions_text))
 
         image_count = 0
         for _, params in metadata.get("ss_dataset_dirs", {}).items():
@@ -119,7 +118,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         tags = build_tags(metadata)
         gradio_tags = [(tag, str(count)) for tag, count in tags[0:24]]
 
-        version = user_metadata.get('sd_version_str') or item.get('sd_version_str')
+        version = user_metadata.get("sd_version_str") or item.get("sd_version_str")
         if version:
             version = version[10:]
         else:
@@ -129,30 +128,31 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
             *values[0:5],
             version,
             gr.update(value=gradio_tags, visible=True if tags else False),
-            user_metadata.get('activation text', ''),
-            float(user_metadata.get('preferred weight', 1.0)),
-            user_metadata.get('negative text', ''),
+            user_metadata.get("activation text", ""),
+            float(user_metadata.get("preferred weight", 1.0)),
+            user_metadata.get("negative text", ""),
         ]
 
     def create_extra_default_items_in_left_column(self):
-        self.select_sd_version = gr.Radio(['SD1', 'SD2', 'SDXL', 'SD3', 'Anima', 'ERNIE', 'Flux', 'Klein', 'Krea2', 'Zimage', 'Unknown'], value='Unknown', label='Base model', interactive=True)
+        self.select_sd_version = gr.Radio(["SD1", "SD2", "SDXL", "SD3", "Anima", "ERNIE", "Flux", "Klein", "Krea2", "Zimage", "Unknown"], value="Unknown", label="Base model", interactive=True)
 
     def create_editor(self):
         self.create_default_editor_elems()
 
-        self.taginfo = gr.HighlightedText(label='Training tags')
-        self.edit_activation_text = gr.Text(label='Activation text', info='Will be added to prompt along with Lora', value='')
-        self.edit_negative_text = gr.Text(label='Negative prompt', info='Will be added to negative prompts', value='')
-        self.slider_preferred_weight = gr.Slider(label='Preferred weight', minimum=0.0, maximum=2.0, value=1.0, step=0.01)
-        self.edit_notes = gr.TextArea(label='Notes', lines=4)
+        self.taginfo = gr.HighlightedText(label="Training tags")
+        self.edit_activation_text = gr.Text(label="Activation text", placeholder="Will be added to prompt along with LoRA", value="", elem_id="lora_activation")
+        with gr.Row():
+            self.edit_negative_text = gr.Text(label="Negative prompt", placeholder="Will be added to negative prompt", value="", elem_id="lora_negative")
+            self.preferred_weight = gr.Number(label="LoRA weight", minimum=-50.0, maximum=50.0, value=1.0, step=0.01, scale=0)
+        self.edit_notes = gr.TextArea(label="Notes", lines=3)
 
         def select_tag(activation_text, evt: gr.SelectData):
             tag = evt.value[0]
 
-            if activation_text == '':
+            if activation_text == "":
                 return tag
             if activation_text == tag:
-                return ''
+                return ""
 
             words = re.split(re_comma, activation_text)
             if tag in words:
@@ -174,7 +174,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
             self.select_sd_version,
             self.taginfo,
             self.edit_activation_text,
-            self.slider_preferred_weight,
+            self.preferred_weight,
             self.edit_negative_text,
         ]
 
@@ -186,10 +186,9 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
             self.edit_description,
             self.select_sd_version,
             self.edit_activation_text,
-            self.slider_preferred_weight,
+            self.preferred_weight,
             self.edit_negative_text,
             self.edit_notes,
         ]
-
 
         self.setup_save_handler(self.button_save, self.save_lora_user_metadata, edited_components)
