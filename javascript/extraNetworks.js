@@ -251,7 +251,6 @@ function tryToRemoveExtraNetworkFromPrompt(textarea, text, isNeg) {
     var m = text.match(isNeg ? re_extranet_neg : re_extranet);
     var replaced = false;
     var newTextareaText;
-    var extraTextBeforeNet = opts.extra_networks_add_text_separator;
     if (m) {
         var extraTextAfterNet = m[2];
         var partToSearch = m[1];
@@ -269,12 +268,12 @@ function tryToRemoveExtraNetworkFromPrompt(textarea, text, isNeg) {
             if (extraTextAfterNet && newTextareaText.substr(foundAtPosition, extraTextAfterNet.length) == extraTextAfterNet) {
                 newTextareaText = newTextareaText.substr(0, foundAtPosition) + newTextareaText.substr(foundAtPosition + extraTextAfterNet.length);
             }
-            if (newTextareaText.substr(foundAtPosition - extraTextBeforeNet.length, extraTextBeforeNet.length) == extraTextBeforeNet) {
-                newTextareaText = newTextareaText.substr(0, foundAtPosition - extraTextBeforeNet.length) + newTextareaText.substr(foundAtPosition);
+            if (newTextareaText[foundAtPosition - 1] == " ") {
+                newTextareaText = newTextareaText.substr(0, foundAtPosition - 1) + newTextareaText.substr(foundAtPosition);
             }
         }
     } else {
-        newTextareaText = textarea.value.replaceAll(new RegExp(`((?:${extraTextBeforeNet})?${text})`, "g"), "");
+		newTextareaText = textarea.value.replaceAll(new RegExp(`(?:\\s*?)?${text}`, "g"), "");
         replaced = (newTextareaText != textarea.value);
     }
 
@@ -288,7 +287,12 @@ function tryToRemoveExtraNetworkFromPrompt(textarea, text, isNeg) {
 
 function updatePromptArea(text, textArea, isNeg) {
     if (!tryToRemoveExtraNetworkFromPrompt(textArea, text, isNeg)) {
-        textArea.value = textArea.value + opts.extra_networks_add_text_separator + text;
+        if (textArea.value !== "") {
+            textArea.value = textArea.value + " " + text;
+		}
+        else {
+            textArea.value = text;
+		}	
     }
 
     updateInput(textArea);
