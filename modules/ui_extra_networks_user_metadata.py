@@ -17,27 +17,23 @@ class UserMetadataEditor:
         self.id_part = f"{self.tabname}_{self.page.extra_networks_tabname}_edit_user_metadata"
 
         self.box = None
-
         self.edit_name_input = None
         self.button_edit = None
-
         self.edit_name = None
         self.edit_description = None
         self.edit_notes = None
         self.html_filedata = None
         self.html_preview = None
-
-        # self.button_cancel = None
         self.button_replace_preview = None
         self.button_save = None
 
     def get_user_metadata(self, name):
         item = self.page.items.get(name, {})
 
-        user_metadata = item.get('user_metadata', None)
+        user_metadata = item.get("user_metadata", None)
         if not user_metadata:
-            user_metadata = {'description': item.get('description', '')}
-            item['user_metadata'] = user_metadata
+            user_metadata = {"description": item.get("description", "")}
+            item["user_metadata"] = user_metadata
 
         return user_metadata
 
@@ -45,25 +41,21 @@ class UserMetadataEditor:
         pass
 
     def create_default_editor_elems(self):
+        self.edit_name = gr.Markdown()
+        self.edit_description = gr.Textbox(show_label=False, label="", placeholder="Description: searchable", lines=1)
         with gr.Row():
             with gr.Column(scale=2):
-                self.edit_name = gr.Markdown()
-                self.edit_description = gr.Textbox(label="Description", lines=4)
                 self.html_filedata = gr.Markdown()
 
                 self.create_extra_default_items_in_left_column()
 
             with gr.Column(scale=1, min_width=0):
                 self.html_preview = gr.HTML()
+                self.button_replace_preview = gr.Button("Replace preview", variant="primary")
 
     def create_default_buttons(self):
-
         with gr.Row(elem_classes="edit-user-metadata-buttons"):
-            # self.button_cancel = gr.Button('Cancel')
-            self.button_replace_preview = gr.Button('Replace preview', variant='primary')
-            self.button_save = gr.Button('Save', variant='primary')
-
-        # self.button_cancel.click(fn=None, js="closePopup")
+            self.button_save = gr.Button("Save", variant="primary")
 
     def get_card_html(self, name):
         item = self.page.items.get(name, {})
@@ -101,10 +93,10 @@ class UserMetadataEditor:
 
             stats = os.stat(filename)
             params = [
-                ('File path', filename),
-                ('File size', sysinfo.pretty_bytes(stats.st_size)),
-                ('Hash', shorthash),
-                ('Modified', datetime.datetime.fromtimestamp(stats.st_mtime).strftime('%Y-%m-%d %H:%M')),
+                ("File path", filename),
+                ("File size", sysinfo.pretty_bytes(stats.st_size)),
+                ("Hash", shorthash),
+                ("Modified", datetime.datetime.fromtimestamp(stats.st_mtime).strftime("%Y-%m-%d %H:%M")),
             ]
 
             return params
@@ -121,16 +113,16 @@ class UserMetadataEditor:
             errors.display(e, f"reading metadata info for {name}")
             params = []
 
-        table = "| *metadata* | *value* | \n|---|---|\n" + "\n".join(f"| {name} | {html.escape(str(value))} |" for name, value in params if value is not None)
+        table = "| *metadata* | *value* |\n|---|---|\n" + "\n".join(f"| {name} | {html.escape(str(value))} |" for name, value in params if value is not None)
 
-        return f'## {name}', user_metadata.get('description', ''), table, self.get_card_html(name), user_metadata.get('notes', '')
+        return f"## {name}", user_metadata.get("description", ""), table, self.get_card_html(name), user_metadata.get("notes", "")
 
     def write_user_metadata(self, name, metadata):
         item = self.page.items.get(name, {})
         filename = item.get("filename", None)
         basename, ext = os.path.splitext(filename)
 
-        metadata_path = basename + '.json'
+        metadata_path = basename + ".json"
         with open(metadata_path, "w", encoding="utf8") as file:
             json.dump(metadata, file, indent=4, ensure_ascii=False)
         self.page.lister.update_file_entry(metadata_path)
@@ -150,7 +142,7 @@ class UserMetadataEditor:
     def create_editor(self):
         self.create_default_editor_elems()
 
-        self.edit_notes = gr.TextArea(label='Notes', lines=4)
+        self.edit_notes = gr.TextArea(label="Notes", lines=3)
 
         self.create_default_buttons()
 

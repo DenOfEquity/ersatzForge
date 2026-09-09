@@ -13,7 +13,7 @@ embedding_db.load_textual_inversion_embeddings(find_only=True)
 
 class ExtraNetworksPageTextualInversion(ui_extra_networks.ExtraNetworksPage):
     def __init__(self):
-        super().__init__('Textual Inversion')
+        super().__init__("Textual Inversion")
         self.allow_prompt = True
         self.allow_negative_prompt = True
 

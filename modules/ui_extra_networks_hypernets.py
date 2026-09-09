@@ -11,7 +11,7 @@ class HypernetUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEdi
         super().__init__(ui, tabname, page)
 
         self.edit_activation_text = None
-        self.slider_preferred_weight = None
+        self.preferred_weight = None
 
     def save_hypernet_user_metadata(self, name, desc, activation_text, preferred_weight, notes):
         user_metadata = self.get_user_metadata(name)
@@ -37,10 +37,11 @@ class HypernetUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEdi
     def create_editor(self):
         self.create_default_editor_elems()
 
-        self.edit_activation_text = gr.Text(label='Activation text', info="Will be added to prompt along with Hypernetwork")
-        self.slider_preferred_weight = gr.Slider(label='Preferred weight', info="Set to 0 to disable", minimum=0.0, maximum=2.0, value=1.0, step=0.01)
+        with gr.Row():
+            self.edit_activation_text = gr.Text(label="Activation text", placeholder="Will be added to prompt along with Hypernetwork")
+            self.preferred_weight = gr.Number(label="Weight", minimum=-5.0, maximum=5.0, value=1.0, step=0.01, scale=0)
 
-        self.edit_notes = gr.TextArea(label='Notes', lines=4)
+        self.edit_notes = gr.TextArea(label="Notes", lines=3)
 
         self.create_default_buttons()
 
@@ -51,7 +52,7 @@ class HypernetUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEdi
             self.html_preview,
             self.edit_notes,
             self.edit_activation_text,
-            self.slider_preferred_weight,
+            self.preferred_weight,
         ]
 
         self.button_edit\
@@ -61,7 +62,7 @@ class HypernetUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEdi
         edited_components = [
             self.edit_description,
             self.edit_activation_text,
-            self.slider_preferred_weight,
+            self.preferred_weight,
             self.edit_notes,
         ]
 
