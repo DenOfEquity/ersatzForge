@@ -63,8 +63,8 @@ class KohyaHRFixForForge(scripts.Script):
                 end_percent = gr.Slider(label='End Percent', value=0.35, minimum=0.0, maximum=1.0, step=0.001)
             downscale_after_skip = gr.Checkbox(label='Downscale After Skip', value=True)
             with gr.Row():
-                downscale_method = gr.Dropdown(label='Downscale Method', choices=upscale_methods, value=upscale_methods[0])
-                upscale_method = gr.Dropdown(label='Upscale Method', choices=upscale_methods, value=upscale_methods[0])
+                downscale_method = gr.Dropdown(label='Downscale Method', choices=upscale_methods, value=upscale_methods[0], filterable=False)
+                upscale_method = gr.Dropdown(label='Upscale Method', choices=upscale_methods, value=upscale_methods[0], filterable=False)
             phase2 = gr.Checkbox(label='Do second phase (auto calculated)', value=False)
 
         self.infotext_fields = [
