@@ -31,7 +31,7 @@ class NeverOOMForForge(scripts.Script):
                 tile_method = gr.Radio(label="Tile decode method", choices=["original", "diffusers", "DoE"], value="original")
             controlnet_on_cpu = gr.Checkbox(label="Enabled for ControlNet (stored on CPU)", value=False)
             with gr.Row():
-                tiled_conv2d = gr.Dropdown(label="Tiled conv2d", choices=["Disabled", "64", "96", "128"], value="Disabled", type="value", scale=0)
+                tiled_conv2d = gr.Dropdown(label="Tiled conv2d", choices=["Disabled", "64", "96", "128"], value="Disabled", type="value", scale=0, filterable=False)
         return unet_enabled, vae_enabled, controlnet_on_cpu, tile_size_x, tile_size_y, tile_overlap, tile_method, tiled_conv2d
 
     def process(self, p, *script_args, **kwargs):
