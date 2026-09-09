@@ -382,6 +382,7 @@ class ControlNetUiGroup(object):
                 label="Control mode",
                 elem_id=f"{tabname}_controlnet_control_mode_radio",
                 elem_classes="controlnet_control_mode_radio",
+                filterable=False,
             )
             self.resize_mode = gr.Dropdown(
                 choices=[e.value for e in external_code.ResizeMode],
@@ -390,6 +391,7 @@ class ControlNetUiGroup(object):
                 elem_id=f"{tabname}_controlnet_resize_mode_radio",
                 elem_classes="controlnet_resize_mode_radio",
                 visible=not self.is_img2img,
+                filterable=False,
             )
             self.hr_option = gr.Dropdown(
                 choices=[e.value for e in HiResFixOption],
@@ -398,6 +400,7 @@ class ControlNetUiGroup(object):
                 elem_id=f"{tabname}_controlnet_hr_option_radio",
                 elem_classes="controlnet_hr_option_radio",
                 visible=not self.is_img2img,
+                filterable=False,
             )
 
         self.timestep_range.change(
