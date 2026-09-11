@@ -69,6 +69,7 @@ extra_networks_symbol = "\U0001F3B4"  # 🎴
 switch_values_symbol = "\U000021C5" # ⇅
 detect_image_size_symbol = "\U0001F4D0"  # 📐
 
+last_img2img_width_0 = False
 
 def roundM(i, m):
     i = int(i)
@@ -200,7 +201,7 @@ def ordered_ui_categories():
 
 
 def create_override_settings_dropdown(tabname, row):
-    dropdown = gr.Dropdown([], label="Override settings", visible=False, elem_id=f"{tabname}_override_settings", multiselect=True)
+    dropdown = gr.Dropdown([], label="Override settings", visible=False, elem_id=f"{tabname}_override_settings", multiselect=True, filterable=False)
 
     dropdown.change(
         fn=lambda x: gr.update(visible=bool(x)),
@@ -229,8 +230,8 @@ def create_ui():
     with gr.Blocks(analytics_enabled=False, head=canvas_head) as txt2img_interface:
         toprow = ui_toprow.Toprow(id_part="txt2img")
 
-        dummy_component = gr.Textbox(visible=False)
-        dummy_component_number = gr.Number(visible=False)
+        dummy_component = gr.Textbox(visible=False, interactive=False)
+        dummy_component_number = gr.Number(visible=False, interactive=False)
 
         extra_tabs = gr.Tabs(elem_id="txt2img_extra_tabs", elem_classes=["extra-networks"])
         extra_tabs.__enter__()
@@ -517,7 +518,7 @@ def create_ui():
 
                             with gr.TabItem("Batch", id="batch", elem_id="img2img_batch_tab") as tab_batch:
                                 with gr.Tabs(elem_id="img2img_batch_source"):
-                                    img2img_batch_source_type = gr.Textbox(visible=False, value="upload")
+                                    img2img_batch_source_type = gr.Textbox(visible=False, value="upload", interactive=False)
                                     with gr.TabItem("Upload", id="batch_upload", elem_id="img2img_batch_upload_tab") as tab_batch_upload:
                                         img2img_batch_upload = gr.Files(label="Files", interactive=True, elem_id="img2img_batch_upload")
                                     with gr.TabItem("From directory", id="batch_from_dir", elem_id="img2img_batch_from_dir_tab") as tab_batch_from_dir:
@@ -543,13 +544,14 @@ def create_ui():
                     elif category == "dimensions":
                         with FormRow():
                             with gr.Column(elem_id="img2img_column_size", scale=4):
-                                selected_scale_tab = gr.Number(value=0, visible=False)
+                                selected_scale_tab = gr.Number(value=0, visible=False, interactive=False)
 
                                 with gr.Tabs(elem_id="img2img_tabs_resize"):
                                     with gr.Tab(label="Resize to", id="to", elem_id="img2img_tab_resize_to") as tab_scale_to:
                                         with gr.Row():
                                             width = gr.Slider(minimum=256, maximum=4096, step=8, label="Width", value=512, elem_id="img2img_width")
                                             res_switch_btn = ToolButton(value=switch_values_symbol, elem_id="img2img_res_switch_btn", tooltip="Switch width/height")
+                                            #does this button have value?
                                         with gr.Row():
                                             height = gr.Slider(minimum=256, maximum=4096, step=8, label="Height", value=512, elem_id="img2img_height")
                                             detect_image_size_btn = ToolButton(value=detect_image_size_symbol, elem_id="img2img_detect_image_size_btn", tooltip="Auto detect size from img2img")
@@ -567,6 +569,9 @@ def create_ui():
                                         scale_by = gr.Slider(info="(no image)", minimum=0.05, maximum=4.0, step=0.01, label="Scale", value=1.0, elem_id="img2img_scale")
                                         scale_by_html = FormHTML("", elem_id="img2img_scale_resolution_preview", visible=False)
                                         # FormHTML for compatibility with ForgeCouple
+
+                                    with gr.Tab(label="Preserve aspect ratio", id="md", elem_id="img2img_tab_resize_by") as tab_scale_md:
+                                        max_dim = gr.Slider(minimum=256, maximum=4096, step=8, label="Maximum dimension", value=512, elem_id="img2img_max_dim")
 
                                     on_change_args = dict(
                                         fn=resize_from_to_html,
@@ -590,6 +595,7 @@ def create_ui():
 
                             tab_scale_to.select(fn=lambda: 0, inputs=None, outputs=[selected_scale_tab])
                             tab_scale_by.select(fn=lambda: 1, inputs=None, outputs=[selected_scale_tab])
+                            tab_scale_md.select(fn=lambda: 2, inputs=None, outputs=[selected_scale_tab])
 
                             with gr.Column(elem_id="img2img_column_batch"):
                                 batch_count = gr.Slider(minimum=1, step=1, label="Batch count", value=1, elem_id="img2img_batch_count")
@@ -626,9 +632,9 @@ def create_ui():
                             inpaint_full_res_padding = gr.Slider(label="Mask padding", minimum=0, maximum=256, step=4, value=32, elem_id="img2img_inpaint_full_res_padding")
 
                         with FormRow():
-                            inpainting_mask_invert = gr.Dropdown(label="Mask mode", choices=["Inpaint masked", "Inpaint not masked"], value="Inpaint masked", type="index", elem_id="img2img_mask_mode")
-                            inpainting_fill = gr.Dropdown(label="Masked content", choices=["fill", "original", "latent noise", "latent nothing", "lama", "MAT"], value="original", type="index", elem_id="img2img_inpainting_fill")
-                            inpaint_full_res = gr.Dropdown(label="Inpaint area", choices=["Whole picture", "Only masked"], type="index", value="Whole picture", elem_id="img2img_inpaint_full_res")
+                            inpainting_mask_invert = gr.Dropdown(label="Mask mode", choices=["Inpaint masked", "Inpaint not masked"], value="Inpaint masked", type="index", elem_id="img2img_mask_mode", filterable=False)
+                            inpainting_fill = gr.Dropdown(label="Masked content", choices=["fill", "original", "latent noise", "latent nothing", "lama", "MAT"], value="original", type="index", elem_id="img2img_inpainting_fill", filterable=False)
+                            inpaint_full_res = gr.Dropdown(label="Inpaint area", choices=["Whole picture", "Only masked"], type="index", value="Whole picture", elem_id="img2img_inpaint_full_res", filterable=False)
 
                     if category not in {"accordions"}:
                         scripts.scripts_img2img.setup_ui_for_section(category)
@@ -660,6 +666,7 @@ def create_ui():
                 height,
                 width,
                 scale_by,
+                max_dim,
                 resize_mode,
                 inpaint_full_res,
                 inpaint_full_res_padding,
@@ -757,7 +764,7 @@ def create_ui():
             image = gr.Image(elem_id="pnginfo_image", label="Source", source="upload", interactive=True, type="pil", height="50vh")
 
             with gr.Column(variant="panel"):
-                generation_info = gr.Textbox(visible=False, elem_id="pnginfo_generation_info")
+                generation_info = gr.Textbox(visible=False, elem_id="pnginfo_generation_info", interactive=False)
                 html2 = gr.HTML()
                 with gr.Row():
                     buttons = parameters_copypaste.create_buttons(["txt2img", "img2img", "extras"])
