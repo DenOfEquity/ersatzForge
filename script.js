@@ -153,6 +153,7 @@ document.addEventListener('keydown', function(e) {
 
     if (isCtrlKey && isEnter) {
         if (interruptButton.style.display === "none" || interruptButton.style.display === "") {
+            deBounceAll();
             generateButton.click();
             e.preventDefault();
         }
