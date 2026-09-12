@@ -4,6 +4,8 @@
 //   hardcoded delay, doesn't need to be an option
 //   removed some event listeners, seemed unnecessary
 
+function deBounceAll() {;}
+
 (function () {
     /**
      * Gradio re-evaluates its whole component tree on every value change, which costs ~75 ms
@@ -83,8 +85,9 @@
 
         document.addEventListener("input", onInput, true);
         document.addEventListener("pointerdown", flushAll, true);
-// not checking for modifier keys (so fast typing then Ctrl+Enter to generate could be outdated?), blur (timeout short enough)
-// even pointerdown is barely justified
+
+        // standard Ctrl+Enter handler (in script.js) modified to call deBounceAll before sending click to Generate button
+        deBounceAll = flushAll;
     }
 
     onUiLoaded(() => {
