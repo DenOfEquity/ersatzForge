@@ -40,7 +40,7 @@ class OpenposeEditor(object):
         self.render_button = gr.Button(visible=False, elem_classes=["cnet-render-pose"])
         # The hidden element that stores the pose json for backend retrieval.
         # The front-end javascript will write the edited JSON data to the element.
-        self.pose_input = gr.Textbox(visible=False, elem_classes=["cnet-pose-json"])
+        self.pose_input = gr.Textbox(visible=False, elem_classes=["cnet-pose-json"], interactive=False)
 
         self.modal = ModalInterface(
             # Use about:blank here as placeholder so that the iframe does not
