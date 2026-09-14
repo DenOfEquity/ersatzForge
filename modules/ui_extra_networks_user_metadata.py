@@ -9,7 +9,6 @@ from modules import infotext_utils, images, sysinfo, errors, ui_extra_networks, 
 
 
 class UserMetadataEditor:
-
     def __init__(self, ui, tabname, page):
         self.ui = ui
         self.tabname = tabname
@@ -156,7 +155,7 @@ class UserMetadataEditor:
         with gr.Box(visible=False, elem_id=self.id_part, elem_classes="edit-user-metadata") as box:
             self.box = box
 
-            self.edit_name_input = gr.Textbox("Edit user metadata card id", visible=False, elem_id=f"{self.id_part}_name")
+            self.edit_name_input = gr.Textbox("Edit user metadata card id", visible=False, elem_id=f"{self.id_part}_name", interactive=False)
             self.button_edit = gr.Button("Edit user metadata", visible=False, elem_id=f"{self.id_part}_button")
 
             self.create_editor()
