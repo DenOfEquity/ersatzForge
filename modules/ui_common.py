@@ -73,7 +73,7 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
             toprow.submit_box.render()
 
         with gr.Group(elem_id=f"{tabname}_gallery_container"):
-            dummy = gr.Number(value=0, visible=False)
+            dummy = gr.Number(value=0, visible=False, interactive=False)
 
             res.gallery = gr.Gallery(label="Output", show_label=False, elem_id=f"{tabname}_gallery", columns=4, preview=True, height=shared.opts.gallery_height or None, interactive=False, type="pil", object_fit="contain")
 
@@ -99,7 +99,7 @@ def create_output_panel(tabname, outdir, toprow=None):  # used by txt2img, img2i
         if tabname == "extras":
             res.generation_info = gr.HTML(elem_id=f"html_info_{tabname}")
         else:
-            res.generation_info = gr.Textbox(visible=False, elem_id=f"generation_info_{tabname}")
+            res.generation_info = gr.Textbox(visible=False, elem_id=f"generation_info_{tabname}", interactive=False)
             res.infotext = gr.HTML(elem_id=f"html_info_{tabname}", elem_classes="infotext")
             res.gallery.select(fn=update_generation_info, js="function(x, y, z){ return [x, y, selected_gallery_index()] }", inputs=[res.generation_info, res.infotext, dummy], outputs=[res.infotext], show_progress="hidden")
 
