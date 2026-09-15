@@ -679,7 +679,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
     elif p.sampler_name == "Fixed-ODE":
         generation_params["Fixed-ODE solver"] = opts.fixed_ode_solver
 
-    if p.sampler_name in ["DEIS", "Euler", "Euler a", "Euler a na", "Extended Reverse-Time SDE", "Heun", "LCM"] and opts.TAG_t_guidance != 1.0:
+    if p.sampler_name in ["DEIS", "Euler", "Euler a", "Euler a na", "Extended Reverse-Time SDE", "Heun", "LCM", "SSPRK3"] and opts.TAG_t_guidance != 1.0:
         generation_params["TAG_t"] = opts.TAG_t_guidance
         generation_params["TAG_r"] = opts.TAG_r_guidance
         generation_params["TAG_start"] = opts.TAG_start
