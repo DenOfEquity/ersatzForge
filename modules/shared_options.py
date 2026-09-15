@@ -55,7 +55,7 @@ options_templates.update(options_section(("saving-images", "Saving images/grids"
     "target_side_length": OptionInfo(4000, "Width/height limit for the above option, in pixels", gr.Number),
     "img_max_size_mp": OptionInfo(200, "Maximum image size", gr.Number).info("in megapixels"),
 
-    "use_original_name_batch": OptionInfo(True, "Use original name for output filename during batch process in extras tab"),
+    "use_original_name_batch": OptionInfo(True, "Use original name for output filename during batch process in Extras tab"),
 
     "temp_dir":  OptionInfo("", "Directory for temporary images; leave empty for default"),
     "clean_temp_dir_at_start": OptionInfo(False, "Cleanup non-default temporary directory when starting webui"),
@@ -65,13 +65,11 @@ options_templates.update(options_section(("saving-paths", "Paths for saving", "s
     "outdir_samples": OptionInfo("", "Output directory for images; if empty, defaults to three directories below", component_args=hide_dirs),
     "outdir_txt2img_samples": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "txt2img-images")), "Output directory for txt2img images", component_args=hide_dirs),
     "outdir_img2img_samples": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "img2img-images")), "Output directory for img2img images", component_args=hide_dirs),
-    "outdir_extras_samples": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "extras-images")), "Output directory for images from extras tab", component_args=hide_dirs),
+    "outdir_extras_samples": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "extras-images")), "Output directory for images from Extras tab", component_args=hide_dirs),
     "outdir_grids": OptionInfo("", "Output directory for grids; if empty, defaults to two directories below", component_args=hide_dirs),
     "outdir_txt2img_grids": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "txt2img-grids")), "Output directory for txt2img grids", component_args=hide_dirs),
     "outdir_img2img_grids": OptionInfo(util.truncate_path(os.path.join(default_output_dir, "img2img-grids")), "Output directory for img2img grids", component_args=hide_dirs),
-}))
 
-options_templates.update(options_section(("saving-to-dirs", "Saving to a directory", "saving"), {
     "save_to_dirs": OptionInfo(True, "Save images to a subdirectory"),
     "grid_save_to_dirs": OptionInfo(True, "Save grids to a subdirectory"),
     "directories_filename_pattern": OptionInfo("[date]", "Directory name pattern", component_args=hide_dirs).link("wiki", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Custom-Images-Filename-Name-and-Subdirectory"),
@@ -194,7 +192,7 @@ For img2img, VAE is used to process user's input image before the sampling, and 
 }))
 
 options_templates.update(options_section(("img2img", "img2img", "sd"), {
-    "upscaler_for_img2img": OptionInfo(None, "Upscaler for img2img", gr.Dropdown, lambda: {"choices": [x.name for x in shared.sd_upscalers]}),
+    "upscaler_for_img2img": OptionInfo(None, "Upscaler for img2img", gr.Dropdown, lambda: {"choices": [x.name for x in shared.sd_upscalers], "filterable": False}),
     "inpainting_mask_weight": OptionInfo(1.0, "Inpainting conditioning mask strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="Conditional mask weight"),
     "initial_noise_multiplier": OptionInfo(1.0, "Noise multiplier for img2img", gr.Slider, {"minimum": 0.0, "maximum": 1.5, "step": 0.001}, infotext="Noise multiplier"),
     "img2img_extra_noise": OptionInfo(0.0, "Extra noise multiplier for img2img and hires fix", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="Extra noise").info("0 = disabled (default); value will be clamped to <= 0.5 * denoising strength"),
@@ -269,10 +267,10 @@ options_templates.update(options_section(("ui", "User interface", "ui"), {
     "localization": OptionInfo("None", "Localization", gr.Dropdown, lambda: {"choices": ["None"] + list(localization.localizations.keys())}, refresh=lambda: localization.list_localizations(cmd_opts.localizations_dir)).needs_reload_ui(),
     "quick_setting_list": OptionInfo([], "Quicksettings list", ui_components.DropdownMulti, lambda: {"choices": list(shared.opts.data_labels.keys())}).js("info", "settingsHintsShowQuicksettings").info("setting entries that appear at the top of page rather than in settings tab").needs_reload_ui(),
 #make a 'useful' list for quicksettings?
-    "ui_tab_order": OptionInfo([], "UI tab order", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)}).needs_reload_ui(),
-    "hidden_tabs": OptionInfo([], "Hidden UI tabs", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)[2:]}).needs_reload_ui(),
-    "tabs_without_quick_settings_bar": OptionInfo(["Spaces"], "UI tabs without Quicksettings bar (top row)", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)}),
-    "ui_reorder_list": OptionInfo([], "UI item order for txt2img/img2img tabs", ui_components.DropdownMulti, lambda: {"choices": list(shared_items.ui_reorder_categories())}).info("selected items appear first").needs_reload_ui(),
+    "ui_tab_order": OptionInfo([], "UI tab order", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names), "filterable": False}).needs_reload_ui(),
+    "hidden_tabs": OptionInfo([], "Hidden UI tabs", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)[2:], "filterable": False}).needs_reload_ui(),
+    "tabs_without_quick_settings_bar": OptionInfo(["Spaces"], "UI tabs without Quicksettings bar (top row)", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names), "filterable": False}),
+    "ui_reorder_list": OptionInfo([], "UI item order for Txt2img/Img2img tabs", ui_components.DropdownMulti, lambda: {"choices": list(shared_items.ui_reorder_categories())}).info("selected items appear first").needs_reload_ui(),
     "gradio_theme": OptionInfo("Default", "Gradio theme", ui_components.DropdownEditable, lambda: {"choices": ["Default"] + shared_gradio_themes.gradio_hf_hub_themes}).info("you can also manually enter any of themes from the <a href='https://huggingface.co/spaces/gradio/theme-gallery'>gallery</a>.").needs_reload_ui(),
     "gradio_themes_cache": OptionInfo(True, "Cache gradio themes locally").info("disable to update the selected Gradio theme"),
     "show_progress_in_title": OptionInfo(True, "Show generation progress in window title."),
@@ -368,11 +366,25 @@ options_templates.update(options_section(("sampler-params", "Sampler parameters"
     "beta_dist_beta": OptionInfo(0.6, "Beta scheduler - beta", gr.Slider, {"minimum": 0.01, "maximum": 1.0, "step": 0.01}, infotext="Beta beta").info("Default = 0.6; the beta parameter of the beta distribution used in Beta sampling"),
     "sigmoid_base_c": OptionInfo(0.5, "Sigmoid offset scheduler - base c", gr.Slider, {"minimum": -50.0, "maximum": 50.0, "step": 0.01}, infotext="base c").info("Default = 0.5; the base c parameter of the Sigmoid offset scheduler sampling"),
     "sigmoid_square_k": OptionInfo(1.0, "Sigmoid offset scheduler - square k", gr.Slider, {"minimum": 0.01, "maximum": 10.0, "step": 0.01}, infotext="square k").info("Default = 1.0; the square k parameter of the Sigmoid offset scheduler sampling"),
+
+    "TAG_explanation": OptionHTML("""
+<h3>Tangential Amplifying Guidance: https://arxiv.org/abs/2510.04533, https://github.com/hyeon-cho/Tangential-Amplifying-Guidance</h3>
+Implemented for <b>DEIS</b>, <b>Euler (a) (na)</b>, <b>Extended Reverse-Time SDE</b>, <b>Heun</b>, <b>LCM</b>.</br>
+Processing cost is insignificant.
+<ul>
+<li><i>tangential guidance</i> recommended: 1.2 (Euler), 1.05 (Euler a) (1.0 = disabled)</li>
+<li><i>radial guidance</i> default: 1.0, probably best left alone?</li>
+</ul>
+"""),
+    "TAG_t_guidance": OptionInfo(1.0, "Tangential Amplifying Guidance - tangential guidance", gr.Slider, {"minimum": 0.5, "maximum": 2.0, "step": 0.01}, infotext="TAG_t"),
+    "TAG_r_guidance": OptionInfo(1.0, "Tangential Amplifying Guidance - radial guidance", gr.Slider, {"minimum": 0.5, "maximum": 2.0, "step": 0.01}, infotext="TAG_r"),
+    "TAG_start": OptionInfo(0.0, "Tangential Amplifying Guidance - start step (inclusive)", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="TAG_start"),
+    "TAG_stop": OptionInfo(1.0, "Tangential Amplifying Guidance - stop step (inclusive)", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="TAG_stop"),
 }))
 
 options_templates.update(options_section(("postprocessing", "Postprocessing", "postprocessing"), {
-    "postprocessing_enable_in_main_ui": OptionInfo([], "Enable postprocessing operations in txt2img and img2img tabs", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()]}).needs_reload_ui(),
-    "postprocessing_disable_in_extras": OptionInfo([], "Disable postprocessing operations in extras tab", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()]}).needs_reload_ui(),
+    "postprocessing_enable_in_main_ui": OptionInfo([], "Enable postprocessing operations in Txt2img and Img2img tabs", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()], "filterable": False}).needs_reload_ui(),
+    "postprocessing_disable_in_extras": OptionInfo([], "Disable postprocessing operations in Extras tab", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()], "filterable": False}).needs_reload_ui(),
     "postprocessing_operation_order": OptionInfo([], "Postprocessing operation order", ui_components.DropdownMulti, lambda: {"choices": [x.name for x in shared_items.postprocessing_scripts()]}),
     "upscaling_max_images_in_cache": OptionInfo(5, "Maximum number of images in upscaling cache", gr.Slider, {"minimum": 0, "maximum": 10, "step": 1}),
 }))
