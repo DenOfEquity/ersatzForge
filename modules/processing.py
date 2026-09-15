@@ -679,6 +679,13 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
     elif p.sampler_name == "Fixed-ODE":
         generation_params["Fixed-ODE solver"] = opts.fixed_ode_solver
 
+    if p.sampler_name in ["DEIS", "Euler", "Euler a", "Euler a na", "Extended Reverse-Time SDE", "Heun", "LCM"] and opts.TAG_t_guidance != 1.0:
+        generation_params["TAG_t"] = opts.TAG_t_guidance
+        generation_params["TAG_r"] = opts.TAG_r_guidance
+        generation_params["TAG_start"] = opts.TAG_start
+        generation_params["TAG_stop"] = opts.TAG_stop
+        
+
     # if HiRes fix was used, p.firstpass_use_distilled_cfg_scale is appropriately set, otherwise it doesn't exist
     firstpass_use_distilled_cfg_scale = getattr(p,"firstpass_use_distilled_cfg_scale", p.sd_model.use_distilled_cfg_scale)
     if firstpass_use_distilled_cfg_scale:
