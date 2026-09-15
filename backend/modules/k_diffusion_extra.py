@@ -3,7 +3,7 @@ import math
 
 from tqdm import tqdm, trange
 
-from k_diffusion.sampling import default_noise_sampler
+from k_diffusion.sampling import default_noise_sampler, TangentialAmplifyingGuidance
 from modules import shared
 
 
@@ -265,6 +265,8 @@ def sample_er_sde(model, x, sigmas, extra_args=None, callback=None, disable=None
     """Extended Reverse-Time SDE solver (VP ER-SDE-Solver-3). arXiv: https://arxiv.org/abs/2309.06169.
     Code reference: https://github.com/QinpengCui/ER-SDE-Solver/blob/main/er_sde_solver.py.
     """
+    TAG = TangentialAmplifyingGuidance(len(sigmas) - 1)
+
     extra_args = {} if extra_args is None else extra_args
     noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
     s_in = x.new_ones([x.shape[0]])
@@ -285,6 +287,8 @@ def sample_er_sde(model, x, sigmas, extra_args=None, callback=None, disable=None
     old_denoised_d = None
 
     for i in trange(len(sigmas) - 1, disable=disable):
+        TAG.pre(x, i)
+
         denoised = model(x, sigmas[i] * s_in, **extra_args)
         if callback is not None:
             callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
@@ -322,6 +326,11 @@ def sample_er_sde(model, x, sigmas, extra_args=None, callback=None, disable=None
             if s_noise > 0:
                 x = x + alpha_t * noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * (er_lambda_t ** 2 - er_lambda_s ** 2 * r ** 2).sqrt()#.nan_to_num(nan=0.0)
         old_denoised = denoised
+
+        x = TAG.post(x)
+
+    del TAG
+
     return x
 #### end: ER-SDE
 
@@ -495,10 +504,14 @@ def sample_ssprk3(model, x: torch.Tensor, *, sigmas=None, extra_args=None, callb
     if steps <= 0:
         return x
 
+    TAG = TangentialAmplifyingGuidance(steps)
+
     s_in = x.new_ones(x.shape[0])
     eps_sigma = torch.tensor(1e-8).to(x)
 
     for i in trange(steps, disable=disable):
+        TAG.pre(x, i)
+
         s0 = sigmas[i]
         s1 = sigmas[i + 1]
         h = s1 - s0
@@ -546,5 +559,8 @@ def sample_ssprk3(model, x: torch.Tensor, *, sigmas=None, extra_args=None, callb
         if callback is not None:
             callback({"i": i, "sigma": s0, "sigma_next": s1, "x": x, "denoised": den3})
 
+        x = TAG.post(x)
+
+    del TAG
     return x
 #### end SSPRK3
