@@ -129,8 +129,79 @@ class BrownianTreeNoiseSampler:
         return self.tree(t0, t1) / (t1 - t0).abs().sqrt()
 
 
+class TangentialAmplifyingGuidance:
+    # https://arxiv.org/abs/2510.04533, https://github.com/hyeon-cho/Tangential-Amplifying-Guidance
+
+    # should be applicable to any sampler
+
+    def __init__(self, steps):
+        # usage, at start of sampler function: TAG = TangentialAmplifyingGuidance(len(sigmas) - 1)
+        self.t_guidance = shared.opts.TAG_t_guidance
+        self.r_guidance = shared.opts.TAG_r_guidance
+        self.start = shared.opts.TAG_start * (steps - 1)
+        self.stop = shared.opts.TAG_stop * (steps - 1)
+
+    def pre(self, x, step):
+        # usage, at start of steps loop (before first model call): TAG.pre(x, i)
+        if self.t_guidance != 1.0 and self.start <= step <= self.stop:
+            self.original_latent = x.clone()
+        else:
+            self.original_latent = None
+
+    def post(self, post_latent):
+        # usage, at end of steps loop (after sampler calculations): x = TAG.post(x)
+        if self.original_latent is not None:
+            v_t_2d        = self.original_latent / (self.original_latent.norm(p=2, dim=(1,2,3), keepdim=True) + 1e-6)
+
+            delta_latents = post_latent - self.original_latent
+            delta_unit    = (delta_latents * v_t_2d).sum(dim=(1,2,3), keepdim=True)
+
+            normal_update_vector     = delta_unit * v_t_2d
+            tangential_update_vector = delta_latents - normal_update_vector
+
+            post_latent = self.original_latent + \
+                self.t_guidance * tangential_update_vector + \
+                self.r_guidance * normal_update_vector
+
+            self.original_latent = None
+
+        return post_latent
+
+    # finally, before sampler returns result: del TAG
+
+
 @torch.no_grad()
 def sample_euler(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1.):
+    """Implements Algorithm 2 (Euler steps) from Karras et al. (2022)."""
+    TAG = TangentialAmplifyingGuidance(len(sigmas) - 1)
+
+    extra_args = {} if extra_args is None else extra_args
+    s_in = x.new_ones([x.shape[0]])
+    for i in trange(len(sigmas) - 1, disable=disable):
+        TAG.pre(x, i)
+
+        gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
+        sigma_hat = sigmas[i] * (gamma + 1)
+        if gamma > 0:
+            eps = torch.randn_like(x) * s_noise
+            x.add_(eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5)
+
+        denoised = model(x, sigma_hat * s_in, **extra_args)
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigma_hat, 'denoised': denoised})
+
+        d = to_d(x, sigma_hat, denoised)
+        x.addcmul_(d, sigmas[i + 1] - sigma_hat)
+
+        x = TAG.post(x)
+
+    del TAG
+
+    return x
+
+
+@torch.no_grad()
+def sample_euler_original(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1.):
     """Implements Algorithm 2 (Euler steps) from Karras et al. (2022)."""
     extra_args = {} if extra_args is None else extra_args
     s_in = x.new_ones([x.shape[0]])
@@ -154,6 +225,9 @@ def sample_euler(model, x, sigmas, extra_args=None, callback=None, disable=None,
 @torch.no_grad()
 def sample_euler_ancestral(model, x, sigmas, extra_args=None, callback=None, disable=None, eta=1., s_noise=1., noise_sampler=None, noise_attenuation=False):
     """Ancestral sampling with Euler method steps."""
+
+    TAG = TangentialAmplifyingGuidance(len(sigmas) - 1)
+
     extra_args = {} if extra_args is None else extra_args
     noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
     s_in = x.new_ones([x.shape[0]])
@@ -162,6 +236,8 @@ def sample_euler_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
     use_flow_method = hasattr(model.inner_model.predictor, "shift") or hasattr(model.inner_model.predictor, "mu")
 
     for i in trange(len(sigmas) - 1, disable=disable):
+        TAG.pre(x, i)
+
         denoised = model(x, sigmas[i] * s_in, **extra_args)
 
         if callback is not None:
@@ -178,8 +254,7 @@ def sample_euler_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
             alpha = 1.0
 
             d = to_d(x, sigmas[i], denoised)
-            d.mul_(sigma_down - sigmas[i])
-            x.add_(d)
+            x.addcmul_(d, sigma_down - sigmas[i])
 
         if eta > 0 and sigmas[i + 1] > 0:
             if noise_attenuation and p is not None:
@@ -196,7 +271,11 @@ def sample_euler_ancestral(model, x, sigmas, extra_args=None, callback=None, dis
                 x.mul_(alpha)
                 x.add_(noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * sigma_up)
                 # x = alpha * x + noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * sigma_up
- 
+
+        x = TAG.post(x)
+
+    del TAG
+
     return x
 
 @torch.no_grad()
@@ -207,9 +286,14 @@ def sample_euler_ancestral_na(model, x, sigmas, extra_args=None, callback=None, 
 @torch.no_grad()
 def sample_heun(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1.):
     """Implements Algorithm 2 (Heun steps) from Karras et al. (2022)."""
+
+    TAG = TangentialAmplifyingGuidance(len(sigmas) - 1)
+
     extra_args = {} if extra_args is None else extra_args
     s_in = x.new_ones([x.shape[0]])
     for i in trange(len(sigmas) - 1, disable=disable):
+        TAG.pre(x, i)
+
         gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
         sigma_hat = sigmas[i] * (gamma + 1)
         if gamma > 0:
@@ -230,6 +314,11 @@ def sample_heun(model, x, sigmas, extra_args=None, callback=None, disable=None, 
             d_2 = to_d(x_2, sigmas[i + 1], denoised_2)
             d_prime = (d + d_2) / 2
             x.add_(d_prime * dt)
+
+        x = TAG.post(x)
+
+    del TAG
+
     return x
 
 
@@ -640,6 +729,33 @@ def sample_dpmpp_sde(model, x, sigmas, extra_args=None, callback=None, disable=N
 
 
 @torch.no_grad()
+def sample_dpmpp_2m_o(model, x, sigmas, extra_args=None, callback=None, disable=None):
+    """DPM-Solver++(2M)."""
+    extra_args = {} if extra_args is None else extra_args
+    s_in = x.new_ones([x.shape[0]])
+    old_denoised = None
+
+    sigma_t = sigmas.log().neg()
+
+
+    for i in trange(len(sigmas) - 1, disable=disable):
+        denoised = model(x, sigmas[i] * s_in, **extra_args)
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
+        t, t_next = sigma_t[i], sigma_t[i + 1]
+        h = t_next - t
+        if old_denoised is None or sigmas[i + 1] == 0:
+            x = (sigmas[i+1] / sigmas[i]) * x - (-h).expm1() * denoised
+        else:
+            h_last = t - sigma_t[i - 1]
+            r = h_last / h
+            denoised_d = (1 + 1 / (2 * r)) * denoised - (1 / (2 * r)) * old_denoised
+            x = (sigmas[i+1] / sigmas[i]) * x - (-h).expm1() * denoised_d
+        old_denoised = denoised.clone()
+    return x
+
+
+@torch.no_grad()
 def sample_dpmpp_2m(model, x, sigmas, extra_args=None, callback=None, disable=None):
     """DPM-Solver++(2M)."""
     extra_args = {} if extra_args is None else extra_args
@@ -663,6 +779,8 @@ def sample_dpmpp_2m(model, x, sigmas, extra_args=None, callback=None, disable=No
             x = (sigma_fn(t_next) / sigma_fn(t)) * x - (-h).expm1() * denoised_d
         old_denoised = denoised
     return x
+
+
 
 
 @torch.no_grad()
@@ -706,7 +824,7 @@ def sample_dpmpp_2m_sde(model, x, sigmas, extra_args=None, callback=None, disabl
 
             h_last = h
 
-        old_denoised = denoised
+        old_denoised = denoised.clone()
     return x
 
 
@@ -757,7 +875,8 @@ def sample_dpmpp_3m_sde(model, x, sigmas, extra_args=None, callback=None, disabl
 
             h_1, h_2 = h, h_1
 
-        denoised_1, denoised_2 = denoised, denoised_1
+        denoised_2 = denoised_1.clone() if denoised_1 is not None else None
+        denoised_1 = denoised.clone()
     return x
 
 @torch.no_grad()
@@ -922,6 +1041,8 @@ def sample_ipndm_v(model, x, sigmas, extra_args=None, callback=None, disable=Non
 #under Apache 2 license
 @torch.no_grad()
 def sample_deis(model, x, sigmas, extra_args=None, callback=None, disable=None):
+    TAG = TangentialAmplifyingGuidance(len(sigmas) - 1)
+
     max_order = int(shared.opts.deis_order)
     deis_mode = shared.opts.deis_mode
     
@@ -935,6 +1056,8 @@ def sample_deis(model, x, sigmas, extra_args=None, callback=None, disable=None):
 
     buffer_model = []
     for i in trange(len(sigmas) - 1, disable=disable):
+        TAG.pre(x, i)
+
         t_cur = sigmas[i]
         t_next = sigmas[i + 1]
 
@@ -967,5 +1090,9 @@ def sample_deis(model, x, sigmas, extra_args=None, callback=None, disable=None):
                 buffer_model[-1] = d_cur.detach()
             else:
                 buffer_model.append(d_cur.detach())
+
+        x_next = TAG.post(x_next)
+
+    del TAG
 
     return x_next
