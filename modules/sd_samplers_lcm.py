@@ -1,11 +1,13 @@
 import torch
 
-from k_diffusion.sampling import default_noise_sampler, trange
+from k_diffusion.sampling import default_noise_sampler, trange, TangentialAmplifyingGuidance
 from modules import shared, sd_samplers_kdiffusion, sd_samplers_common
 
 
 @torch.no_grad()
 def sample_lcm(model, x, sigmas, extra_args=None, callback=None, disable=None, noise_sampler=None):
+    TAG = TangentialAmplifyingGuidance(len(sigmas) - 1)
+
     extra_args = {} if extra_args is None else extra_args
     noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
     s_in = x.new_ones([x.shape[0]])
@@ -19,6 +21,8 @@ def sample_lcm(model, x, sigmas, extra_args=None, callback=None, disable=None, n
     previous4 = None
 
     for i in trange(len(sigmas) - 1, disable=disable):
+        TAG.pre(x, i)
+
         denoised = model(x, sigmas[i] * s_in, **extra_args)
 
         if callback is not None:
@@ -50,6 +54,11 @@ def sample_lcm(model, x, sigmas, extra_args=None, callback=None, disable=None, n
             if scale < 1.0 and noise_scaling.item() > 1.0:
                 noise_scaling **= scale
             x = model.inner_model.predictor.noise_scaling(noise_scaling, noise_sampler(sigmas[i], sigmas[i + 1]), x)
+
+        x = TAG.post(x)
+
+    del TAG
+
     return x
 
 
