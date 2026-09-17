@@ -117,14 +117,14 @@ class ersatzOtherControl(scripts.Script):
                             with gradio.Row():
                                 k_image1_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 k_image1_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                k_image1_dims = gradio.Textbox(visible=False, value="0")
+                                k_image1_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                         with gradio.Column():
                             k_image2 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                             with gradio.Row():
                                 swap12 = ToolButton("\U000021C4")
                                 k_image2_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 k_image2_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                k_image2_dims = gradio.Textbox(visible=False, value="0")
+                                k_image2_dims = gradio.Textbox(visible=False, value="0", interactive=False)
 
                         k_image1.change(fn=get_dims, inputs=[k_image1, selected_tab], outputs=[k_image1_info, k_image1_send, k_image1_dims], show_progress="hidden")
                         k_image2.change(fn=get_dims, inputs=[k_image2, selected_tab], outputs=[k_image2_info, k_image2_send, k_image2_dims], show_progress="hidden")
@@ -132,7 +132,7 @@ class ersatzOtherControl(scripts.Script):
                         k_image2_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, k_image2_dims], outputs=None)
 
                     with gradio.Row():
-                        kontext_sizing = gradio.Dropdown(label="Kontext image size/crop", choices=["no change", "to output", "to BFL recommended"], value="to BFL recommended")
+                        kontext_sizing = gradio.Dropdown(label="Kontext image size/crop", choices=["no change", "to output", "to BFL recommended"], value="to BFL recommended", filterable=False)
                         kontext_reduce = gradio.Checkbox(False, info="This reduction is independent of the size/crop setting.", label="reduce to half width and height")
 
                     def kontext_swap(imageA, imageB):
@@ -147,7 +147,7 @@ class ersatzOtherControl(scripts.Script):
                             with gradio.Row():
                                 klein_1_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 klein_1_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                klein_1_dims = gradio.Textbox(visible=False, value="0")
+                                klein_1_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                             with gradio.Row():
                                 klein_1_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                 klein_1_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
@@ -156,7 +156,7 @@ class ersatzOtherControl(scripts.Script):
                             with gradio.Row():
                                 klein_2_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 klein_2_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                klein_2_dims = gradio.Textbox(visible=False, value="0")
+                                klein_2_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                             with gradio.Row():
                                 klein_2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                 klein_2_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
@@ -167,7 +167,7 @@ class ersatzOtherControl(scripts.Script):
                                 with gradio.Row():
                                     klein_3_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                     klein_3_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                    klein_3_dims = gradio.Textbox(visible=False, value="0")
+                                    klein_3_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                                 with gradio.Row():
                                     klein_3_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                     klein_3_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
@@ -176,7 +176,7 @@ class ersatzOtherControl(scripts.Script):
                                 with gradio.Row():
                                     klein_4_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                     klein_4_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                    klein_4_dims = gradio.Textbox(visible=False, value="0")
+                                    klein_4_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                                 with gradio.Row():
                                     klein_4_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
                                     klein_4_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
@@ -203,7 +203,7 @@ class ersatzOtherControl(scripts.Script):
                             with gradio.Row():
                                 z_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 z_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                z_image_dims = gradio.Textbox(visible=False, value="0")
+                                z_image_dims = gradio.Textbox(visible=False, value="0", interactive=False)
 
                         z_image.background.change(fn=get_dims, inputs=[z_image.background, selected_tab], outputs=[z_image_info, z_image_send, z_image_dims], show_progress="hidden")
                         z_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z_image_dims], outputs=None)
@@ -215,7 +215,7 @@ class ersatzOtherControl(scripts.Script):
                             k2_image = ForgeCanvas(height=300, contrast_scribbles=True, scribble_alpha=50)
                         with gradio.Column():
                             with gradio.Row():
-                                k2_edit_type = gradio.Dropdown(label="Edit LoRA type", choices=["", "ConradLocke", "Ostris"], value="")
+                                k2_edit_type = gradio.Dropdown(label="Edit LoRA type", choices=["", "ConradLocke", "Ostris"], value="", filterable=False)
                                 k2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True)
                             k2_mask_mode = gradio.Radio(value="unmasked", choices=["masked", "unmasked"], label="Target area")
                             with gradio.Row():
@@ -229,7 +229,7 @@ class ersatzOtherControl(scripts.Script):
                             with gradio.Row():
                                 k2_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 k2_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                k2_image_dims = gradio.Textbox(visible=False, value="0")
+                                k2_image_dims = gradio.Textbox(visible=False, value="0", interactive=False)
 
                         k2_image.background.change(fn=get_dims, inputs=[k2_image.background, selected_tab], outputs=[k2_image_info, k2_image_send, k2_image_dims], show_progress="hidden")
                         k2_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, k2_image_dims], outputs=None)
