@@ -17,7 +17,6 @@ class ExtraNetworkLora(extra_networks.ExtraNetwork):
         names = []
         te_multipliers = []
         unet_multipliers = []
-        dyn_dims = []
         for params in params_list:
             assert params.items
 
@@ -30,13 +29,9 @@ class ExtraNetworkLora(extra_networks.ExtraNetwork):
             if te_multiplier == 0.0 and unet_multiplier == 0.0:
                 continue
 
-            dyn_dim = int(params.positional[3]) if len(params.positional) > 3 else None
-            dyn_dim = int(params.named["dyn"]) if "dyn" in params.named else dyn_dim
-
             names.append(params.positional[0])
             te_multipliers.append(te_multiplier)
             unet_multipliers.append(unet_multiplier)
-            dyn_dims.append(dyn_dim)
 
         networks.load_networks(names, te_multipliers, unet_multipliers, dyn_dims)
 

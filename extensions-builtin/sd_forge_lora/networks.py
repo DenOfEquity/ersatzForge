@@ -157,7 +157,7 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
     return model, clip
 
 
-def load_networks(names, te_multipliers=None, unet_multipliers=None, dyn_dims=None):
+def load_networks(names, te_multipliers=None, unet_multipliers=None):
     if shared.sd_model is None:
         return
 
