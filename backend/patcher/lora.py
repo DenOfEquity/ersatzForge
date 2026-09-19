@@ -1,24 +1,14 @@
 import torch
 
-# import packages.webui_lora_collection.lora as lora_utils_webui
-import packages.comfyui_lora_collection.lora as lora_utils_comfyui
-
+import packages.comfyui_lora_collection.lora as lora_utils
 from backend import memory_management, utils
 
 
 extra_weight_calculators = {}
-# lora_collection_priority = [lora_utils_webui, lora_utils_comfyui]
-lora_collection_priority = [lora_utils_comfyui]
-
-
-def get_function(function_name: str):
-    for lora_collection in lora_collection_priority:
-        if hasattr(lora_collection, function_name):
-            return getattr(lora_collection, function_name)
 
 
 def load_lora(lora, to_load):
-    patch_dict, remaining_dict = get_function("load_lora")(lora, to_load)
+    patch_dict, remaining_dict = lora_utils.load_lora(lora, to_load)
     return patch_dict, remaining_dict
 
 
@@ -27,7 +17,7 @@ def inner_str(k, prefix="", suffix=""):
 
 
 def model_lora_keys_clip(model, key_map={}):
-    model_keys, key_maps = get_function("model_lora_keys_clip")(model, key_map)
+    model_keys, key_maps = lora_utils.model_lora_keys_clip(model, key_map)
 
     for model_key in model_keys:
         if model_key.endswith(".weight"):
@@ -42,7 +32,7 @@ def model_lora_keys_clip(model, key_map={}):
 
 
 def model_lora_keys_unet(model, key_map={}):
-    model_keys, key_maps = get_function("model_lora_keys_unet")(model, key_map)
+    model_keys, key_maps = lora_utils.model_lora_keys_unet(model, key_map)
 
     return key_maps
 
