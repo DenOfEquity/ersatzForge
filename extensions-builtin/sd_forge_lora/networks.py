@@ -149,7 +149,7 @@ def load_lora_for_models(model, clip, lora, strength_model, strength_clip, filen
         loaded = len(loaded_keys)
         skipped_keys = len(lora_clip) - loaded
         skipped_message = f"; {cc.MINOR}{skipped_keys} keys mismatched{cc.RESET}" if skipped_keys else ""
-        print(f"    loaded {loaded} keys for {cc.LOAD2}CLIP{cc.RESET} at weight {strength_model} with on_the_fly={online_mode}{skipped_message}")
+        print(f"    loaded {loaded} keys for {cc.LOAD2}CLIP{cc.RESET} at weight {strength_clip} with on_the_fly={online_mode}{skipped_message}")
 
         if loaded > 0:
             clip = new_clip
@@ -184,7 +184,7 @@ def load_networks(names, te_multipliers=None, unet_multipliers=None):
             continue
         try:
             net = network.Network(names[i], networks_on_disk[i])
-            net.mtime = os.path.getmtime(networks_on_disk[i].filename)
+            # net.mtime = os.path.getmtime(networks_on_disk[i].filename)
             net.mentioned_name = names[i]
             networks_on_disk[i].read_hash()
             loaded_networks.append(net)

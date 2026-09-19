@@ -130,12 +130,11 @@ class NetworkOnDisk:
 
 class Network:
     def __init__(self, name, network_on_disk: NetworkOnDisk):
-        self.name = name
+        # self.name = name
         self.network_on_disk = network_on_disk
         self.te_multiplier = 1.0
         self.unet_multiplier = 1.0
-        self.dyn_dim = None
-        self.modules = {}
-        self.bundle_embeddings = {}
-        self.mtime = None
+        # self.modules = {}
+        # self.bundle_embeddings = {}
+        # self.mtime = None
         self.mentioned_name = None
