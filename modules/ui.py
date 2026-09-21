@@ -69,7 +69,6 @@ extra_networks_symbol = "\U0001F3B4"  # 🎴
 switch_values_symbol = "\U000021C5" # ⇅
 detect_image_size_symbol = "\U0001F4D0"  # 📐
 
-last_img2img_width_0 = False
 
 def roundM(i, m):
     i = int(i)
@@ -103,23 +102,36 @@ def calc_resolution_hires(enable, width, height, hr_scale, hr_resize_x, hr_resiz
     return f"from <span class='resolution'>{width}×{height}</span> to <span class='resolution'>{new_width}×{new_height}</span>"
 
 
-def resize_from_to_html(width, height, scale_by):
-    target_width  = int(float(width)  * scale_by)
-    target_height = int(float(height) * scale_by)
+def resize_from_to_html(width, height, scale_by, max_dim):
+    width = int(width)
+    height = int(height)
 
-    if not target_width or not target_height:
-        return gr.Slider(info="(no image)"), ""
+    if not width or not height:
+        return gr.Slider(info="(no image)"), gr.Slider(info="(no image)"), ""
+
+    target_width_s  = int(width  * scale_by)
+    target_height_s = int(height * scale_by)
+    ar = width / height
+    if ar >= 1.0:
+        target_width_m = max_dim
+        target_height_m = int(max_dim / ar)
+    else:
+        target_width_m = int(max_dim * ar)
+        target_height_m = max_dim
 
     if sd_models.model_data.sd_model is not None:
         factor = 8 if sd_models.model_data.sd_model.is_webui_legacy_model() else 16
     else:
         factor = 16
-    target_width  = roundM(target_width, factor)
-    target_height = roundM(target_height, factor)
+    target_width_s  = roundM(target_width_s, factor)
+    target_height_s = roundM(target_height_s, factor)
+    target_width_m  = roundM(target_width_m, factor)
+    target_height_m = roundM(target_height_m, factor)
 
-    message = f"resize: from {width}×{height} to {target_width}×{target_height}"
+    message_s = f"resize: from {width}×{height} to {target_width_s}×{target_height_s}"
+    message_m = f"resize: from {width}×{height} to {target_width_m}×{target_height_m}"
 
-    return gr.Slider(info=message), message
+    return gr.Slider(info=message_s), gr.Slider(info=message_m), message_s
 
 
 def process_interrogate(interrogation_function, mode, ii_input_dir, ii_output_dir, *ii_singles):
@@ -242,11 +254,10 @@ def create_ui():
 
                 scripts.scripts_txt2img.prepare_ui()
 
-                for category in ordered_ui_categories():
-                    if category == "prompt":
-                        toprow.create_inline_toprow_prompts()
+                toprow.create_inline_toprow_prompts()   # forced prompt first
 
-                    elif category == "dimensions":
+                for category in ordered_ui_categories():
+                    if category == "dimensions":
                         with FormRow():
                             with gr.Column(elem_id="txt2img_column_size", scale=4):
                                 width = gr.Slider(minimum=256, maximum=4096, step=8, label="Width", value=512, elem_id="txt2img_width")
@@ -500,48 +511,42 @@ def create_ui():
 
                 scripts.scripts_img2img.prepare_ui()
 
+                toprow.create_inline_toprow_prompts()  # forced prompts first
+
+                with gr.Tabs(elem_id="mode_img2img"):  # forced image second
+                    img2img_selected_tab = gr.State(value=0)
+
+                    with gr.TabItem("img2img", id="img2img", elem_id="img2img_img2img_tab") as tab_img2img:
+                        init_img = ForgeCanvas(elem_id="img2img_image", height=512, scribble_color="#ffffff")
+                        i2i_method = gr.Radio(choices=["img2img", "sketch", "inpaint", "inpaint+", "lama (no save)", "MAT (no save)"], value="img2img", show_label=False)
+
+                    with gr.TabItem("Inpaint upload", id="inpaint_upload", elem_id="img2img_inpaint_upload_tab") as tab_inpaint_upload:
+                        init_img_inpaint = gr.Image(label="Image for img2img", show_label=False, sources=["upload", "clipboard"], interactive=True, type="pil", height=360, elem_id="img_inpaint_base")
+                        init_mask_inpaint = gr.Image(label="Mask", sources=["upload", "clipboard"], interactive=True, type="pil", image_mode="RGBA", height=360, elem_id="img_inpaint_mask")
+
+                    with gr.TabItem("Batch", id="batch", elem_id="img2img_batch_tab") as tab_batch:
+                        with gr.Tabs(elem_id="img2img_batch_source"):
+                            img2img_batch_source_type = gr.Textbox(visible=False, value="upload", interactive=False)
+                            with gr.TabItem("Upload", id="batch_upload", elem_id="img2img_batch_upload_tab") as tab_batch_upload:
+                                img2img_batch_upload = gr.Files(label="Files", interactive=True, elem_id="img2img_batch_upload")
+                            with gr.TabItem("From directory", id="batch_from_dir", elem_id="img2img_batch_from_dir_tab") as tab_batch_from_dir:
+                                hidden = " Disabled when launched with --hide-ui-dir-config." if shared.cmd_opts.hide_ui_dir_config else ""
+                                gr.Markdown(f"Process images in a directory on the same machine where the server is running.{hidden}")
+                                img2img_batch_input_dir = gr.Textbox(label="Input directory", **shared.hide_dirs, elem_id="img2img_batch_input_dir")
+                                img2img_batch_output_dir = gr.Textbox(label="Output directory", placeholder="Overrides normal output directory if set", **shared.hide_dirs, elem_id="img2img_batch_output_dir")
+                                img2img_batch_inpaint_mask_dir = gr.Textbox(label="Batch mask directory (for inpaint batch processing only)", **shared.hide_dirs, elem_id="img2img_batch_inpaint_mask_dir")
+
+                            tab_batch_upload.select(fn=lambda: "upload", inputs=None, outputs=[img2img_batch_source_type])
+                            tab_batch_from_dir.select(fn=lambda: "from dir", inputs=None, outputs=[img2img_batch_source_type])
+
+                        with InputAccordion(False, label="Append PNG info", elem_id="img2img_batch_use_png_info") as img2img_batch_use_png_info:
+                            img2img_batch_png_info_dir = gr.Textbox(label="PNG info directory", **shared.hide_dirs, placeholder="Leave empty to use input directory", elem_id="img2img_batch_png_info_dir")
+                            img2img_batch_png_info_props = gr.CheckboxGroup(["Prompt", "Negative prompt", "Seed", "CFG scale", "Sampler", "Schedule type", "Steps", "Model hash"], label="Parameters to take from png info", info="Prompts from png info will be appended to prompts set in UI")
+
+                resize_mode = gr.Radio(label="Resize mode", elem_id="resize_mode", choices=["Just resize", "Crop and resize", "Resize and fill", "Just resize (latent upscale)"], type="index", value="Just resize")
+
                 for category in ordered_ui_categories():
-                    if category == "prompt":
-                        toprow.create_inline_toprow_prompts()
-
-                    if category == "image":
-                        with gr.Tabs(elem_id="mode_img2img"):
-                            img2img_selected_tab = gr.State(value=0)
-
-                            with gr.TabItem("img2img", id="img2img", elem_id="img2img_img2img_tab") as tab_img2img:
-                                init_img = ForgeCanvas(elem_id="img2img_image", height=512, scribble_color="#ffffff")
-                                i2i_method = gr.Radio(choices=["img2img", "sketch", "inpaint", "inpaint+", "lama (no save)", "MAT (no save)"], value="img2img", show_label=False)
-
-                            with gr.TabItem("Inpaint upload", id="inpaint_upload", elem_id="img2img_inpaint_upload_tab") as tab_inpaint_upload:
-                                init_img_inpaint = gr.Image(label="Image for img2img", show_label=False, sources=["upload", "clipboard"], interactive=True, type="pil", height=360, elem_id="img_inpaint_base")
-                                init_mask_inpaint = gr.Image(label="Mask", sources=["upload", "clipboard"], interactive=True, type="pil", image_mode="RGBA", height=360, elem_id="img_inpaint_mask")
-
-                            with gr.TabItem("Batch", id="batch", elem_id="img2img_batch_tab") as tab_batch:
-                                with gr.Tabs(elem_id="img2img_batch_source"):
-                                    img2img_batch_source_type = gr.Textbox(visible=False, value="upload", interactive=False)
-                                    with gr.TabItem("Upload", id="batch_upload", elem_id="img2img_batch_upload_tab") as tab_batch_upload:
-                                        img2img_batch_upload = gr.Files(label="Files", interactive=True, elem_id="img2img_batch_upload")
-                                    with gr.TabItem("From directory", id="batch_from_dir", elem_id="img2img_batch_from_dir_tab") as tab_batch_from_dir:
-                                        hidden = " Disabled when launched with --hide-ui-dir-config." if shared.cmd_opts.hide_ui_dir_config else ""
-                                        gr.Markdown(f"Process images in a directory on the same machine where the server is running.{hidden}")
-                                        img2img_batch_input_dir = gr.Textbox(label="Input directory", **shared.hide_dirs, elem_id="img2img_batch_input_dir")
-                                        img2img_batch_output_dir = gr.Textbox(label="Output directory", placeholder="Overrides normal output directory if set", **shared.hide_dirs, elem_id="img2img_batch_output_dir")
-                                        img2img_batch_inpaint_mask_dir = gr.Textbox(label="Batch mask directory (for inpaint batch processing only)", **shared.hide_dirs, elem_id="img2img_batch_inpaint_mask_dir")
-
-                                    tab_batch_upload.select(fn=lambda: "upload", inputs=None, outputs=[img2img_batch_source_type])
-                                    tab_batch_from_dir.select(fn=lambda: "from dir", inputs=None, outputs=[img2img_batch_source_type])
-
-                                with InputAccordion(False, label="Append PNG info", elem_id="img2img_batch_use_png_info") as img2img_batch_use_png_info:
-                                    img2img_batch_png_info_dir = gr.Textbox(label="PNG info directory", **shared.hide_dirs, placeholder="Leave empty to use input directory", elem_id="img2img_batch_png_info_dir")
-                                    img2img_batch_png_info_props = gr.CheckboxGroup(["Prompt", "Negative prompt", "Seed", "CFG scale", "Sampler", "Schedule type", "Steps", "Model hash"], label="Parameters to take from png info", info="Prompts from png info will be appended to prompts set in UI")
-
-                            tab_img2img.select       (fn=lambda: 0, show_progress="hidden", inputs=None, outputs=img2img_selected_tab)
-                            tab_inpaint_upload.select(fn=lambda: 1, show_progress="hidden", inputs=None, outputs=img2img_selected_tab)
-                            tab_batch.select         (fn=lambda: 2, show_progress="hidden", inputs=None, outputs=img2img_selected_tab)
-
-                        resize_mode = gr.Radio(label="Resize mode", elem_id="resize_mode", choices=["Just resize", "Crop and resize", "Resize and fill", "Just resize (latent upscale)"], type="index", value="Just resize")
-
-                    elif category == "dimensions":
+                    if category == "dimensions":
                         with FormRow():
                             with gr.Column(elem_id="img2img_column_size", scale=4):
                                 selected_scale_tab = gr.Number(value=0, visible=False, interactive=False)
@@ -571,17 +576,18 @@ def create_ui():
                                         # FormHTML for compatibility with ForgeCouple
 
                                     with gr.Tab(label="Preserve aspect ratio", id="md", elem_id="img2img_tab_resize_by") as tab_scale_md:
-                                        max_dim = gr.Slider(minimum=256, maximum=4096, step=8, label="Maximum dimension", value=512, elem_id="img2img_max_dim")
+                                        max_dim = gr.Slider(info="(no image)", minimum=256, maximum=4096, step=8, label="Maximum dimension", value=512, elem_id="img2img_max_dim")
 
                                     on_change_args = dict(
                                         fn=resize_from_to_html,
                                         js="currentImg2imgSourceResolution",
-                                        inputs=[dummy_component, dummy_component, scale_by],
-                                        outputs=[scale_by, scale_by_html],
+                                        inputs=[dummy_component, dummy_component, scale_by, max_dim],
+                                        outputs=[scale_by, max_dim, scale_by_html],
                                         show_progress="hidden",
                                     )
 
                                     scale_by.change(**on_change_args)
+                                    max_dim.change(**on_change_args)
 
                                     def updateWH (img, step):
                                         if img and shared.opts.img2img_autosize:
@@ -592,6 +598,13 @@ def create_ui():
                                     img_sources = [init_img.background, init_img_inpaint]
                                     for i in img_sources:
                                         i.change(fn=updateWH, inputs=[i, gr.State(width.step)], outputs=[width, height], show_progress="hidden").then(**on_change_args)
+
+                            def tab_batch_no_size():
+                                return gr.Slider(info="😊"), gr.Slider(info="😇")
+
+                            tab_img2img.select       (fn=lambda: 0, show_progress="hidden", inputs=None, outputs=img2img_selected_tab).then(**on_change_args)
+                            tab_inpaint_upload.select(fn=lambda: 1, show_progress="hidden", inputs=None, outputs=img2img_selected_tab).then(**on_change_args)
+                            tab_batch.select         (fn=lambda: 2, show_progress="hidden", inputs=None, outputs=img2img_selected_tab).then(fn=tab_batch_no_size, inputs=None, outputs=[scale_by, max_dim], show_progress="hidden")
 
                             tab_scale_to.select(fn=lambda: 0, inputs=None, outputs=[selected_scale_tab])
                             tab_scale_by.select(fn=lambda: 1, inputs=None, outputs=[selected_scale_tab])
