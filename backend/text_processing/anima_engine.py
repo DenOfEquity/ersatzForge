@@ -63,7 +63,10 @@ class AnimaTextProcessingEngine:
             chunk.qwen_tokens.extend(Qwen_tokens)
             chunk.t5_tokens.extend(T5_tokens)
 
-            if opts.use_negPiP:
+            if opts.use_negPiP == "Enabled (+)":
+                chunk.t5_multipliers.extend([1.0] * len(T5_tokens))
+                chunk.negpip.extend([weight] * len(T5_tokens))
+            elif opts.use_negPiP == "Enabled":
                 w = 1.0 if weight < 0.0 else weight
                 chunk.t5_multipliers.extend([w] * len(T5_tokens))
                 w = 1.0 if weight >= 0.0 else weight

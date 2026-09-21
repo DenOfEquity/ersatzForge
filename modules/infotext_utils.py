@@ -499,11 +499,11 @@ Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 965400086, Size: 512x512, Model
     else: # no Hires Module infotext, use default
         res["HiRes VAE/TE"] = ["Use same choices"]
 
-    if "ELLA" not in res:
-        res["ELLA"] = "CLIP (normal)"
+    # if "ELLA" not in res:
+        # res["ELLA"] = "CLIP (normal)"
 
-    if "negPiP" not in res:
-        res["negPiP"] = False
+    if res.get("negPiP") == True:
+        res["negPiP"] = "Enabled"
 
     return res
 

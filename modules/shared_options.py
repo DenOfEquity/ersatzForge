@@ -150,7 +150,7 @@ options_templates.update(options_section(("sd", "Stable Diffusion", "sd"), {
     "cfg_normalization": OptionInfo(0.0, "CFG normalization strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="CFG normalization").info("beneficial for Lumina2, LCM/DMD models"),
     "cfg_rescale": OptionInfo(0.0, "CFG rescale strength", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="CFG rescale"),
 
-    "use_negPiP": OptionInfo(True, "enable negPiP: negative Prompt in Prompt", infotext="negPiP").info("particularly useful for models that use CFG=1. Currently supported for Anima, Flux.2 Klein, Krea2, Z-Image. Effectiveness varies."),
+    "use_negPiP": OptionInfo("Disabled", "enable negPiP: negative Prompt in Prompt", gr.Radio, {"choices": ["Disabled", "Enabled", "Enabled (+)"]}, infotext="negPiP").info("particularly useful for models that use CFG=1. Currently supported for Anima, Flux.2 Klein, Krea2, Z-Image. Effectiveness varies. 'Enabled' handles negative weights; 'Enabled (+)' handles all emphasis."),
 
 }))
 
@@ -369,7 +369,7 @@ options_templates.update(options_section(("sampler-params", "Sampler parameters"
 
     "TAG_explanation": OptionHTML("""
 <h3>Tangential Amplifying Guidance: https://arxiv.org/abs/2510.04533, https://github.com/hyeon-cho/Tangential-Amplifying-Guidance</h3>
-Implemented for <b>DEIS</b>, <b>Euler (a) (na)</b>, <b>Extended Reverse-Time SDE</b>, <b>Heun</b>, <b>LCM</b>.</br>
+Implemented for <b>DEIS</b>, <b>Euler (a) (na)</b>, <b>Extended Reverse-Time SDE</b>, <b>Heun</b>, <b>LCM</b>, <b>SSPRK3</b>.</br>
 Processing cost is insignificant.
 <ul>
 <li><i>tangential guidance</i> recommended: 1.2 (Euler), 1.05 (Euler a) (1.0 = disabled)</li>

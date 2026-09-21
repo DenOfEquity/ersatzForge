@@ -2,7 +2,7 @@
 # https://github.com/comfyanonymous/ComfyUI/blob/v0.3.75/comfy/text_encoders/z_image.py
 
 #via ForgeNeo by Haoming02
-# added emphasis, combining of chunks after BREAK
+# added emphasis, combining of chunks after BREAK, negPiP
 
 
 import torch
@@ -107,11 +107,15 @@ class Qwen3TextProcessingEngine:
                 continue
 
             chunk.tokens.extend(tokens)
-            if opts.use_negPiP and self.use_negPiP:
-                w = 1.0 if weight < 0.0 else weight
-                chunk.multipliers.extend([w] * len(tokens))
-                w = 1.0 if weight >= 0.0 else weight
-                chunk.negpip.extend([w] * len(tokens))
+            if opts.use_negPiP != "Disabled" and self.use_negPiP:
+                if opts.use_negPiP == "Enabled (+)":
+                    chunk.multipliers.extend([1.0] * len(tokens))
+                    chunk.negpip.extend([weight] * len(tokens))
+                else:
+                    w = 1.0 if weight < 0.0 else weight
+                    chunk.multipliers.extend([w] * len(tokens))
+                    w = 1.0 if weight >= 0.0 else weight
+                    chunk.negpip.extend([w] * len(tokens))
             else:
                 chunk.multipliers.extend([weight] * len(tokens))
                 chunk.negpip.extend([1.0] * len(tokens))
