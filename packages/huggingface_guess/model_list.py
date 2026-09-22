@@ -778,7 +778,7 @@ class Krea2(BASE):
         "shift": 1.15,
     }
 
-    memory_usage_factor = 3.0 #TODO
+    memory_usage_factor = 3.0
 
     latent_format = latent.Wan21
 
@@ -792,4 +792,32 @@ class Krea2(BASE):
         return {"qwen3_4b": "text_encoder"}
 
 
-models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, Mugen, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima, Klein4B, Klein9B, ERNIEImage, Krea2]#, WAN21_I2V]
+class QwenImage21(BASE):
+    huggingface_repo = "qwen/QwenImage21"
+
+    unet_config = {
+        "image_model": "qwen_image21",
+    }
+
+    # scheduler mu at 1024x1024 (base 0.5 @ 256 tokens, max 0.9 @ 8192)
+    sampling_settings = {
+        "multiplier": 1.0,
+        "shift": 0.69,
+    }
+
+    memory_usage_factor = 6.0
+
+    unet_extra_config = {}
+    latent_format = latent.QwenImage21
+
+    supported_inference_dtypes = [torch.bfloat16, torch.float32]
+
+    vae_key_prefix = ["vae."]
+    text_encoder_key_prefix = ["text_encoders."]
+    unet_target = "transformer"
+
+    def clip_target(self, state_dict={}):
+        return {"qwen3_8b": "text_encoder"}
+
+
+models = [SD15_instructpix2pix, SD15, SD20, SD21UnclipL, SD21UnclipH, SDXL_instructpix2pix, SDXLRefiner, Mugen, SDXL, SSD1B, SD3, Flux, FluxSchnell, Chroma, ChromaDCT, CosmosT2IPredict2, WAN22_T2V, WAN21_T2V, Lumina2, Zimage, Anima, Klein4B, Klein9B, ERNIEImage, Krea2, QwenImage21]

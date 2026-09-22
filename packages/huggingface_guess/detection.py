@@ -5,6 +5,7 @@ import torch
 from huggingface_guess import model_list
 
 
+# assumes start at zero
 def count_blocks(state_dict_keys, prefix_string):
     count = 0
     while True:
@@ -299,6 +300,29 @@ def detect_unet_config(state_dict, key_prefix):
         dit_config["txtdim"] = state_dict["{}txtfusion.layerwise_blocks.0.prenorm.scale".format(key_prefix)].shape[0]
 
         return dit_config
+
+
+    qwen_image21_keys = ['txt_in.text_norm.weight', 'modulation.1.weight', 'transformer_blocks.0.attn.norm_q.weight', 'img_in.weight', 'proj_out.weight']
+    if all('{}{}'.format(key_prefix, k) in state_dict_keys for k in qwen_image21_keys) and any('{}transformer_blocks.0.img_mlp.{}.weight'.format(key_prefix, k) in state_dict_keys for k in ('gate_up', 'proj')):  # Qwen Image 2.1
+        dit_config = {}
+        dit_config["image_model"] = "qwen_image21"
+        head_dim = state_dict['{}transformer_blocks.0.attn.norm_q.weight'.format(key_prefix)].shape[0]
+        inner_dim = state_dict['{}img_in.weight'.format(key_prefix)].shape[0]
+        dit_config["in_channels"] = state_dict['{}img_in.weight'.format(key_prefix)].shape[1]
+        dit_config["out_channels"] = state_dict['{}proj_out.weight'.format(key_prefix)].shape[0]
+        dit_config["num_layers"] = count_blocks(state_dict_keys, '{}transformer_blocks.'.format(key_prefix) + '{}.')
+        dit_config["attention_head_dim"] = head_dim
+        dit_config["num_attention_heads"] = inner_dim // head_dim
+        dit_config["context_in_dim"] = state_dict['{}txt_in.text_norm.weight'.format(key_prefix)].shape[0]
+        # gate and up projections fuse into one GEMM when their rows can be concatenated: plain weights or per-row scales; a comfy-saved file is already fused
+        gate_up = state_dict.get('{}transformer_blocks.0.img_mlp.gate_up.weight'.format(key_prefix), None)
+        if gate_up is not None:
+            dit_config["mlp_ratio"] = gate_up.shape[0] // 2 // inner_dim
+        else:
+            dit_config["mlp_ratio"] = state_dict['{}transformer_blocks.0.img_mlp.proj.weight'.format(key_prefix)].shape[0] // inner_dim
+        dit_config["fused_mlp"] = gate_up is not None
+        return dit_config
+
 
     if "{}input_blocks.0.0.weight".format(key_prefix) not in state_dict_keys:
         return None

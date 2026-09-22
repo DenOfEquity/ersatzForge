@@ -15,6 +15,7 @@ from backend.state_dict import try_filter_state_dict, load_state_dict, state_dic
 from backend.operations import using_forge_operations
 from backend.nn.vae import IntegratedAutoencoderKL, AutoencoderKLFlux2
 from backend.nn.vae_wan22 import AutoencoderKLWan22
+from backend.nn.vae_qwen21 import AutoencoderQwen21
 from backend.nn.clip import IntegratedCLIP
 from backend.nn.unet import IntegratedUNet2DConditionModel
 
@@ -32,11 +33,12 @@ from backend.diffusion_engine.lumina2 import Lumina2, Zimage
 from backend.diffusion_engine.anima import Anima
 from backend.diffusion_engine.ernie import ERNIE
 from backend.diffusion_engine.krea2 import Krea2
+from backend.diffusion_engine.qwen21 import Qwen21
 
 import modules_forge.colour_code as cc
 
 
-possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux2, Flux, Cosmos, Wan, Zimage, Lumina2, Anima, ERNIE, Krea2]
+possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux2, Flux, Cosmos, Wan, Zimage, Lumina2, Anima, ERNIE, Krea2, Qwen21]
 
 
 logging.getLogger("diffusers").setLevel(logging.ERROR)
@@ -120,6 +122,17 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             load_state_dict(model, state_dict)
             return model
 
+        if cls_name == "AutoencoderQwen21":
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Qwen Image 2.1 VAE!"
+
+            config = AutoencoderQwen21.load_config(config_path)
+
+            with modeling_utils.no_init_weights():
+                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                    model = AutoencoderQwen21.from_config(config)
+
+            load_state_dict(model, state_dict)
+            return model
 
         def state_dict_info(state_dict_dtype, storage_dtype, model_text=""):
             if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
@@ -223,9 +236,12 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             config = read_arbitrary_config(config_path)
 
             if config["hidden_size"] == 4096:
-                if guess.huggingface_repo == "black-forest-labs/FLUX.2-klein-9B": # only need layers 0-27 for Klein9B
-                    config["layers_hack"] = 28
-                from backend.nn.llm.llama import Qwen3_8B as Qwen3
+                if cls_name == "Qwen3VLModel":
+                    from backend.nn.llm.llama import Qwen3VL_8B as Qwen3
+                else:
+                    if guess.huggingface_repo == "black-forest-labs/FLUX.2-klein-9B": # only need layers 0-27 for Klein9B
+                        config["layers_hack"] = 28
+                    from backend.nn.llm.llama import Qwen3_8B as Qwen3
             elif config["hidden_size"] == 2560:
                 if cls_name == "Qwen3VLModel":
                     from backend.nn.llm.llama import Qwen3VL_4B as Qwen3
@@ -317,7 +333,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             return model
 
-        if cls_name in ["UNet2DConditionModel", "FluxTransformer2DModel", "Flux2Transformer2DModel", "SD3Transformer2DModel", "ChromaTransformer2DModel", "ChromaDCT", "CosmosTransformer3DModel", "WanTransformer3DModel", "Lumina2Transformer2DModel", "ERNIEImageModel", "Krea2Transformer2DModel"]:
+        if cls_name in ["UNet2DConditionModel", "FluxTransformer2DModel", "Flux2Transformer2DModel", "SD3Transformer2DModel", "ChromaTransformer2DModel", "ChromaDCT", "CosmosTransformer3DModel", "WanTransformer3DModel", "Lumina2Transformer2DModel", "ERNIEImageModel", "Krea2Transformer2DModel", "QwenImage21Transformer2DModel"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have model state dict!"
 
             model_loader = None
@@ -351,6 +367,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 from backend.nn.krea2 import SingleStreamDiT
                 ctrl_patched = "first_ctrl.weight" in state_dict
                 model_loader = lambda c: SingleStreamDiT(**c, ctrl_patched=ctrl_patched)
+            elif cls_name == "QwenImage21Transformer2DModel":
+                from backend.nn.qwen21 import QwenImage21Transformer2DModel
+                model_loader = lambda c: QwenImage21Transformer2DModel(**c)
             elif cls_name == "Lumina2Transformer2DModel":
                 from backend.nn.lumina2 import Lumina2DiT
                 
@@ -818,7 +837,7 @@ def replace_state_dict(sd, asd, guess):
                 continue
             sd[f"{text_encoder_key_prefix}gemma2_2b.{k}"] = v
 
-    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 8B (Klein9B), 4B[VL] (Z Image, Klein4B) [Krea2], 06B (Anima), ministral3_3b (ERNIE)
+    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 8B[VL] (Klein9B) [QwenImage2.1], 4B[VL] (Z Image, Klein4B) [Krea2], 06B (Anima), ministral3_3b (ERNIE)
         size = asd["model.layers.0.post_attention_layernorm.weight"].shape[0]
         if size == 4096:
             size_str = "qwen3_8b"
@@ -931,10 +950,12 @@ def replace_state_dict(sd, asd, guess):
             for k in list(asd.keys()):
                 sd["model.diffusion_model." + k] = asd.pop(k)
 
-        elif "diffusion_model.blocks.0.attn.gate.lora_A.weight" in asd: # generic LoRA, but specifically edit w/ reference
+        elif "diffusion_model.blocks.0.attn.gate.lora_A.weight" in asd: # generic (no alpha) LoRA, but specifically edit w/ reference
             for k in list(asd.keys()):
-                _k = "model." + k.replace(".lora_A.weight", ".A", 1).replace(".lora_B.weight", ".B", 1)
-                sd[_k] = asd.pop(k)
+                # _k = "model." + k.replace(".lora_A.weight", ".A", 1).replace(".lora_B.weight", ".B", 1)
+                if k.endswith((".lora_A.weight", ".lora_B.weight")):
+                    _k = "model." + k[:-13] + k[-8]
+                    sd[_k] = asd.pop(k)
 
     return sd
 
@@ -962,6 +983,8 @@ def split_state_dict(sd, additional_state_dicts: list = None):
             asd = load_torch_file(asd)
 
             for k in list(asd.keys()):
+                if k.startswith("model.language_model."):
+                    asd[k.replace("model.language_model.", "model.", 1)] = asd.pop(k)
                 if k.endswith(".comfy_quant"):
                     asd.pop(k)
 

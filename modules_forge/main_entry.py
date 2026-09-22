@@ -125,8 +125,8 @@ def make_checkpoint_manager_ui():
         if len(sd_models.checkpoints_list) > 0:
             shared.opts.set("sd_model_checkpoint", next(iter(sd_models.checkpoints_list.values())).name)
 
-    ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value="-", 
-                                  choices=["all", "anima", "chroma", "ernie", "flux", "klein", "krea2", "sd", "sd3", "xl", "zimage"], scale=0, filterable=False)
+    ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value=None, 
+                                  choices=["all", "anima", "chroma", "ernie", "flux", "klein", "krea2", "qwen_2.1", "sd", "sd3", "xl", "zimage"], scale=0, filterable=False)
 
     ui_checkpoint = gr.Dropdown(
         value=lambda: shared.opts.sd_model_checkpoint,
@@ -502,6 +502,7 @@ Code order is: (all must be present)<br/>
     "preset_code_ernie": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Beta, 8", "ERNIE preset code", gr.Textbox, {"max_lines": 1}),
     "preset_code_klein": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 4", "Flux2 Klein preset code", gr.Textbox, {"max_lines": 1}),
     "preset_code_krea2": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Krea2 preset code", gr.Textbox, {"max_lines": 1}),
+    "preset_code_qwen_2.1": shared.OptionInfo("None, 0, 1024, 1024, 3.1, None, Euler a, Simple, 24", "QwenImage 2.1 preset code", gr.Textbox, {"max_lines": 1}),
     "preset_code_zimage": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Z-Image preset code", gr.Textbox, {"max_lines": 1}),
 
 }))

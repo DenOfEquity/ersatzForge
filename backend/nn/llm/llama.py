@@ -1,4 +1,3 @@
-import math
 from dataclasses import asdict, dataclass
 from typing import Optional
 
@@ -104,6 +103,11 @@ class Qwen3_8BConfig:
     k_norm = "gemma3"
     rope_scale = None
     final_norm: bool = True
+    lm_head: bool = True
+    fixed_kv: bool = False
+    merged_qkv: bool = False
+    merged_mlp: bool = False
+    stop_tokens = [151643, 151645]
 
 
 @dataclass
@@ -116,6 +120,16 @@ class Qwen3VL_4BConfig(Qwen3_8BConfig):
     hidden_size: int = 2560
     intermediate_size: int = 9728
     lm_head: bool = False  # 4B ties word embeddings
+
+
+@dataclass
+class Qwen3VL_8BConfig(Qwen3_8BConfig):
+    max_position_embeddings: int = 262144
+    num_hidden_layers: int = 36
+    rope_theta: float = 5000000.0
+    rope_dims = [24, 20, 20]
+    interleaved_mrope = True
+    fixed_kv: bool = True
 
 
 @dataclass
@@ -170,7 +184,7 @@ def precompute_freqs_cis(head_dim, position_ids, theta, rope_scale=None, rope_di
 
     if rope_scale is not None:
         if isinstance(rope_scale, list):
-            inv_freq /= rope_scale[index]
+            inv_freq /= rope_scale[0] # index
         else:
             inv_freq /= rope_scale
 
@@ -535,6 +549,20 @@ class Qwen3_8B(BaseLlama, torch.nn.Module):
             config.num_hidden_layers = config_dict["layers_hack"]
         else:
             config.num_hidden_layers = 36
+        self.num_layers = config.num_hidden_layers
+        self.model = Llama2_(config)
+
+
+class Qwen3VL_8B(BaseLlama, torch.nn.Module):
+    def __init__(self, config_dict):
+        super().__init__()
+        config = Qwen3VL_8BConfig()
+
+        # _config_dict = asdict(config)
+        # for key, value in _config_dict.items():
+            # if key in config_dict:
+                # assert value == config_dict[key]
+
         self.num_layers = config.num_hidden_layers
         self.model = Llama2_(config)
 

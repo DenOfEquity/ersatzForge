@@ -20,7 +20,7 @@ class PromptChunk:
 
 
 class Qwen3TextProcessingEngine:
-    def __init__(self, text_encoder, tokenizer, is_flux2=False, is_ernie=False, is_krea2=False):
+    def __init__(self, text_encoder, tokenizer, is_flux2=False, is_ernie=False, is_krea2=False, is_qwen21=False):
         super().__init__()
 
         self.text_encoder = text_encoder
@@ -28,6 +28,7 @@ class Qwen3TextProcessingEngine:
         self.is_flux2 = is_flux2
         self.is_ERNIE = is_ernie
         self.is_krea2 = is_krea2
+        self.is_qwen21 = is_qwen21
 
         self.id_pad = 0 if is_ernie else 151643
         # self.min_length = 512 if is_flux2 else 1 #flux min 512? or pow2
@@ -38,11 +39,13 @@ class Qwen3TextProcessingEngine:
             # self.intermediate_output = [7, 17, 27]
         elif is_krea2:
             self.intermediate_output = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
+        elif is_qwen21:
+            self.intermediate_output = -1
         else:
             self.intermediate_output = -2
         self.layer_norm_hidden_state = False
 
-        self.use_negPiP = not is_ernie
+        self.use_negPiP = not (is_ernie or is_qwen21)
         # seems to work with Krea2
         # works OK with Z-Image-Turbo, lower strengths better?
         # sometimes works with Flux.2 Klein4B
@@ -62,6 +65,8 @@ class Qwen3TextProcessingEngine:
             extra_length = 3 + 11
         elif self.is_ERNIE:
             extra_length = 1
+        elif self.is_qwen21:
+            extra_length = 8 + 5
         else:
             extra_length = 3 + 5
         return length + extra_length
@@ -92,6 +97,11 @@ class Qwen3TextProcessingEngine:
                 chunk.tokens = [1] + chunk.tokens
                 chunk.multipliers = [1.0] + chunk.multipliers
                 chunk.negpip = [1.0] + chunk.negpip
+            elif self.is_qwen21:
+                #             <|im_start|>system\n<|im_end|>\n<|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
+                chunk.tokens = [151644, 8948, 198, 151645, 198, 151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198]
+                chunk.multipliers = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0]
+                chunk.negpip = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0] + chunk.negpip + [1.0, 1.0, 1.0, 1.0, 1.0]
             else:
                 #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
                 chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198]
@@ -158,6 +168,9 @@ class Qwen3TextProcessingEngine:
                 elif self.is_ERNIE:
                     s = 1
                     e = None
+                elif self.is_qwen21:
+                    s = 8
+                    e = -5
                 else:
                     s = 3
                     e = -5

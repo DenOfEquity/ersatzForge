@@ -36,7 +36,12 @@ def get_weight_and_bias(layer, weight_args=None, bias_args=None, weight_fn=None,
         if weight_args is not None:
             weight = weight.to(**weight_args)
         if scale_weight is not None:
-            weight.mul_(scale_weight.to(device=weight.device, dtype=weight.dtype))
+            try:
+                weight.mul_(scale_weight.to(device=weight.device, dtype=weight.dtype))
+            except:
+                weight = weight.to(torch.float32)
+                weight.mul_(scale_weight.to(device=weight.device, dtype=torch.float32))
+                
         if weight_patches is not None:
             weight = merge_lora_to_weight(patches=weight_patches, weight=weight, key="online weight lora", computation_dtype=weight.dtype)
 
@@ -409,8 +414,23 @@ class ForgeOperations:
         def __init__(self, *args, **kwargs):
             kwargs['device'] = current_device
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype))
+            self.weight = None
+            self.scale_weight = None
             self.bias = None
+            self.parameters_manual_cast = current_manual_cast_enabled
+
+        def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+            ForgeOperations.common_load(self, state_dict, prefix)
+            if hasattr(self, 'dummy'):
+                if prefix + 'weight' in state_dict:
+                    self.weight = torch.nn.Parameter(state_dict[prefix + 'weight'].to(self.dummy))
+
+                if prefix + 'bias' in state_dict:
+                    self.bias = torch.nn.Parameter(state_dict[prefix + 'bias'].to(self.dummy))
+                del self.dummy
+            else:
+                super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
 
         def reset_parameters(self):
             self.bias = None
