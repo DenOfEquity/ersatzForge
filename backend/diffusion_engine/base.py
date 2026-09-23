@@ -66,6 +66,7 @@ class ForgeDiffusionEngine:
         self.is_lumina2 = False
         self.is_ernie = False
         self.is_krea2 = False
+        self.is_qwen21 = False
 
         return
 
