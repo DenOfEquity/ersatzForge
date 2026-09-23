@@ -276,27 +276,34 @@ def create_ui():
                                 ]
                                 def set_res(setting, width, height):
                                     setting = setting.strip()
-                                    if setting.startswith(("÷", "/")):
-                                        factor = float(setting[1:])
-                                        width /= factor
-                                        height /= factor
-                                    elif setting.startswith(("×", "*", "x")):
-                                        factor = float(setting[1:])
-                                        width *= factor
-                                        height *= factor
-                                    elif ":" in setting:
-                                        setting = setting.replace("ɸ", "1.618034")
-                                        aspect = setting.split(" : ", 2)
-                                        ratio = float(aspect[0]) / float(aspect[1])
-                                        num_pixels = width * height
-                                        width = (num_pixels * ratio) ** 0.5
-                                        height = 16 * round((width / ratio) / 16)
-                                        width = height * ratio
-                                    elif "×" in setting:
-                                        width, height = setting.split("×", 2)
-                                        width = float(width)
-                                        height = float(height)
-                                    else:
+                                    try:
+                                        if setting.startswith(("÷", "/")):
+                                            factor = float(setting[1:])
+                                            width /= factor
+                                            height /= factor
+                                        elif setting.startswith(("×", "*", "x")):
+                                            factor = float(setting[1:])
+                                            width *= factor
+                                            height *= factor
+                                        elif ":" in setting:
+                                            setting = setting.replace("ɸ", "1.618034")
+                                            aspect = setting.split(":", 2)
+                                            ratio = float(aspect[0].strip()) / float(aspect[1].strip())
+                                            num_pixels = width * height
+                                            width = (num_pixels * ratio) ** 0.5
+                                            height = 16 * round((width / ratio) / 16)
+                                            width = height * ratio
+                                        elif "×" in setting:
+                                            width, height = setting.split("×", 2)
+                                            width = float(width.strip())
+                                            height = float(height.strip())
+                                        elif "x" in setting:
+                                            width, height = setting.split("x", 2)
+                                            width = float(width.strip())
+                                            height = float(height.strip())
+                                        else:
+                                            return "", gr.skip(), gr.skip()
+                                    except Exception:
                                         return "", gr.skip(), gr.skip()
 
                                     return "", int(16 * round(width/16)), int(16 * round(height / 16))
