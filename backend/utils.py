@@ -57,6 +57,9 @@ def load_torch_file(ckpt, safe_load=False, device=None, return_metadata=False):
                 torch_tensor = torch_tensor.view(*shape)
                 dequant = torch_tensor.view(torch.float16)#.to(torch.float32)
                 sd[tensor_name] = torch.nn.Parameter(dequant, requires_grad=False)
+            elif tensor.tensor_type == gguf.GGMLQuantizationType.BF16:
+                dequant = torch_tensor.view(torch.bfloat16).view(*shape)
+                sd[tensor_name] = torch.nn.Parameter(dequant, requires_grad=False)
             else:
                 sd[tensor_name] = ParameterGGUF(torch_tensor, tensor_type=tensor.tensor_type, tensor_shape=shape)
                 if arch == "cosmos" and tensor_name.startswith("llm_adapter."):
@@ -190,7 +193,7 @@ def get_state_dict_after_quant(model, prefix=''):
 
 
 def beautiful_print_gguf_state_dict_statics(state_dict):
-    type_counts = { "F32": 0, "F16" : 0, }
+    type_counts = { "F32": 0, "F16": 0, "BF16": 0 }
     for _k, v in state_dict.items():
         gguf_cls = getattr(v, "gguf_cls", None)
         if gguf_cls is not None:
@@ -204,6 +207,8 @@ def beautiful_print_gguf_state_dict_statics(state_dict):
                 type_counts["F32"] += 1
             elif v.dtype == torch.float16:
                 type_counts["F16"] += 1
+            elif v.dtype == torch.bfloat16:
+                type_counts["BF16"] += 1
 
     for t in list(type_counts.keys()):
         if type_counts[t] == 0:
