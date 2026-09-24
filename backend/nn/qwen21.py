@@ -1,12 +1,7 @@
 # https://github.com/huggingface/diffusers (Apache 2.0) Qwen-Image 2.1
 # from there to ComfyUI
-# from there to here
-# removed caching, coz it was a mess: diffusers method looks much cleaner
-# and the wrapped attn_fn errored for me
-# inlined calcs instead of using comfy kitchen
-# it works! but maybe not worth the effort. quality seems low, smeared details, bad noisy/gritty look
-# Euler a na helps? less noise = less noisy
-# untested with references
+# from there to here, with some modifications/cleanups
+
 
 import torch
 import torch.nn as nn
@@ -20,23 +15,26 @@ from modules import shared
 
 
 class TimestepEmbedding(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        time_embed_dim: int,
-        sample_proj_bias=True,
-    ):
+    def __init__(self, in_channels: int, time_embed_dim: int, sample_proj_bias=True):
         super().__init__()
 
         self.linear_1 = nn.Linear(in_channels, time_embed_dim, sample_proj_bias)
-        self.act = nn.SiLU()
         self.linear_2 = nn.Linear(time_embed_dim, time_embed_dim, sample_proj_bias)
 
     def forward(self, sample):
         sample = self.linear_1(sample)
-        sample = self.act(sample)
+        sample = F.silu(sample)
         sample = self.linear_2(sample)
         return sample
+
+
+class TimestepProjEmbeddings(nn.Module):
+    def __init__(self, embedding_dim):
+        super().__init__()
+        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim, sample_proj_bias=False)
+
+    def forward(self, timestep, dtype):
+        return self.timestep_embedder(timestep_embedding(timestep.to(torch.float32), 256).to(dtype))
 
 
 class ZeroCenteredRMSNorm(nn.Module):
@@ -62,15 +60,6 @@ class TextProjection(nn.Module):
         return self.out_layer(F.gelu(self.in_layer(self.text_norm(x)), approximate="tanh"))
 
 
-class TimestepProjEmbeddings(nn.Module):
-    def __init__(self, embedding_dim):
-        super().__init__()
-        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim, sample_proj_bias=False)
-
-    def forward(self, timestep, dtype):
-        return self.timestep_embedder(timestep_embedding(timestep.to(torch.float32), 256).to(dtype))
-
-
 class SwiGLUFeedForward(nn.Module):
     def __init__(self, dim, hidden_dim, fused=True):
         super().__init__()
@@ -85,7 +74,7 @@ class SwiGLUFeedForward(nn.Module):
     def forward(self, x):
         if self.fused: #untested
             gate, up = self.gate_up(x).chunk(2, dim=-1)
-            act = nn.SiLU(gate).mul_(up)
+            act = F.silu(gate).mul_(up)
             return self.out(act)
         return self.out(F.silu(self.gate_layer(x)) * self.proj(x))
 
@@ -112,7 +101,7 @@ class Attention(nn.Module):
         self.norm_q = nn.RMSNorm(dim_head, eps=eps)
         self.norm_k = nn.RMSNorm(dim_head, eps=eps)
 
-    def forward(self, x, pe, prefix_len):
+    def forward(self, x, pe, prefix_len, negpip):
         # (B, N, H, D) throughout
         B, N, _ = x.shape
 
@@ -125,6 +114,9 @@ class Attention(nn.Module):
         k = _apply_rope1(k, pe)
 
         v = self.to_v(x)
+        if negpip is not None:
+            y_len = len(negpip)
+            v[:, :y_len, :] *= negpip[:, None]
 
         attn = attention_function(q.flatten(2), k.flatten(2), v, self.heads)
         return self.to_out[0](attn)
@@ -132,7 +124,7 @@ class Attention(nn.Module):
 
 def _split_rows(p):
     # shared modulation rows: (t = 0 row for text and references, sampled-t rows for the target)
-    return p[-1:].unsqueeze(1), p[:-1].unsqueeze(1)
+    return p[:1].unsqueeze(1), p[1:].unsqueeze(1)
 
 
 class QwenImage21TransformerBlock(nn.Module):
@@ -143,13 +135,13 @@ class QwenImage21TransformerBlock(nn.Module):
         self.img_norm2 = nn.LayerNorm(dim, elementwise_affine=False, eps=eps)
         self.img_mlp = SwiGLUFeedForward(dim, dim * mlp_ratio, fused=fused_mlp)
 
-    def forward(self, x, mod, pe, prefix_len):
+    def forward(self, x, mod, pe, prefix_len, negpip):
         (s_prefix1, s_target1), (g_prefix1, g_target1), (s_prefix2, s_target2), (g_prefix2, g_target2) = mod
         norm = self.img_norm1(x)
         norm[:, :prefix_len].mul_(s_prefix1)
         norm[:, prefix_len:].mul_(s_target1)
 
-        attn = self.attn(norm, pe, prefix_len)
+        attn = self.attn(norm, pe, prefix_len, negpip)
         attn[:, :prefix_len].mul_(g_prefix1)
         attn[:, prefix_len:].mul_(g_target1)
         x.add_(attn)
@@ -220,57 +212,55 @@ class QwenImage21Transformer2DModel(nn.Module):
         # text + reference K/V are step-independent (t = 0 modulation, causal prefix), cached for one sampling run
 
 
-    def build_sequence(self, x, context, ref_latents):
+    def build_sequence(self, x, context, ref_latents, ref_strengths):
         # text with each reference image spliced in at its slot, target image last
         txt = self.txt_in(context)
-
-        bounds = [0] + [txt.shape[1]] * (len(ref_latents) + 1)
         parts, ids = [], []
-        pos = 0
-        for (start, end), img in zip(zip(bounds[:-1], bounds[1:]), ref_latents + [x]):
-            n = end - start
-            if n > 0:
-                parts.append(txt[:, start:end])
-                ids.append(torch.arange(pos, pos + n, device=x.device, dtype=torch.float32).unsqueeze(1).expand(n, 3))
-                pos += n
 
-            h, w = img.shape[-2:]
-            parts.append(self.img_in(img.flatten(2).transpose(1, 2)))
-            
-            hh = torch.arange(-(h - h // 2), h // 2, device=x.device, dtype=torch.float32)
-            ww = torch.arange(-(w - w // 2), w // 2, device=x.device, dtype=torch.float32)
-            
-            ids.append(torch.stack([torch.full((h, w), pos, device=x.device, dtype=torch.float32), hh[:, None].expand(h, w), ww[None, :].expand(h, w)], dim=-1).flatten(0, 1))
-            pos += max(h, w)
+        parts.append(txt)
+        pos = txt.shape[1]
+        ids.append(torch.arange(0, pos, device=x.device, dtype=torch.float32).unsqueeze(1).expand(pos, 3))
+        
+        for img, str in zip(ref_latents + [x], ref_strengths + [1.0]): # + (1.0,) if not scaling strength by timestep
+            if img is not None and str > 0.0:
+                h, w = img.shape[-2:]
+                parts.append(self.img_in(img.flatten(2).transpose(1, 2)).mul_(str)) # mul on img or result of img_in is identical
+                
+                hh = torch.arange(-(h - h // 2), h // 2, device=x.device, dtype=torch.float32)
+                ww = torch.arange(-(w - w // 2), w // 2, device=x.device, dtype=torch.float32)
+                
+                ids.append(torch.stack([torch.full((h, w), pos, device=x.device, dtype=torch.float32), hh[:, None].expand(h, w), ww[None, :].expand(h, w)], dim=-1).flatten(0, 1))
+                pos += h*w
 
         # (1, N, 1, ...): the layout the fused rms_rope wants for (B, N, H, D) queries
         pe = self.pe_embedder(torch.cat(ids, dim=0).unsqueeze(0)).transpose(1, 2).contiguous()
         return torch.cat(parts, dim=1), pe
 
 
-    def forward(self, x, timesteps, context, **kwargs):
+    def forward(self, x, timesteps, context, negpip=None, **kwargs):
         B, C, H, W = x.shape
         dtype = x.dtype
 
         # reusing, for now
-        if any(s > 0.0 for s in getattr(shared, "klein_strength", [])):
-            ref_latents = [ql for ql in getattr(shared, "klein_latents", []) if ql is not None]
-        else:
-            ref_latents = []
+#        ref_strengths = getattr(shared, "klein_strength", [])
+        timestep = timesteps[0].item()
+        ref_strengths = [s*timestep for s in getattr(shared, "klein_strength", [])]
+        ref_latents = getattr(shared, "klein_latents", [])
 
-        hidden_states, pe = self.build_sequence(x, context, ref_latents)
+        hidden_states, pe = self.build_sequence(x, context, ref_latents, ref_strengths)
         prefix_len = hidden_states.shape[1] - H * W
 
-        # pipeline rounds t*1000 and t to the compute dtype; text and reference tokens modulate from t = 0
-        # t = ((timesteps * 1000).to(dtype) / 1000).to(dtype)
-        temb = self.time_text_embed(torch.cat([timesteps, timesteps.new_zeros(1)]), dtype)
+        t = timesteps[:1].to(dtype)
+        temb = self.time_text_embed(torch.cat((t.new_zeros(1), t)), dtype)
         scale1, gate1, scale2, gate2 = self.modulation(temb).chunk(4, dim=-1)
         mod = (_split_rows(scale1.add_(1)), _split_rows(gate1.tanh()), _split_rows(scale2.add_(1)), _split_rows(gate2.tanh()))
 
-        for block in self.transformer_blocks:
-            hidden_states = block(hidden_states, mod, pe, prefix_len) # still passing unused prefix_len, in case re-add caching later
-            # caching based attn_fn no work, so coded directly
+        if negpip is not None:
+            negpip = negpip[0]
 
-        hidden_states = self.norm_out(hidden_states[:, prefix_len:], temb[:-1])
+        for block in self.transformer_blocks:
+            hidden_states = block(hidden_states, mod, pe, prefix_len, negpip)
+
+        hidden_states = self.norm_out(hidden_states[:, prefix_len:], temb[1:])
         hidden_states = self.proj_out(hidden_states)
         return hidden_states.transpose(1, 2).reshape(B, self.out_channels, H, W)

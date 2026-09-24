@@ -716,7 +716,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
         "Prediction scaling": opts.prediction_scaling if opts.prediction_scaling != 1.0 else None,
         "CFG normalization": opts.cfg_normalization if opts.cfg_normalization > 0.0 else None,
         "CFG rescale": opts.cfg_rescale if opts.cfg_rescale > 0.0 else None,
-        "negPiP": opts.use_negPiP if shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_krea2 or shared.sd_model.is_flux2 or shared.sd_model.is_lumina2 else None,
+        "negPiP": opts.use_negPiP if shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_krea2 or shared.sd_model.is_flux2 or shared.sd_model.is_lumina2 or shared.sd_model.is_qwen21 else None,
         "SDXL Shift": opts.sdxl_flow_shift if dynamic_args.get("SDXL_flow", False) else None,
         "RNG": noise_source_type if noise_source_type != "GPU" else None,
     })
