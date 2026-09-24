@@ -244,8 +244,8 @@ class QwenImage21Transformer2DModel(nn.Module):
         # reusing, for now
 #        ref_strengths = getattr(shared, "klein_strength", [])
         timestep = timesteps[0].item()
-        ref_strengths = [s*timestep for s in getattr(shared, "klein_strength", [])]
-        ref_latents = getattr(shared, "klein_latents", [])
+        ref_strengths = [s*timestep for s in getattr(shared, "klein_strength", (0.0, 0.0, 0.0, 0.0))]
+        ref_latents = getattr(shared, "klein_latents", [None, None, None, None]) # lengths must match, currently 4 hardcoded
 
         hidden_states, pe = self.build_sequence(x, context, ref_latents, ref_strengths)
         prefix_len = hidden_states.shape[1] - H * W
