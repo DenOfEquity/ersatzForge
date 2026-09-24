@@ -139,8 +139,8 @@ class ersatzOtherControl(scripts.Script):
                         return imageB, imageA
                     swap12.click(fn=kontext_swap, inputs=[k_image1, k_image2], outputs=[k_image1, k_image2])
 
-                with gradio.Tab("Flux2.Klein") as klein:
-                    gradio.Markdown("Select a Flux2.Klein model in the **Checkpoint** menu. Add reference image(s) here.")
+                with gradio.Tab("Flux2.Klein / Qwen 2.1") as klein:
+                    gradio.Markdown("Select a Flux2.Klein / Qwen 2.1 model in the **Checkpoint** menu. Add reference image(s) here.")
                     with gradio.Row():
                         with gradio.Column():
                             klein_1 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
@@ -150,7 +150,7 @@ class ersatzOtherControl(scripts.Script):
                                 klein_1_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                             with gradio.Row():
                                 klein_1_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
-                                klein_1_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
+                                klein_1_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.01)
                         with gradio.Column():
                             klein_2 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                             with gradio.Row():
@@ -159,7 +159,7 @@ class ersatzOtherControl(scripts.Script):
                                 klein_2_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                             with gradio.Row():
                                 klein_2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
-                                klein_2_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
+                                klein_2_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.01)
                     with gradio.Accordion(label="References 3 & 4", open=False):
                         with gradio.Row():
                             with gradio.Column():
@@ -170,7 +170,7 @@ class ersatzOtherControl(scripts.Script):
                                     klein_3_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                                 with gradio.Row():
                                     klein_3_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
-                                    klein_3_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
+                                    klein_3_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.01)
                             with gradio.Column():
                                 klein_4 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
                                 with gradio.Row():
@@ -179,7 +179,7 @@ class ersatzOtherControl(scripts.Script):
                                     klein_4_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                                 with gradio.Row():
                                     klein_4_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
-                                    klein_4_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.1)
+                                    klein_4_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.01)
 
                         klein_1.change(fn=get_dims, inputs=[klein_1, selected_tab], outputs=[klein_1_info, klein_1_send, klein_1_dims], show_progress="hidden")
                         klein_2.change(fn=get_dims, inputs=[klein_2, selected_tab], outputs=[klein_2_info, klein_2_send, klein_2_dims], show_progress="hidden")
@@ -190,29 +190,33 @@ class ersatzOtherControl(scripts.Script):
                         klein_3_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, klein_3_dims], outputs=None)
                         klein_4_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, klein_4_dims], outputs=None)
 
-                with gradio.Tab("Z-Image-Turbo Control") as zitc:
+                with gradio.Tab("Z-Image-Turbo") as zitc:
                     gradio.Markdown("Select the control model in the **Additional modules** menu. Include pre-processed reference image, or inpaint image, here. NeverOOM recommended for low-VRAM.")
                     with gradio.Row():
                         with gradio.Column():
                             z_image = ForgeCanvas(height=300, contrast_scribbles=True, scribble_alpha=50)
+                            with gradio.Row():
+                                z_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
+                                z_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                z_image_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                         with gradio.Column():
                             z_version = gradio.Radio(value="v1", choices=["v1", "v2", "v2 inpaint"], label="Mode")
                             z_mask_mode = gradio.Radio(value="unmasked", choices=["masked", "unmasked"], label="Target area")
                             z_strength = gradio.Slider(value=1.0, minimum=0.0, maximum=2.0, step=0.01, label="strength")
                             z_stop = gradio.Slider(value=0.85, minimum=0.0, maximum=1.0, step=0.01, label="stop sigma")
-                            with gradio.Row():
-                                z_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
-                                z_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                z_image_dims = gradio.Textbox(visible=False, value="0", interactive=False)
 
                         z_image.background.change(fn=get_dims, inputs=[z_image.background, selected_tab], outputs=[z_image_info, z_image_send, z_image_dims], show_progress="hidden")
                         z_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, z_image_dims], outputs=None)
 
-                with gradio.Tab("Krea2 Control LoRA") as krea2:
-                    gradio.Markdown("Select the control model in the **Additional modules** menu. Include (pre-processed, if necessary) reference image here. NeverOOM recommended for low-VRAM.")
+                with gradio.Tab("Krea2") as krea2:
+                    gradio.Markdown("Select a control LoRA in the **Additional modules** menu. Include (pre-processed, if necessary) reference image here. NeverOOM recommended for low-VRAM.")
                     with gradio.Row():
                         with gradio.Column():
                             k2_image = ForgeCanvas(height=300, contrast_scribbles=True, scribble_alpha=50)
+                            with gradio.Row():
+                                k2_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
+                                k2_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                k2_image_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                         with gradio.Column():
                             with gradio.Row():
                                 k2_edit_type = gradio.Dropdown(label="Edit LoRA type", choices=["", "ConradLocke", "Ostris"], value="", filterable=False)
@@ -226,10 +230,6 @@ class ersatzOtherControl(scripts.Script):
                                 # id reference: delayed start minimises composition change due to reference
                                 k2_stop = gradio.Slider(value=0.5, minimum=0.0, maximum=1.0, step=0.01, label="Stop sigma")
                                 # Pose: stop early (0.95-0.90), 1-2 steps is enough with Turbo; more steps introduces artefacts
-                            with gradio.Row():
-                                k2_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
-                                k2_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
-                                k2_image_dims = gradio.Textbox(visible=False, value="0", interactive=False)
 
                         k2_image.background.change(fn=get_dims, inputs=[k2_image.background, selected_tab], outputs=[k2_image_info, k2_image_send, k2_image_dims], show_progress="hidden")
                         k2_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, k2_image_dims], outputs=None)
@@ -239,7 +239,6 @@ class ersatzOtherControl(scripts.Script):
             klein.select(fn=lambda: 1, inputs=None, outputs=selected_tab, show_progress="hidden")
             zitc.select( fn=lambda: 2, inputs=None, outputs=selected_tab, show_progress="hidden")
             krea2.select(fn=lambda: 3, inputs=None, outputs=selected_tab, show_progress="hidden")
-
 
         self.infotext_fields = [
             (enabled,  lambda d: d.get("eOC_enabled", False)),
@@ -278,10 +277,15 @@ class ersatzOtherControl(scripts.Script):
                     kontext_sizing = kontext_sizing,
                     kontext_reduce = kontext_reduce,
                 ))
-            elif selected_tab == 1 and (klein_1 is not None or klein_2 is not None or klein_3 is not None or klein_4 is not None) and params.sd_model.is_flux2:
+            elif selected_tab == 1 and (klein_1 is not None or klein_2 is not None or klein_3 is not None or klein_4 is not None) and (params.sd_model.is_flux2 or params.sd_model.is_qwen21):
                 params.extra_generation_params.update(dict(
                     eOC_enabled  = enabled,
                 ))
+                if params.sd_model.is_qwen21:
+                    klein_1_resize = "to output"
+                    klein_2_resize = "to output"
+                    klein_3_resize = "to output"
+                    klein_4_resize = "to output"
                 if klein_1 is not None:
                     params.extra_generation_params.update(dict(klein_1_resize = klein_1_resize, klein_1_str = klein_1_str,))
                 if klein_2 is not None:
@@ -329,6 +333,11 @@ class ersatzOtherControl(scripts.Script):
                         params.extra_generation_params.update(dict(
                             k2_fidelity = k2_fidelity,
                         ))
+        else:
+            IntegratedFluxTransformer2DModel.forward = ersatzOtherControl.original_kontext_forward
+            shared.klein_strength = (0.0, 0.0, 0.0, 0.0)
+            shared.ZITstrength = 0.0
+            setattr(global_variables, "krea2_control_lora_strength", 0.0)
 
 
     def process_before_every_sampling(self, params, *script_args, **kwargs):
@@ -459,7 +468,7 @@ class ersatzOtherControl(scripts.Script):
             params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
 
-        elif selected_tab == 1 and params.sd_model.is_flux2:
+        elif selected_tab == 1 and (params.sd_model.is_flux2 or params.sd_model.is_qwen21):
             imgs_data = ""
             for input_image in (klein_1, klein_2, klein_3, klein_4):
                 if input_image is not None:
@@ -469,7 +478,10 @@ class ersatzOtherControl(scripts.Script):
 
             klein_image_hash = hash(imgs_data)
             klein_latent_size = (w, h)
-            klein_resize = (klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize)
+            if params.sd_model.is_qwen21:
+                klein_resize = ("to output", "to output", "to output", "to output")
+            else:
+                klein_resize = (klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize)
 
             if klein_image_hash == self.klein_image_hash and klein_latent_size == self.klein_latent_size and klein_resize == self.klein_resize:
                 print ("[KleinEdit] used cache")
@@ -478,16 +490,18 @@ class ersatzOtherControl(scripts.Script):
                 self.klein_latent_size = klein_latent_size
                 self.klein_resize = klein_resize
 
+                latent_size = 16 if params.sd_model.is_qwen21 else 8
+
                 k_latents = []
                 for image, resize in zip([klein_1, klein_2, klein_3, klein_4], klein_resize):
                     if image is not None:
                         match resize:
                             case "to output":
-                                k_width = 32 * ((w*8 + 31) // 32)
-                                k_height = 32 * ((h*8 + 31) // 32)
+                                k_width = 32 * ((w*latent_size + 31) // 32)
+                                k_height = 32 * ((h*latent_size + 31) // 32)
                             case "half output":
-                                k_width = (64 * ((w*8 + 63) // 64)) // 2
-                                k_height = (64 * ((h*8 + 63) // 64)) // 2
+                                k_width = (64 * ((w*latent_size + 63) // 64)) // 2
+                                k_height = (64 * ((h*latent_size + 63) // 64)) // 2
                             case "half":
                                 k_width = (64 * ((image.size[0] + 63) // 64)) // 2
                                 k_height = (64 * ((image.size[1] + 63) // 64)) // 2
