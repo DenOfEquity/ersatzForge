@@ -281,11 +281,6 @@ class ersatzOtherControl(scripts.Script):
                 params.extra_generation_params.update(dict(
                     eOC_enabled  = enabled,
                 ))
-                if params.sd_model.is_qwen21:
-                    klein_1_resize = "to output"
-                    klein_2_resize = "to output"
-                    klein_3_resize = "to output"
-                    klein_4_resize = "to output"
                 if klein_1 is not None:
                     params.extra_generation_params.update(dict(klein_1_resize = klein_1_resize, klein_1_str = klein_1_str,))
                 if klein_2 is not None:
@@ -478,10 +473,7 @@ class ersatzOtherControl(scripts.Script):
 
             klein_image_hash = hash(imgs_data)
             klein_latent_size = (w, h)
-            if params.sd_model.is_qwen21:
-                klein_resize = ("to output", "to output", "to output", "to output")
-            else:
-                klein_resize = (klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize)
+            klein_resize = (klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize)
 
             if klein_image_hash == self.klein_image_hash and klein_latent_size == self.klein_latent_size and klein_resize == self.klein_resize:
                 print ("[KleinEdit] used cache")
