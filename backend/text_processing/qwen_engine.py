@@ -51,6 +51,8 @@ class Qwen3TextProcessingEngine:
         # sometimes works with Flux.2 Klein4B
         # bad with ERNIE
 
+        self.vision_block = None
+
     def tokenize(self, texts):
         return self.tokenizer(texts)["input_ids"]
 
@@ -66,7 +68,7 @@ class Qwen3TextProcessingEngine:
         elif self.is_ERNIE:
             extra_length = 1
         elif self.is_qwen21:
-            extra_length = 8 + 5
+            extra_length = 36 + 5
         else:
             extra_length = 3 + 5
         return length + extra_length
@@ -88,7 +90,6 @@ class Qwen3TextProcessingEngine:
                 chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
                 chunk.negpip = [1.0, 1.0, 1.0] + chunk.negpip + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
             elif self.is_krea2:
-                #"<|im_start|>system\nDescribe the image by detailing the color, shape, size, texture, quantity, text, spatial relationships of the objects and background:<|im_end|\n    <|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
                 #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
                 chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198, 151667, 198, 198, 151668, 198, 198]
                 chunk.multipliers = [1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
@@ -98,10 +99,12 @@ class Qwen3TextProcessingEngine:
                 chunk.multipliers = [1.0] + chunk.multipliers
                 chunk.negpip = [1.0] + chunk.negpip
             elif self.is_qwen21:
+                #             <|im_start|>system\nComprehend and analyze the provided prompt.<|im_end|>\n<|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
+
                 #             <|im_start|>system\n<|im_end|>\n<|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
-                chunk.tokens = [151644, 8948, 198, 151645, 198, 151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198]
-                chunk.multipliers = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0] + chunk.multipliers + [1.0, 1.0, 1.0, 1.0, 1.0]
-                chunk.negpip = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0] + chunk.negpip + [1.0, 1.0, 1.0, 1.0, 1.0]
+                chunk.tokens = [151644, 8948, 198, 151645, 198, 151644, 872, 198] + self.vision_block + chunk.tokens + [151645, 198, 151644, 77091, 198]
+                chunk.multipliers = [1.0] * 36 + chunk.multipliers + [1.0] * 5
+                chunk.negpip = [1.0] * 36 + chunk.negpip + [1.0] * 5
             else:
                 #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
                 chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198]
@@ -139,8 +142,12 @@ class Qwen3TextProcessingEngine:
         zs = []
         np = []
         cache = {}
-
         self.emphasis = emphasis.get_current_option(opts.emphasis)()
+
+        if self.is_qwen21 and self.vision_block is None:
+            vision_text = "<image1><|vision_start|><|image_pad|><|vision_end|><image2><|vision_start|><|image_pad|><|vision_end|><image3><|vision_start|><|image_pad|><|vision_end|><image4><|vision_start|><|image_pad|><|vision_end|>" #len 28
+            vision_tokens = self.tokenize([vision_text])
+            self.vision_block = vision_tokens[0]
 
         for line in texts:
             if line in cache:
@@ -169,7 +176,7 @@ class Qwen3TextProcessingEngine:
                     s = 1
                     e = None
                 elif self.is_qwen21:
-                    s = 8
+                    s = 36
                     e = -5
                 else:
                     s = 3
