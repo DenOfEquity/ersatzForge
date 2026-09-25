@@ -66,6 +66,22 @@ def load_lora(lora, to_load):
                 new_lora[k] = lora[k]
         return new_lora
 
+    def convert_qwen21(sd): # make unfused copy: gate_up -> gate_layer+proj
+        new_lora = {}
+        for k, v in lora.items():
+            if k.endswith(".img_mlp.gate_up.lora_A.weight"): # duplicate
+                name1 = k[:-22] + ".gate_layer.lora_A.weight"
+                name2 = k[:-22] + ".proj.lora_A.weight"
+                new_lora[name1] = lora[k]
+                new_lora[name2] = lora[k]
+            elif k.endswith(".img_mlp.gate_up.lora_B.weight"): # split
+                name1 = k[:-22] + ".gate_layer.lora_B.weight"
+                name2 = k[:-22] + ".proj.lora_B.weight"
+                new_lora[name1] = lora[k][:12288]
+                new_lora[name2] = lora[k][12288:]
+
+            new_lora[k] = lora[k]
+        return new_lora
 
     if "img_in.lora_A.weight" in lora and "single_blocks.0.norm.key_norm.scale" in lora:
         lora = convert_lora_bfl_control(lora)
@@ -75,6 +91,9 @@ def load_lora(lora, to_load):
 
     if any(k.startswith("base_model.model.") for k in lora.keys()):
         lora = convert_fal(lora)
+
+    if any(k.endswith(".img_mlp.gate_up.lora_A.weight") for k in lora.keys()):
+        lora = convert_qwen21(lora)
 
 
     patch_dict = {}
@@ -448,5 +467,22 @@ def model_lora_keys_unet(model, key_map={}):
                 key_map["transformer.{}".format(key_lora)] = to
                 key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to
                 key_map[key_lora] = to
+
+    if "QwenImage21" in model.config.huggingface_repo:
+        for k in sdk:
+            if k.startswith("diffusion_model.") and k.endswith(".weight"): #QwenImage lora format
+                key_lora = k[len("diffusion_model."):-len(".weight")]
+                if key_lora.endswith(".img_mlp.gate_up"):  # Qwen Image 2.1 model could have fused gate_layer/proj; LoRAs could address the halves
+                    half = sd[k].shape[0] // 2
+                    targets = [(key_lora.replace(".gate_up", ".gate_layer"), (k, (0, 0, half))), (key_lora.replace(".gate_up", ".proj"), (k, (0, half, half)))]
+                else:
+                    targets = [(key_lora, k)]
+
+                for key_lora, to in targets:
+                    # Direct mapping for transformer_blocks format (QwenImage LoRA format)
+                    key_map["{}".format(key_lora)] = to
+                    # Support transformer prefix format
+                    key_map["transformer.{}".format(key_lora)] = to
+                    key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to #SimpleTuner lycoris format
 
     return sdk, key_map
