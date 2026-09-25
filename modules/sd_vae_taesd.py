@@ -81,10 +81,15 @@ class TAESDDecoder(nn.Module):
             elif "taef2" in str(decoder_path):
                 latent_channels = 32
                 midblock = True
+            elif "qi2_1" in str(decoder_path):
+                latent_channels = 64
             else:
                 latent_channels = 4
 
-        self.decoder = Decoder(latent_channels, use_midblock_gn=midblock)
+        if latent_channels == 64:
+            self.decoder = DecoderQ21()
+        else:
+            self.decoder = Decoder(latent_channels, use_midblock_gn=midblock)
         self.decoder.load_state_dict(torch.load(decoder_path, map_location='cpu'))
 
 
@@ -105,10 +110,15 @@ class TAESDEncoder(nn.Module):
             elif "taef2" in str(encoder_path):
                 latent_channels = 32
                 midblock = True
+            elif "qi2_1" in str(encoder_path):
+                latent_channels = 64
             else:
                 latent_channels = 4
 
-        self.encoder = Encoder(latent_channels, use_midblock_gn=midblock)
+        if latent_channels == 64:
+            self.encoder = EncoderQ21()
+        else:
+            self.encoder = Encoder(latent_channels, use_midblock_gn=midblock)
         self.encoder.load_state_dict(
             torch.load(encoder_path, map_location='cpu' if devices.device.type != 'cuda' else None))
 
@@ -255,11 +265,33 @@ class TAEHVEncoder(nn.Module):
         return self.encoder.apply_model_with_memblocks(self.encoder.encoder, z, parallel, show_progress_bar).squeeze(1)
 
 
+class EncoderQ21(nn.Sequential):
+    # 16x: 2x2 pixel unshuffle on the way in and wider low resolution stages (Qwen Image 2.1, RGBA)
+    def __init__(self, latent_channels: int = 64, image_channels: int = 4):
+        super().__init__(
+            nn.PixelUnshuffle(2), conv(image_channels * 4, 64), nn.ReLU(inplace=True), Block(64, 64),
+            conv(64, 64, stride=2, bias=False), Block(64, 64), Block(64, 64), Block(64, 64),
+            conv(64, 128, stride=2, bias=False), Block(128, 128), Block(128, 128), Block(128, 128),
+            conv(128, 256, stride=2, bias=False), Block(256, 256), Block(256, 256), Block(256, 256),
+            conv(256, latent_channels),
+        )
+
+class DecoderQ21(nn.Sequential):
+    def __init__(self, latent_channels: int = 64, image_channels: int = 4):
+        super().__init__(
+            Clamp(), conv(latent_channels, 256), nn.ReLU(),
+            Block(256, 256), Block(256, 256), Block(256, 256), nn.Upsample(scale_factor=2), conv(256, 128, bias=False),
+            Block(128, 128), Block(128, 128), Block(128, 128), nn.Upsample(scale_factor=2), conv(128, 64, bias=False),
+            Block(64, 64), Block(64, 64), Block(64, 64), nn.Upsample(scale_factor=2), conv(64, 64, bias=False),
+            Block(64, 64), conv(64, image_channels * 4), nn.PixelShuffle(2),
+        )
+
+
 def download_model(model_path, model_url):
     if not os.path.exists(model_path):
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
 
-        print(f'Downloading TAESD model to: {model_path}')
+        print(f"Downloading TAESD model to: {model_path}")
         torch.hub.download_url_to_file(model_url, model_path)
 
 
@@ -281,7 +313,8 @@ def decoder_model():
     elif shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_wan or shared.sd_model.is_krea2:
         v = True
         model_name = "taew2_2.pth" if shared.sd_model.forge_objects.vae.latent_channels == 48 else "taew2_1.pth"
-        
+    elif shared.sd_model.is_qwen21:
+        model_name = "taeqi2_1_decoder.pth"
     else:
         return None # preview can fall back to cheap approximation
 
@@ -290,9 +323,9 @@ def decoder_model():
     if loaded_model is None:
         model_path = os.path.join(models_path, "VAE-taesd", model_name)
         if v:
-            download_model(model_path, 'https://github.com/madebyollin/taehv/raw/main/' + model_name)
+            download_model(model_path, "https://github.com/madebyollin/taehv/raw/main/" + model_name)
         else:
-            download_model(model_path, 'https://github.com/madebyollin/taesd/raw/main/' + model_name)
+            download_model(model_path, "https://github.com/madebyollin/taesd/raw/main/" + model_name)
 
         if os.path.exists(model_path):
             loaded_model = (TAEHVDecoder if v else TAESDDecoder)(model_path)
@@ -301,7 +334,7 @@ def decoder_model():
             sd_vae_taesd_models[model_name] = loaded_model
             devices.torch_gc()
         else:
-            raise FileNotFoundError('TAESD model not found')
+            raise FileNotFoundError("TAESD model not found")
 
     return loaded_model if v else loaded_model.decoder
 
@@ -324,14 +357,16 @@ def encoder_model():
     elif shared.sd_model.is_cosmos_predict2 or shared.sd_model.is_wan or shared.sd_model.is_krea2:
         v = True
         model_name = "taew2_2.pth" if shared.sd_model.forge_objects.vae.latent_channels == 48 else "taew2_1.pth"
+    elif shared.sd_model.is_qwen21:
+        model_name = "taeqi2_1_encoder.pth"
     else:
-        raise FileNotFoundError('no TAESD encoder model for this architecture')
+        raise FileNotFoundError("no TAESD encoder model for this architecture")
 
     loaded_model = sd_vae_taesd_models.get(model_name)
 
     if loaded_model is None:
         model_path = os.path.join(models_path, "VAE-taesd", model_name)
-        download_model(model_path, 'https://github.com/madebyollin/taesd/raw/main/' + model_name)
+        download_model(model_path, "https://github.com/madebyollin/taesd/raw/main/" + model_name)
 
         if os.path.exists(model_path):
             loaded_model = (TAEHVEncoder if v else TAESDEncoder)(model_path)
@@ -339,6 +374,6 @@ def encoder_model():
             loaded_model.to(devices.device, devices.dtype_vae)
             sd_vae_taesd_models[model_name] = loaded_model
         else:
-            raise FileNotFoundError('TAESD model not found')
+            raise FileNotFoundError("TAESD model not found")
 
     return loaded_model if v else loaded_model.encoder
