@@ -54,7 +54,7 @@ class Qwen3TextProcessingEngine:
         self.vision_block = None
 
     def tokenize(self, texts):
-        return self.tokenizer(texts)["input_ids"]
+        return self.tokenizer(texts, truncation=False, add_special_tokens=False)["input_ids"]
 
     def tokenize_for_UI(self, prompt):
         parsed = parsing.parse_prompt_attention(prompt, "Ignore")
@@ -68,7 +68,7 @@ class Qwen3TextProcessingEngine:
         elif self.is_ERNIE:
             extra_length = 1
         elif self.is_qwen21:
-            extra_length = 36 + 5
+            extra_length = 3 + 5 # not counting system turn or image placeholders
         else:
             extra_length = 3 + 5
         return length + extra_length
@@ -100,6 +100,9 @@ class Qwen3TextProcessingEngine:
                 chunk.negpip = [1.0] + chunk.negpip
             elif self.is_qwen21:
                 #             <|im_start|>system\nComprehend and analyze the provided prompt.<|im_end|>\n<|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
+                # chunk.tokens = [151644, 8948, 198, 1092, 30782, 408, 323, 23643, 279, 3897, 9934, 13, 151645, 198, 151644, 872, 198] + self.vision_block + chunk.tokens + [151645, 198, 151644, 77091, 198]
+                # chunk.multipliers = [1.0] * 45 + chunk.multipliers + [1.0] * 5
+                # chunk.negpip = [1.0] * 45 + chunk.negpip + [1.0] * 5
 
                 #             <|im_start|>system\n<|im_end|>\n<|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
                 chunk.tokens = [151644, 8948, 198, 151645, 198, 151644, 872, 198] + self.vision_block + chunk.tokens + [151645, 198, 151644, 77091, 198]
@@ -145,7 +148,7 @@ class Qwen3TextProcessingEngine:
         self.emphasis = emphasis.get_current_option(opts.emphasis)()
 
         if self.is_qwen21 and self.vision_block is None:
-            vision_text = "<image1><|vision_start|><|image_pad|><|vision_end|><image2><|vision_start|><|image_pad|><|vision_end|><image3><|vision_start|><|image_pad|><|vision_end|><image4><|vision_start|><|image_pad|><|vision_end|>" #len 28
+            vision_text = "<image1><|vision_start|><|image_pad|><|vision_end|> <image2><|vision_start|><|image_pad|><|vision_end|> <image3><|vision_start|><|image_pad|><|vision_end|> <image4><|vision_start|><|image_pad|><|vision_end|>" #len 28
             vision_tokens = self.tokenize([vision_text])
             self.vision_block = vision_tokens[0]
 
@@ -202,6 +205,8 @@ class Qwen3TextProcessingEngine:
             np.extend(negpip_values)
 
         if opts.use_negPiP and self.use_negPiP:
+            if self.is_qwen21:
+                np = [np[0][33:-5]] # don't want to include system turn or image placeholders
             return zs, np
         else:
             return zs, None
