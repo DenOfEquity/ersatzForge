@@ -175,7 +175,7 @@ class DupUp3D(nn.Module):
         assert out_channels * self.factor % in_channels == 0
         self.repeats = out_channels * self.factor // in_channels
 
-    def forward(self, x: torch.Tensor, first_chunk=False) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.repeat_interleave(self.repeats, dim=1)
         x = x.view(
             x.size(0),
@@ -187,6 +187,17 @@ class DupUp3D(nn.Module):
             x.size(3),
             x.size(4),
         )
+
+        # checkerboard fix via Comfy PR 16571 by roj234
+        if self.repeats < self.factor_s * self.factor_s:
+            # spatial phase slots are not all copies of one channel -> give every
+            # spatial phase the group mean instead of a different source channel
+            x = x.mean(dim=(3, 4), keepdim=True).expand(
+                -1, -1, -1,
+                self.factor_s, self.factor_s,
+                -1, -1, -1
+            )
+
         x = x.permute(0, 1, 5, 2, 6, 3, 7, 4).contiguous()
         x = x.view(
             x.size(0),
@@ -195,8 +206,8 @@ class DupUp3D(nn.Module):
             x.size(4) * self.factor_s,
             x.size(6) * self.factor_s,
         )
-        if first_chunk:
-            x = x[:, :, self.factor_t - 1 :, :, :]
+
+        x = x[:, :, self.factor_t - 1:, :, :]
         return x
 
 
@@ -258,12 +269,12 @@ class Up_ResidualBlock(nn.Module):
 
         self.upsamples = nn.Sequential(*upsamples)
 
-    def forward(self, x, first_chunk=False):
+    def forward(self, x):
         x_main = x
         for module in self.upsamples:
             x_main = module(x_main)
         if self.avg_shortcut is not None:
-            x_shortcut = self.avg_shortcut(x, first_chunk)
+            x_shortcut = self.avg_shortcut(x)
             return x_main + x_shortcut[:, :, :1, :, :]
         else:
             return x_main
@@ -387,7 +398,7 @@ class Decoder3d(nn.Module):
             nn.Conv3d(out_dim, 12, 3, padding=1, temporal_pad=True),
         )
 
-    def forward(self, x, first_chunk=False):
+    def forward(self, x):
         x = self.conv1(x)
 
         for layer in self.middle:
@@ -484,18 +495,6 @@ class AutoencoderKLWan22(nn.Module, ConfigMixin):
         z = z.unsqueeze(2)
 
         x = self.conv2(z)
-        out = self.decoder(x, first_chunk=True)
+        out = self.decoder(x)
         out = unpatchify(out, patch_size=2)
         return out.squeeze(2)
-
-    def reparameterize(self, mu, log_var):
-        std = torch.exp(0.5 * log_var)
-        eps = torch.randn_like(std)
-        return eps * std + mu
-
-    def sample(self, imgs, deterministic=False):
-        mu, log_var = self.encode(imgs)
-        if deterministic:
-            return mu
-        std = torch.exp(0.5 * log_var.clamp(-30.0, 20.0))
-        return mu + std * torch.randn_like(std)

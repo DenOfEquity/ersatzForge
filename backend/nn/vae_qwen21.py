@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from einops import rearrange
 
 from .vae_wan import AttentionBlock, RMS_norm
+from .vae_wan22 import AvgDown3D, DupUp3D
 
 
 class Resample(nn.Module):
@@ -110,103 +111,6 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         # single image: the whole block runs in strips so its intermediates never exist at full size
         return strip_apply(lambda s: self.residual(s).add_(self.shortcut(s)), x, halo=2)
-
-
-class AvgDown3D(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        factor_t,
-        factor_s=1,
-    ):
-        super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.factor_t = factor_t
-        self.factor_s = factor_s
-        self.factor = self.factor_t * self.factor_s * self.factor_s
-
-        assert in_channels * self.factor % out_channels == 0
-        self.group_size = in_channels * self.factor // out_channels
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        pad_t = (self.factor_t - x.shape[2] % self.factor_t) % self.factor_t
-        pad = (0, 0, 0, 0, pad_t, 0)
-        x = F.pad(x, pad)
-        B, C, T, H, W = x.shape
-        x = x.view(
-            B,
-            C,
-            T // self.factor_t,
-            self.factor_t,
-            H // self.factor_s,
-            self.factor_s,
-            W // self.factor_s,
-            self.factor_s,
-        )
-        x = x.permute(0, 1, 3, 5, 7, 2, 4, 6).contiguous()
-        x = x.view(
-            B,
-            C * self.factor,
-            T // self.factor_t,
-            H // self.factor_s,
-            W // self.factor_s,
-        )
-        x = x.view(
-            B,
-            self.out_channels,
-            self.group_size,
-            T // self.factor_t,
-            H // self.factor_s,
-            W // self.factor_s,
-        )
-        x = x.mean(dim=2)
-        return x
-
-
-class DupUp3D(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        factor_t,
-        factor_s=1,
-    ):
-        super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-
-        self.factor_t = factor_t
-        self.factor_s = factor_s
-        self.factor = self.factor_t * self.factor_s * self.factor_s
-
-        assert out_channels * self.factor % in_channels == 0
-        self.repeats = out_channels * self.factor // in_channels
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.repeat_interleave(self.repeats, dim=1)
-        x = x.view(
-            x.size(0),
-            self.out_channels,
-            self.factor_t,
-            self.factor_s,
-            self.factor_s,
-            x.size(2),
-            x.size(3),
-            x.size(4),
-        )
-        x = x.permute(0, 1, 5, 2, 6, 3, 7, 4).contiguous()
-        x = x.view(
-            x.size(0),
-            self.out_channels,
-            x.size(2) * self.factor_t,
-            x.size(4) * self.factor_s,
-            x.size(6) * self.factor_s,
-        )
-
-        x = x[:, :, self.factor_t - 1:, :, :]
-        return x
 
 
 class Down_ResidualBlock(nn.Module):
@@ -517,7 +421,7 @@ class AutoencoderQwen21(nn.Module, ConfigMixin):
 
     def decode(self, z):
         out = self.decoder(self.conv2(z.unsqueeze(2)))
-        return out.squeeze(2)#.clamp(min=-1.0, max=1.0) # clamp?
+        return out.squeeze(2)
 
     def process_in(self, latent):
         latents_mean = self.latents_mean.to(latent.device, latent.dtype)
