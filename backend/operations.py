@@ -159,10 +159,10 @@ class ForgeOperations:
             ForgeOperations.common_load(self, state_dict, prefix)
             if hasattr(self, 'dummy'):
                 if prefix + 'weight' in state_dict:
-                    self.weight = torch.nn.Parameter(state_dict[prefix + 'weight'].to(device=self.dummy.device))
+                    self.weight = torch.nn.Parameter(state_dict[prefix + 'weight'].to(self.dummy))
 
                 if prefix + 'bias' in state_dict:
-                    self.bias = torch.nn.Parameter(state_dict[prefix + 'bias'].to(device=self.dummy.device))
+                    self.bias = torch.nn.Parameter(state_dict[prefix + 'bias'].to(self.dummy))
                 del self.dummy
             else:
                 super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
@@ -480,9 +480,9 @@ try:
                     with main_stream_worker(weight, bias, signal):
                         return functional_linear_4bits(x, weight, bias)
 
-    bnb_avaliable = True
+    bnb_available = True
 except:
-    bnb_avaliable = False
+    bnb_available = False
 
 
 from backend.operations_gguf import dequantize_tensor
@@ -675,7 +675,7 @@ def using_forge_operations(operations=None, device=None, dtype=None, manual_cast
     if operations is None:
         if bnb_dtype in ['gguf']:
             operations = ForgeOperationsGGUF
-        elif bnb_avaliable and bnb_dtype in ['nf4', 'fp4']:
+        elif bnb_available and bnb_dtype in ['nf4', 'fp4']:
             operations = ForgeOperationsBNB4bits
         else:
             operations = ForgeOperations
