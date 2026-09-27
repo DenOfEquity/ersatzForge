@@ -25,7 +25,7 @@ function deBounceAll() {;}
     const lastInput = new WeakMap();
     /** @type {Set<HTMLTextAreaElement>} */
     let targets = new Set();
-    let delay = 160;
+    let delay = 100;
 
     /** @param {HTMLTextAreaElement} textarea */
     function flush(textarea) {
@@ -67,7 +67,8 @@ function deBounceAll() {;}
             return;
         }
 
-        event.stopPropagation();
+        event.stopPropagation(); // no bubbling to parent elements
+        event.stopImmediatePropagation(); // no handling by other event listeners
         lastInput.set(textarea, { inputType: event.inputType, data: event.data, isComposing: event.isComposing });
 
         const timer = pending.get(textarea);

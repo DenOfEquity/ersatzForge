@@ -1,5 +1,5 @@
 function gradioApp() {
-    const elems = document.getElementsByTagName('gradio-app');
+    const elems = document.getElementsByTagName("gradio-app");
     const elem = elems.length == 0 ? document : elems[0];
 
     if (elem !== document) {
@@ -14,7 +14,7 @@ function gradioApp() {
  * Get the currently selected top-level UI tab button (e.g. the button that says "Extras").
  */
 function get_uiCurrentTab() {
-    return gradioApp().querySelector('#tabs > .tab-nav > button.selected');
+    return gradioApp().querySelector("#tabs > .tab-nav > button.selected");
 }
 
 /**
@@ -119,7 +119,7 @@ var executedOnLoaded = false;
 
 document.addEventListener("DOMContentLoaded", function() {
     var mutationObserver = new MutationObserver(function(m) {
-        if (!executedOnLoaded && gradioApp().querySelector('#txt2img_prompt')) {
+        if (!executedOnLoaded && gradioApp().querySelector("#txt2img_prompt")) {
             executedOnLoaded = true;
             executeCallbacks(uiLoadedCallbacks);
         }
@@ -141,28 +141,30 @@ document.addEventListener("DOMContentLoaded", function() {
  * Alt/Option+Enter to skip a generation
  * Esc to interrupt a generation
  */
-document.addEventListener('keydown', function(e) {
-    const isEnter = e.key === 'Enter' || e.keyCode === 13;
+document.addEventListener("keydown", function(e) {
+    const isEnter = e.key === "Enter" || e.keyCode === 13;
     const isCtrlKey = e.metaKey || e.ctrlKey;
     const isAltKey = e.altKey;
-    const isEsc = e.key === 'Escape';
+    const isEsc = e.key === "Escape";
 
-    const generateButton = get_uiCurrentTabContent().querySelector('button[id$=_generate]');
-    const interruptButton = get_uiCurrentTabContent().querySelector('button[id$=_interrupt]');
-    const skipButton = get_uiCurrentTabContent().querySelector('button[id$=_skip]');
+    const generateButton = get_uiCurrentTabContent().querySelector("button[id$=_generate]");
+    const interruptButton = get_uiCurrentTabContent().querySelector("button[id$=_interrupt]");
+    const skipButton = get_uiCurrentTabContent().querySelector("button[id$=_skip]");
 
-    if (isCtrlKey && isEnter) {
-        if (interruptButton.style.display === "none" || interruptButton.style.display === "") {
-            deBounceAll();
-            generateButton.click();
-            e.preventDefault();
+    if (isEnter) {
+        deBounceAll();
+
+        if (isCtrlKey) {
+            if (interruptButton.style.display === "none" || interruptButton.style.display === "") {
+                generateButton.click();
+                e.preventDefault();
+            }
         }
-    }
-
-    if (isAltKey && isEnter) {
-        if (skipButton.style.display === "block") {
-            skipButton.click();
-            e.preventDefault();
+        else if (isAltKey) {
+            if (skipButton.style.display === "block") {
+                skipButton.click();
+                e.preventDefault();
+            }
         }
     }
 
@@ -192,7 +194,7 @@ function uiElementIsVisible(el) {
     }
 
     const computedStyle = getComputedStyle(el);
-    const isVisible = computedStyle.display !== 'none';
+    const isVisible = computedStyle.display !== "none";
 
     if (!isVisible) return false;
     return uiElementIsVisible(el.parentNode);
