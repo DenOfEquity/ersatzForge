@@ -667,7 +667,7 @@ class LoraLoader:
 
             bnb_layer = None
 
-            if hasattr(weight, "bnb_quantized") and operations.bnb_avaliable:
+            if hasattr(weight, "bnb_quantized") and operations.bnb_available:
                 bnb_layer = parent_layer
                 from backend.operations_bnb import functional_dequantize_4bit
                 weight = functional_dequantize_4bit(weight)
