@@ -159,10 +159,10 @@ class ForgeOperations:
             ForgeOperations.common_load(self, state_dict, prefix)
             if hasattr(self, 'dummy'):
                 if prefix + 'weight' in state_dict:
-                    self.weight = torch.nn.Parameter(state_dict[prefix + 'weight'].to(self.dummy))
+                    self.weight = torch.nn.Parameter(state_dict[prefix + 'weight'].to(device=self.dummy.device))
 
                 if prefix + 'bias' in state_dict:
-                    self.bias = torch.nn.Parameter(state_dict[prefix + 'bias'].to(self.dummy))
+                    self.bias = torch.nn.Parameter(state_dict[prefix + 'bias'].to(device=self.dummy.device))
                 del self.dummy
             else:
                 super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
@@ -424,10 +424,10 @@ class ForgeOperations:
             ForgeOperations.common_load(self, state_dict, prefix)
             if hasattr(self, 'dummy'):
                 if prefix + 'weight' in state_dict:
-                    self.weight = torch.nn.Parameter(state_dict[prefix + 'weight'].to(self.dummy))
+                    self.weight = torch.nn.Parameter(state_dict[prefix + 'weight'].to(device=self.dummy.device))
 
                 if prefix + 'bias' in state_dict:
-                    self.bias = torch.nn.Parameter(state_dict[prefix + 'bias'].to(self.dummy))
+                    self.bias = torch.nn.Parameter(state_dict[prefix + 'bias'].to(device=self.dummy.device))
                 del self.dummy
             else:
                 super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
