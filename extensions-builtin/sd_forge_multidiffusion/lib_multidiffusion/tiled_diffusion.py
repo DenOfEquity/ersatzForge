@@ -13,6 +13,7 @@ import torch
 from torch import Tensor
 
 from backend import memory_management
+from backend.shared import global_variables
 from backend.misc.image_resize import adaptive_resize
 from backend.patcher.base import ModelPatcher
 from backend.patcher.controlnet import ControlNet, T2IAdapter
@@ -23,7 +24,6 @@ opt_f: Optional[int] = None
 
 
 class BBox:
-
     def __init__(self, x: int, y: int, w: int, h: int):
         self.x = x
         self.y = y
@@ -151,9 +151,33 @@ class AbstractDiffusion:
                 control.cond_hint = self.control_params[tuple_key][param_id][batch_id]
             control = control.previous_controlnet
 
+    def process_controllllite(self, x_shape: torch.Size, x_dtype: torch.dtype, c_in: dict, cond_or_uncond: list[int], bboxes: list[BBox], batch_size: int, batch_id: int):
+        PH, PW = self.h * opt_f, self.w * opt_f
+        tuple_key = tuple(cond_or_uncond) + tuple(x_shape)
+
+        if patches_dict := c_in.get("transformer_options", {}).get("patches", {}):  # SDXL
+            seen: set[int] = set()
+
+            for patch in [*patches_dict.get("attn1_patch", []), *patches_dict.get("attn2_patch", [])]:
+                if type(patch).__name__ != "control_net_lllite_patch":
+                    continue
+                if (pid := id(patch)) in seen:
+                    continue
+
+                if self.refresh:
+                    patch.clear_cache()
+                patch.prepare_tiled(bboxes, opt_f, PH, PW, batch_size, batch_id, x_dtype, tuple_key)
+
+                seen.add(pid)
+
+        if active_dits := getattr(global_variables, "ACTIVE_LLLITE_DIT", None):  # Anima
+            for instance in active_dits:
+                if self.refresh:
+                    instance.clear_tiled_cache()
+                instance.prepare_tiled(bboxes, opt_f, PH, PW, batch_size, batch_id, x_dtype, tuple_key)
+
 
 class MultiDiffusion(AbstractDiffusion):
-
     @torch.no_grad()
     def __call__(self, model_function, args: dict):
         x_in: Tensor = args["input"]
@@ -192,6 +216,8 @@ class MultiDiffusion(AbstractDiffusion):
             if "control" in c_in:
                 self.process_controlnet(x_tile.shape, x_tile.dtype, c_in, cond_or_uncond, bboxes, N, batch_id)
                 c_tile["control"] = c_in["control_model"].get_control(x_tile, ts_tile, c_tile, len(cond_or_uncond))
+
+            self.process_controllllite(x_tile.shape, x_tile.dtype, c_in, cond_or_uncond, bboxes, N, batch_id)
 
             x_tile_out = model_function(x_tile, ts_tile, **c_tile)
 
@@ -279,6 +305,8 @@ class MixtureOfDiffusers(AbstractDiffusion):
                 self.process_controlnet(x_tile.shape, x_tile.dtype, c_in, cond_or_uncond, bboxes, N, batch_id)
                 c_tile["control"] = c_in["control_model"].get_control(x_tile, t_tile, c_tile, len(cond_or_uncond))
 
+            self.process_controllllite(x_tile.shape, x_tile.dtype, c_in, cond_or_uncond, bboxes, N, batch_id)
+
             x_tile_out = model_function(x_tile, t_tile, **c_tile)
 
             for i, bbox in enumerate(bboxes):
@@ -291,7 +319,6 @@ class MixtureOfDiffusers(AbstractDiffusion):
 
 
 class TiledDiffusion:
-
     @staticmethod
     def apply(model: ModelPatcher, method: str, tile_width: int, tile_height: int, tile_overlap: int, tile_batch_size: int):
         match method:

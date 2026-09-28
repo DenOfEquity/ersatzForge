@@ -5,6 +5,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from backend.shared import global_variables
+
+from .lib_controllllite import make_tiled_cond
+
+
 logger = logging.getLogger(__name__)
 
 TARGET_ATTENTION_CLASS = "Attention"
@@ -262,6 +267,9 @@ class ControlNetLLLiteDiT(nn.Module):
             m.layer_idx = i
             m._depth_embeds_ref = [self.depth_embeds]
 
+        self._cond_image_original: torch.Tensor = None
+        self._lllite_tiled_cache: dict[tuple, dict[int, torch.Tensor]] = {}
+
         logger.info("ControlNet-LLLite (Anima): %d modules, target=%r, atomics=%s",
                     n, target_layers, list(atomics))
 
@@ -315,13 +323,45 @@ class ControlNetLLLiteDiT(nn.Module):
 
     def set_cond_image(self, cond_image: Optional[torch.Tensor]):
         """cond_image: (B, 3, H, W) in [-1, 1]. None clears."""
+        self._lllite_tiled_cache.clear()
+
         if cond_image is None:
             for m in self.lllite_modules:
                 m.cond_emb = None
+            self._cond_image_original = None
+
             return
+
+        self._cond_image_original = cond_image.clone()
+
         cx = self.conditioning1(cond_image)  # (B, S, cond_emb_dim)
         for m in self.lllite_modules:
             m.cond_emb = cx
+
+    def prepare_tiled(self, bboxes, opt_f: int, PH: int, PW: int, batch_size: int, batch_id: int, x_dtype: torch.dtype, tuple_key: tuple):
+        if self._cond_image_original is None:
+            return
+
+        if batch_id in (cache_for_key := self._lllite_tiled_cache.get(tuple_key, {})):
+            for m in self.lllite_modules:
+                m.cond_emb = cache_for_key[batch_id]
+            return
+
+        tiled = make_tiled_cond(self._cond_image_original, x_dtype, batch_size, bboxes, PH, PW, opt_f)
+
+        device = self.conditioning1.conv1.weight.device
+        dtype = self.conditioning1.conv1.weight.dtype
+
+        cx_tiled = self.conditioning1(tiled.to(device=device, dtype=dtype))
+
+        _cache = self._lllite_tiled_cache.setdefault(tuple_key, {})
+        _cache[batch_id] = cx_tiled
+
+        for m in self.lllite_modules:
+            m.cond_emb = cx_tiled
+
+    def clear_tiled_cache(self):
+        self._lllite_tiled_cache.clear()
 
     def clear_cond_image(self):
         self.set_cond_image(None)
@@ -343,9 +383,18 @@ class ControlNetLLLiteDiT(nn.Module):
         for m in self.lllite_modules:
             m.apply_to()
 
+        instances: set["ControlNetLLLiteDiT"] = getattr(global_variables, "ACTIVE_LLLITE_DIT", set()) or set()
+        instances.add(self)
+        setattr(global_variables, "ACTIVE_LLLITE_DIT", instances)
+
     def restore(self):
         for m in self.lllite_modules:
             m.restore()
+
+        try:
+            getattr(global_variables, "ACTIVE_LLLITE_DIT", None).remove(self)
+        except (AttributeError, KeyError):
+            pass
 
 
 # ---------------------------------------------------------------------------

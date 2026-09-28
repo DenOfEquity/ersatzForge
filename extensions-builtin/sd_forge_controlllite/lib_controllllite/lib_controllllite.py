@@ -1,5 +1,6 @@
 import torch
 
+from backend.misc.image_resize import adaptive_resize
 from modules import shared
 import modules_forge.colour_code as cc
 
@@ -25,6 +26,42 @@ def extra_options_to_module_prefix(extra_options):
     else:
         raise Exception("invalid block name")
     return module_pfx
+
+
+def make_tiled_cond(cond, x_dtype, batch_size, bboxes, PH, PW, opt_f):
+    if cond.shape[-2] != PH or cond.shape[-1] != PW:
+        resized = adaptive_resize(cond.to(torch.float32), PW, PH, "nearest-exact", "center").to(dtype=x_dtype)
+        cond_resized = resized.to(device=cond.device, dtype=x_dtype)
+    else:
+        cond_resized = cond
+
+    if cond_resized.shape[0] < batch_size:
+        B = cond_resized.shape[0]
+        if B == 1:
+            cond_repeat = cond_resized.expand(batch_size, -1, -1, -1)
+        else:
+            n = (batch_size + B - 1) // B
+            cond_repeat = cond_resized.repeat(n, 1, 1, 1)[:batch_size]
+    else:
+        cond_repeat = cond_resized[:batch_size]
+
+    tiles = []
+
+    for bbox in bboxes:
+        x1 = bbox[0] * opt_f
+        x2 = bbox[2] * opt_f
+        y1 = bbox[1] * opt_f
+        y2 = bbox[3] * opt_f
+
+        x1 = max(0, min(x1, cond_repeat.shape[3]))
+        x2 = max(0, min(x2, cond_repeat.shape[3]))
+        y1 = max(0, min(y1, cond_repeat.shape[2]))
+        y2 = max(0, min(y2, cond_repeat.shape[2]))
+
+        tile = cond_repeat[:, :, y1:y2, x1:x2]
+        tiles.append(tile)
+
+    return torch.cat(tiles, dim=0) if len(tiles) > 1 else tiles[0]
 
 
 def load_control_net_lllite_patch(ctrl_sd, cond_image, multiplier, start_step, end_step, model_dtype):
@@ -81,8 +118,25 @@ def load_control_net_lllite_patch(ctrl_sd, cond_image, multiplier, start_step, e
 
 
     class control_net_lllite_patch:
-        def __init__(self, modules):
+        def __init__(self, modules, cond_image_original: torch.Tensor):
             self.modules = modules
+
+            self._cond_image_original = cond_image_original
+            self._lllite_tiled_cache: dict[tuple, dict[int, torch.Tensor]] = {}
+
+        def prepare_tiled(self, bboxes, opt_f: int, PH: int, PW: int, batch_size: int, batch_id: int, x_dtype: torch.dtype, tuple_key: tuple):
+            tiled = self._get_tiled_cond(bboxes, opt_f, PH, PW, batch_size, batch_id, x_dtype, tuple_key)
+            for m in self.modules.values():
+                m.cond_image = tiled
+                m.cond_emb = None
+
+        def restore_original(self):
+            for m in self.modules.values():
+                m.cond_image = self._cond_image_original
+                m.cond_emb = None
+
+        def clear_cache(self):
+            self._lllite_tiled_cache.clear()
 
         def __call__(self, q, k, v, extra_options):
             module_pfx = extra_options_to_module_prefix(extra_options)
@@ -106,12 +160,32 @@ def load_control_net_lllite_patch(ctrl_sd, cond_image, multiplier, start_step, e
 
             return q, k, v
 
+        def _get_tiled_cond(self, bboxes: list[list[int]], opt_f: int, PH: int, PW: int, batch_size: int, batch_id: int, x_dtype: torch.dtype, tuple_key: tuple):
+            if self._cond_image_original is None:
+                return
+
+            if batch_id in (cache_for_key := self._lllite_tiled_cache.get(tuple_key, {})):
+                return cache_for_key[batch_id]
+
+            tiled = make_tiled_cond(self._cond_image_original, x_dtype, batch_size, bboxes, PH, PW, opt_f)
+
+            _cache = self._lllite_tiled_cache.setdefault(tuple_key, {})
+            _cache[batch_id] = tiled
+
+            return tiled
+
         def to(self, device):
             for d in self.modules.keys():
                 self.modules[d] = self.modules[d].to(device)
+
+            self._cond_image_original = self._cond_image_original.to(device)
+            for key in list(self._lllite_tiled_cache.keys()):
+                for bid in list(self._lllite_tiled_cache[key].keys()):
+                    self._lllite_tiled_cache[key][bid] = self._lllite_tiled_cache[key][bid].to(device)
+
             return self
 
-    return control_net_lllite_patch(modules)
+    return control_net_lllite_patch(modules, cond_image.detach().clone())
 
 
 class LLLiteModule(torch.nn.Module):
