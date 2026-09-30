@@ -20,22 +20,24 @@ class Flux(ForgeDiffusionEngine):
 
         clip = CLIP(
             model_dict={
-                'clip_l': huggingface_components['text_encoder'],
-                't5xxl': huggingface_components['text_encoder_2']
+                "clip_l": huggingface_components["text_encoder"],
+                "t5xxl": huggingface_components["text_encoder_2"]
             },
             tokenizer_dict={
-                'clip_l': huggingface_components['tokenizer'],
-                't5xxl': huggingface_components['tokenizer_2']
+                "clip_l": huggingface_components["tokenizer"],
+                "t5xxl": huggingface_components["tokenizer_2"]
             }
         )
 
-        vae = VAE(model=huggingface_components['vae'])
+        vae = VAE(model=huggingface_components["vae"])
 
-        if 'schnell' in estimated_config.huggingface_repo.lower():
+        if "schnell" in estimated_config.huggingface_repo.lower():
+            self.is_schnell = True
             k_predictor = PredictionFlux(
                 mu=1.0
             )
         else:
+            self.is_schnell = False
             k_predictor = PredictionFlux(
                 seq_len=4096,
                 base_seq_len=256,
@@ -46,7 +48,7 @@ class Flux(ForgeDiffusionEngine):
             self.use_distilled_cfg_scale = True
 
         unet = UnetPatcher.from_model(
-            model=huggingface_components['transformer'],
+            model=huggingface_components["transformer"],
             diffusers_scheduler=None,
             k_predictor=k_predictor,
             config=estimated_config
@@ -55,8 +57,8 @@ class Flux(ForgeDiffusionEngine):
         self.text_processing_engine_l = ClassicTextProcessingEngine(
             text_encoder=clip.cond_stage_model.clip_l,
             tokenizer=clip.tokenizer.clip_l,
-            embedding_dir=dynamic_args['embedding_dir'],
-            embedding_key='clip_l',
+            embedding_dir=dynamic_args["embedding_dir"],
+            embedding_key="clip_l",
             embedding_expected_shape=768,
             text_projection=False,
             minimal_clip_skip=1,
@@ -78,6 +80,12 @@ class Flux(ForgeDiffusionEngine):
     def set_clip_skip(self, clip_skip):
         self.text_processing_engine_l.clip_skip = clip_skip
 
+    def set_shift(self, sequence_length):
+        if self.is_schnell:
+            self.apply_shift("shift_schnell", sequence_length//4)
+        else:
+            self.apply_shift("shift_flux", sequence_length//4)
+
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
@@ -88,7 +96,7 @@ class Flux(ForgeDiffusionEngine):
         cond = dict(crossattn=cond_t5, vector=pooled_l)
 
         if self.use_distilled_cfg_scale:
-            distilled_cfg_scale = getattr(prompt, 'distilled_cfg_scale', 3.5) or 3.5
+            distilled_cfg_scale = getattr(prompt, "distilled_cfg_scale", 3.5) or 3.5
             cond['guidance'] = torch.FloatTensor([distilled_cfg_scale] * len(prompt))
 
         return cond

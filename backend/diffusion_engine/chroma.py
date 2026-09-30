@@ -18,19 +18,19 @@ class Chroma(ForgeDiffusionEngine):
 
         clip = CLIP(
             model_dict={
-                't5xxl': huggingface_components['text_encoder']
+                "t5xxl": huggingface_components["text_encoder"]
             },
             tokenizer_dict={
-                't5xxl': huggingface_components['tokenizer']
+                "t5xxl": huggingface_components["tokenizer"]
             }
         )
 
-        vae = VAE(model=huggingface_components['vae'])
+        vae = VAE(model=huggingface_components["vae"])
         k_predictor = PredictionFlux(
             mu=1.0
         )
         unet = UnetPatcher.from_model(
-            model=huggingface_components['transformer'],
+            model=huggingface_components["transformer"],
             diffusers_scheduler=None,
             k_predictor=k_predictor,
             config=estimated_config
@@ -43,20 +43,22 @@ class Chroma(ForgeDiffusionEngine):
             end_with_pad=True
         )
 
-        self.is_flux = True # no need for specific is_chroma?
+        self.is_flux = True
+        self.is_schnell = True
+
         self.forge_objects = ForgeObjects(unet=unet, clip=clip, vae=vae, clipvision=None)
         self.forge_objects_original = self.forge_objects.shallow_copy()
         self.forge_objects_after_applying_lora = self.forge_objects.shallow_copy()
 
-    def set_clip_skip(self, clip_skip):
-        pass
+    def set_shift(self, sequence_length):
+        self.apply_shift("shift_schnell", sequence_length//4)
 
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
         cond_t5 = self.text_processing_engine_t5(prompt)
         cond = dict(crossattn=cond_t5)
-        cond['guidance'] = torch.FloatTensor([0] * len(prompt))
+        cond["guidance"] = torch.FloatTensor([0] * len(prompt))
         return cond
 
     @torch.inference_mode()

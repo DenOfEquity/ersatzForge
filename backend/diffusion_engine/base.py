@@ -2,6 +2,7 @@ import torch
 import safetensors.torch as sf
 
 from backend import utils
+from modules.shared import opts
 
 
 class ForgeObjects:
@@ -34,6 +35,66 @@ class ForgeDiffusionEngine:
         self.current_lora_hash = str([])
 
         self.fix_for_webui_backward_compatibility()
+
+    def set_shift(self, sequence_length):
+        pass
+
+    def apply_shift(self, option, sequence_length, max_sequence_length=4096, terminal=0.0):
+        if not hasattr(self, "original_sigmas"):
+            self.original_sigmas = self.forge_objects.unet.model.predictor.sigmas.clone()
+            self.sigmas_length = len(self.original_sigmas) # some Predictors use 1000, others 10000
+            self.last_shift = (0, 0, 0)
+
+        timesteps = None
+
+        shift_parts = getattr(opts, option, "").strip()
+        if shift_parts == "":
+            timesteps = self.original_sigmas.clone()
+
+        try:
+            shift_parts = [float(s.strip()) for s in shift_parts.split(",")[0:2]]
+        except Exception:
+            print (f"[Shift] Error parsing Setting for '{option}' - using original sigmas.")
+            timesteps = self.original_sigmas.clone()
+
+        match len(shift_parts):
+            case 1:
+                shift = max(0.25, shift_parts[0])
+                if self.last_shift[0] == shift:
+                    return
+                base_shift = 0.0
+                max_shift = 0.0
+            case 2:
+                base_shift = max(0.2, shift_parts[0])
+                max_shift = max(base_shift, shift_parts[1])
+                if self.last_shift[1] == base_shift and self.last_shift[2] == max_shift:
+                    return
+                shift = 0.0
+            case _:
+                timesteps = self.original_sigmas.clone()
+
+        if timesteps is None:
+            timesteps = torch.arange(1, self.sigmas_length + 1, 1) / self.sigmas_length
+
+            if shift > 0.0:
+                timesteps = shift * timesteps / (1 + (shift - 1) * timesteps)
+            else:
+                base_sequence_len = 256
+
+                m = (max_shift - base_shift) / (max_sequence_length - base_sequence_len)
+                b = base_shift - m * base_sequence_len
+                mu = sequence_length * m + b
+                mu = torch.tensor(mu).to(timesteps)
+                timesteps = torch.exp(mu) / (torch.exp(mu) + (1 / timesteps - 1))
+
+            if terminal > 0.0:
+                one_minus_z = 1 - timesteps
+                scale_factor = one_minus_z[0] / (1 - terminal)
+                timesteps = 1 - (one_minus_z / scale_factor)
+
+            self.last_shift = (shift, base_shift, max_shift)
+
+        self.forge_objects.unet.model.predictor.register_buffer("sigmas", timesteps)
 
     def set_clip_skip(self, clip_skip):
         pass

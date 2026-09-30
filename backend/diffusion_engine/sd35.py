@@ -22,23 +22,23 @@ class StableDiffusion3(ForgeDiffusionEngine):
 
         clip = CLIP(
             model_dict={
-                'clip_l': huggingface_components['text_encoder'],
-                'clip_g': huggingface_components['text_encoder_2'],
-                't5xxl' : huggingface_components['text_encoder_3']
+                "clip_l": huggingface_components["text_encoder"],
+                "clip_g": huggingface_components["text_encoder_2"],
+                "t5xxl" : huggingface_components["text_encoder_3"]
             },
             tokenizer_dict={
-                'clip_l': huggingface_components['tokenizer'],
-                'clip_g': huggingface_components['tokenizer_2'],
-                't5xxl' : huggingface_components['tokenizer_3']
+                "clip_l": huggingface_components["tokenizer"],
+                "clip_g": huggingface_components["tokenizer_2"],
+                "t5xxl" : huggingface_components["tokenizer_3"]
             }
         )
 
         k_predictor = PredictionDiscreteFlow(shift=3.0)#opts.sd3_flow_shift)
 
-        vae = VAE(model=huggingface_components['vae'])
+        vae = VAE(model=huggingface_components["vae"])
 
         unet = UnetPatcher.from_model(
-            model=huggingface_components['transformer'],
+            model=huggingface_components["transformer"],
             diffusers_scheduler= None,
             k_predictor=k_predictor,
             config=estimated_config
@@ -47,8 +47,8 @@ class StableDiffusion3(ForgeDiffusionEngine):
         self.text_processing_engine_l = ClassicTextProcessingEngine(
             text_encoder=clip.cond_stage_model.clip_l,
             tokenizer=clip.tokenizer.clip_l,
-            embedding_dir=dynamic_args['embedding_dir'],
-            embedding_key='clip_l',
+            embedding_dir=dynamic_args["embedding_dir"],
+            embedding_key="clip_l",
             embedding_expected_shape=768,
             text_projection=True,
             minimal_clip_skip=1,
@@ -60,8 +60,8 @@ class StableDiffusion3(ForgeDiffusionEngine):
         self.text_processing_engine_g = ClassicTextProcessingEngine(
             text_encoder=clip.cond_stage_model.clip_g,
             tokenizer=clip.tokenizer.clip_g,
-            embedding_dir=dynamic_args['embedding_dir'],
-            embedding_key='clip_g',
+            embedding_dir=dynamic_args["embedding_dir"],
+            embedding_key="clip_g",
             embedding_expected_shape=1280,
             text_projection=True,
             minimal_clip_skip=1,
@@ -83,14 +83,11 @@ class StableDiffusion3(ForgeDiffusionEngine):
         self.is_sd3 = True
 
     def set_clip_skip(self, clip_skip):
-        # def sigma (timestep, s):
-            # return s * timestep / (1 + (s - 1) * timestep)
-
-        # ts = sigma((torch.arange(1, 10000 + 1, 1) / 10000), opts.sd3_flow_shift)
-        # self.forge_objects.unet.model.predictor.sigmas = ts
-
         self.text_processing_engine_l.clip_skip = clip_skip
         self.text_processing_engine_g.clip_skip = clip_skip
+
+    def set_shift(self, sequence_length):
+        self.apply_shift("shift_sd3", sequence_length//4)
 
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):
@@ -105,14 +102,14 @@ class StableDiffusion3(ForgeDiffusionEngine):
         pad = cond_g.size(1) - cond_l.size(1)
         if pad > 1:
             padding = (0,0, 0, pad, 0,0)
-            cond_l = torch.nn.functional.pad (cond_l, padding, mode='constant', value=0)
+            cond_l = torch.nn.functional.pad (cond_l, padding, mode="constant", value=0)
         elif pad < 1:
             padding = (0,0, 0, -pad, 0,0)
-            cond_g = torch.nn.functional.pad (cond_g, padding, mode='constant', value=0)
+            cond_g = torch.nn.functional.pad (cond_g, padding, mode="constant", value=0)
 
-        is_negative_prompt = getattr(prompt, 'is_negative_prompt', False)
+        is_negative_prompt = getattr(prompt, "is_negative_prompt", False)
 
-        force_zero_negative_prompt = is_negative_prompt and all(x == '' for x in prompt)
+        force_zero_negative_prompt = is_negative_prompt and all(x == "" for x in prompt)
 
         if force_zero_negative_prompt:
             l_pooled = torch.zeros_like(l_pooled)

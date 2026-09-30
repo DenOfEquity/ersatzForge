@@ -28,7 +28,7 @@ class Anima(ForgeDiffusionEngine):
 
         vae = VAE(model=huggingface_components["vae"])
         k_predictor = PredictionDiscreteFlow(shift=3.0, multiplier=1.0)
-        # k_predictor = PredictionCosmosRFlow(sigma_max=80.0)
+
         unet = UnetPatcher.from_model(
             model=huggingface_components["transformer"],
             diffusers_scheduler=None,
@@ -47,6 +47,9 @@ class Anima(ForgeDiffusionEngine):
         self.forge_objects_after_applying_lora = self.forge_objects.shallow_copy()
 
         self.is_cosmos_predict2 = True
+
+    def set_shift(self, sequence_length):
+        self.apply_shift("shift_anima", sequence_length//4)
 
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):

@@ -48,6 +48,9 @@ class ERNIE(ForgeDiffusionEngine):
         self.forge_objects_original = self.forge_objects.shallow_copy()
         self.forge_objects_after_applying_lora = self.forge_objects.shallow_copy()
 
+    def set_shift(self, sequence_length):
+        self.apply_shift("shift_ernie", sequence_length//4)
+
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)

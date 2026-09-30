@@ -19,19 +19,19 @@ class Krea2(ForgeDiffusionEngine):
 
         clip = CLIP(
             model_dict={
-                'qwen3': huggingface_components['text_encoder'],
+                "qwen3": huggingface_components["text_encoder"],
             },
             tokenizer_dict={
-                'qwen3': huggingface_components['tokenizer'],
+                "qwen3": huggingface_components["tokenizer"],
             }
         )
 
-        vae = VAE(model=huggingface_components['vae'])
+        vae = VAE(model=huggingface_components["vae"])
 
-        k_predictor = PredictionDiscreteFlow(multiplier=1.0, shift=1.15)#estimated_config)
+        k_predictor = PredictionDiscreteFlow(multiplier=1.0, shift=1.15)
 
         unet = UnetPatcher.from_model(
-            model=huggingface_components['transformer'],
+            model=huggingface_components["transformer"],
             diffusers_scheduler=None,
             k_predictor=k_predictor,
             config=estimated_config
@@ -47,6 +47,9 @@ class Krea2(ForgeDiffusionEngine):
         self.forge_objects = ForgeObjects(unet=unet, clip=clip, vae=vae, clipvision=None)
         self.forge_objects_original = self.forge_objects.shallow_copy()
         self.forge_objects_after_applying_lora = self.forge_objects.shallow_copy()
+
+    def set_shift(self, sequence_length):
+        self.apply_shift("shift_krea2", sequence_length//4, max_sequence_length=6400)
 
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):
