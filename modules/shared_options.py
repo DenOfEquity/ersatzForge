@@ -380,6 +380,30 @@ Processing cost is insignificant.
     "TAG_r_guidance": OptionInfo(1.0, "Tangential Amplifying Guidance - radial guidance", gr.Slider, {"minimum": 0.5, "maximum": 2.0, "step": 0.01}, infotext="TAG_r"),
     "TAG_start": OptionInfo(0.0, "Tangential Amplifying Guidance - start step (inclusive)", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="TAG_start"),
     "TAG_stop": OptionInfo(1.0, "Tangential Amplifying Guidance - stop step (inclusive)", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}, infotext="TAG_stop"),
+
+    "shift_explanation": shared.OptionHTML("""
+<h3>Shift parameters for Flow Matching models, set per model architecture.</h3>
+Either two parameters, for dynamic Shift:
+<ol>
+<li>base shift</li>
+<li>maximum shift</li>
+</ol>
+Or one parameter, for non-dynamic Shift:
+<ol>
+<li>shift</li>
+</ol>
+Or leave blank, to use webUI default values.
+"""),
+    "shift_anima":   shared.OptionInfo("", "Shift - Anima (default: 3.0)", gr.Textbox, {"max_lines": 1}, infotext="Shift Anima"),
+    "shift_ernie":   shared.OptionInfo("", "Shift - ERNIEImage (default: 4.0 or 0.5, 1.15)", gr.Textbox, {"max_lines": 1}, infotext="Shift ERNIE"),
+    "shift_flux":    shared.OptionInfo("", "Shift - Flux1.Dev (default: 3.0 or 0.5, 1.15)", gr.Textbox, {"max_lines": 1}, infotext="Shift Flux"),
+    "shift_schnell": shared.OptionInfo("", "Shift - Flux1.Schnell / Chroma (default: 1.0)", gr.Textbox, {"max_lines": 1}, infotext="Shift Schnell"),
+    "shift_klein":   shared.OptionInfo("", "Shift - Flux2 Klein (default: 3.0 or 0.5, 1.15)", gr.Textbox, {"max_lines": 1}, infotext="Shift Klein"),
+    "shift_krea2":   shared.OptionInfo("", "Shift - Krea2 (default: 1.15 or 0.5, 1.15)", gr.Textbox, {"max_lines": 1}, infotext="Shift Krea2"),
+    "shift_qwen2.1": shared.OptionInfo("", "Shift - QwenImage2.1 (default: 3.0 or 0.5, 0.9)", gr.Textbox, {"max_lines": 1}, infotext="Shift Qwen2.1"),
+    "shift_sd3":     shared.OptionInfo("", "Shift - SD3 (default: 3.0)", gr.Textbox, {"max_lines": 1}, infotext="Shift SD3"),
+    "shift_zimage":  shared.OptionInfo("", "Shift - Z-Image (default: 3.0)", gr.Textbox, {"max_lines": 1}, infotext="Shift ZImage"),
+
 }))
 
 options_templates.update(options_section(("postprocessing", "Postprocessing", "postprocessing"), {

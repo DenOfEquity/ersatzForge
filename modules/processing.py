@@ -429,6 +429,7 @@ class StableDiffusionProcessing:
         self.step_multiplier = total_steps // self.steps
         self.firstpass_steps = total_steps
 
+        shared.sd_model.set_shift(self.width*self.height//(opt_f*opt_f))
         shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
 
         if self.cfg_scale == 1:
@@ -736,19 +737,45 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
         if enable_hr and token_merging_ratio_hr > 0:
             generation_params.update({ "Token merging ratio hr": token_merging_ratio_hr, })
 
+    def shift_setting(option, infotext):
+        shift = getattr(opts, option, "").strip()
+        if shift != "":
+            shift = shift.split(",")[0:2]
+            shift = ", ".join(s.strip() for s in shift)
+            generation_params.update({ infotext: shift })
+
     if p.sd_model.is_flux:
+        if p.sd_model.is_schnell:
+            shift_setting("shift_schnell", "Shift Schnell")
+        else:
+            shift_setting("shift_flux", "Shift Flux")
+
         if opts.dynamicPE_flux > 0:
             generation_params.update({ "dynamicPE flux": opts.dynamicPE_flux, })
         elif opts.scalePE_flux > 0:
             generation_params.update({ "scalePE flux": opts.scalePE_flux, })
     elif p.sd_model.is_lumina2:
+        shift_setting("shift_zimage", "Shift ZImage")
+
         if opts.dynamicPE_lumina2 > 0:
             generation_params.update({ "dynamicPE lumina2": opts.dynamicPE_lumina2, })
         elif opts.scalePE_lumina2 > 0:
             generation_params.update({ "scalePE lumina2": opts.scalePE_lumina2, })
     elif p.sd_model.is_ernie:
+        shift_setting("shift_ernie", "Shift ERNIE")
+
         if opts.scalePE_ernie > 0:
             generation_params.update({ "scalePE ernie": opts.scalePE_ernie, })
+    elif p.sd_model.is_krea2:
+        shift_setting("shift_krea2", "Shift Krea2")
+    elif p.sd_model.is_qwen21:
+        shift_setting("shift_qwen2.1", "Shift Qwen2.1")
+    elif p.sd_model.is_cosmos_predict2:
+        shift_setting("shift_anima", "Shift Anima")
+    elif p.sd_model.is_flux2:
+        shift_setting("shift_klein", "Shift Klein")
+    elif p.sd_model.is_sd3:
+        shift_setting("shift_sd3", "Shift SD3")
 
     if opts.sd_vae_decode_method != "Full":
         generation_params.update({ "VAE Decoder": opts.sd_vae_decode_method, })
@@ -1598,6 +1625,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         steps = self.hr_second_pass_steps or self.steps
         total_steps = sampler_config.total_steps(steps) if sampler_config else steps
 
+        shared.sd_model.set_shift(self.width*self.height//(opt_f*opt_f))
         shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
 
         if self.hr_cfg == 1:
