@@ -40,6 +40,7 @@ class ForgeDiffusionEngine:
         pass
 
     def apply_shift(self, option, sequence_length, max_sequence_length=4096, terminal=0.0):
+        # called by set_shift() in actual diffusion engine
         if not hasattr(self, "original_sigmas"):
             self.original_sigmas = self.forge_objects.unet.model.predictor.sigmas.clone()
             self.sigmas_length = len(self.original_sigmas) # some Predictors use 1000, others 10000
@@ -50,28 +51,26 @@ class ForgeDiffusionEngine:
         shift_parts = getattr(opts, option, "").strip()
         if shift_parts == "":
             timesteps = self.original_sigmas.clone()
-
-        try:
-            shift_parts = [float(s.strip()) for s in shift_parts.split(",")[0:2]]
-        except Exception:
-            print (f"[Shift] Error parsing Setting for '{option}' - using original sigmas.")
-            timesteps = self.original_sigmas.clone()
-
-        match len(shift_parts):
-            case 1:
-                shift = max(0.25, shift_parts[0])
-                if self.last_shift[0] == shift:
-                    return
-                base_shift = 0.0
-                max_shift = 0.0
-            case 2:
-                base_shift = max(0.2, shift_parts[0])
-                max_shift = max(base_shift, shift_parts[1])
-                if self.last_shift[1] == base_shift and self.last_shift[2] == max_shift:
-                    return
-                shift = 0.0
-            case _:
+            self.last_shift = (0, 0, 0)
+        else:
+            try:
+                shift_parts = [float(s.strip()) for s in shift_parts.split(",")[0:2]]
+                if len(shift_parts) == 1:
+                    shift = max(0.25, shift_parts[0])
+                    if self.last_shift[0] == shift:
+                        return
+                    base_shift = 0.0
+                    max_shift = 0.0
+                else:
+                    base_shift = max(0.2, shift_parts[0])
+                    max_shift = max(base_shift, shift_parts[1])
+                    if self.last_shift[1] == base_shift and self.last_shift[2] == max_shift:
+                        return
+                    shift = 0.0
+            except Exception:
+                print (f"[Shift] Error parsing Setting for '{option}' - using original sigmas.")
                 timesteps = self.original_sigmas.clone()
+                self.last_shift = (0, 0, 0)
 
         if timesteps is None:
             timesteps = torch.arange(1, self.sigmas_length + 1, 1) / self.sigmas_length
