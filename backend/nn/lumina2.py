@@ -19,13 +19,12 @@ from modules import shared
 class JointAttention(nn.Module):
     def __init__(self, dim: int, n_heads: int, n_kv_heads: int, qk_norm: bool):
         super().__init__()
-        self.n_kv_heads = n_heads if n_kv_heads is None else n_kv_heads
+        n_kv_heads = n_kv_heads or n_heads
         self.n_local_heads = n_heads
-        self.n_local_kv_heads = self.n_kv_heads
-        self.n_rep = self.n_local_heads // self.n_local_kv_heads
+        self.n_local_kv_heads = n_kv_heads
         self.head_dim = dim // n_heads
 
-        self.qkv = nn.Linear(dim, (n_heads + self.n_kv_heads + self.n_kv_heads) * self.head_dim, bias=False)
+        self.qkv = nn.Linear(dim, (n_heads + n_kv_heads + n_kv_heads) * self.head_dim, bias=False)
         self.out = nn.Linear(n_heads * self.head_dim, dim, bias=False)
 
         if qk_norm:
@@ -37,7 +36,6 @@ class JointAttention(nn.Module):
     @staticmethod
     def apply_rotary_emb(x_in: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
         t_ = x_in.reshape(*x_in.shape[:-1], -1, 1, 2)
-        # t_out = freqs_cis[..., 0] * t_[..., 0] + freqs_cis[..., 1] * t_[..., 1]
         t_out = torch.mul(freqs_cis[..., 0], t_[..., 0])
         t_out.addcmul_(freqs_cis[..., 1], t_[..., 1])
         return t_out.reshape(*x_in.shape)
@@ -68,7 +66,7 @@ class JointAttention(nn.Module):
             xv[:, :y_len, :, :] *= negpip[:, None, None]
 
         n_rep = self.n_local_heads // self.n_local_kv_heads
-        if n_rep >= 1:
+        if n_rep > 1:
             xk = xk.unsqueeze(3).repeat(1, 1, 1, n_rep, 1).flatten(2, 3)
             xv = xv.unsqueeze(3).repeat(1, 1, 1, n_rep, 1).flatten(2, 3)
         output = attention_function(xq.movedim(1, 2), xk.movedim(1, 2), xv.movedim(1, 2), self.n_local_heads, None, skip_reshape=True)
@@ -101,10 +99,9 @@ class FeedForward(nn.Module):
 
 
 class JointTransformerBlock(nn.Module):
-    def __init__(self, layer_id: int, dim: int, n_heads: int, n_kv_heads: int, multiple_of: int, ffn_dim_multiplier: float, norm_eps: float, qk_norm: bool, modulation=True, z_modulation=False, block_id=None):
+    def __init__(self, dim: int, n_heads: int, n_kv_heads: int, multiple_of: int, ffn_dim_multiplier: float, norm_eps: float, qk_norm: bool, modulation=True, z_modulation=False, block_id=None):
         super().__init__()
-        self.dim = dim
-        self.head_dim = dim // n_heads
+
         self.attention = JointAttention(dim, n_heads, n_kv_heads, qk_norm)
         self.feed_forward = FeedForward(
             dim=dim,
@@ -112,7 +109,6 @@ class JointTransformerBlock(nn.Module):
             multiple_of=multiple_of,
             ffn_dim_multiplier=ffn_dim_multiplier,
         )
-        self.layer_id = layer_id
         self.block_id = block_id
         self.attention_norm1 = nn.RMSNorm(dim, eps=norm_eps, elementwise_affine=True)
         self.ffn_norm1 = nn.RMSNorm(dim, eps=norm_eps, elementwise_affine=True)
@@ -170,13 +166,13 @@ class JointTransformerBlock(nn.Module):
 
 
 class JointTransformerBlockControl(JointTransformerBlock):
-    def __init__(self, layer_id: int, dim: int, n_heads: int, n_kv_heads: int, multiple_of: int, ffn_dim_multiplier: float, norm_eps: float, qk_norm: bool, modulation=True, z_modulation=False, block_id=None, control=False):
-        super().__init__(layer_id, dim, n_heads, n_kv_heads, multiple_of, ffn_dim_multiplier, norm_eps, qk_norm, modulation, z_modulation)
+    def __init__(self, dim: int, n_heads: int, n_kv_heads: int, multiple_of: int, ffn_dim_multiplier: float, norm_eps: float, qk_norm: bool, modulation=True, z_modulation=False, block_id=None, control=False):
+        super().__init__(dim, n_heads, n_kv_heads, multiple_of, ffn_dim_multiplier, norm_eps, qk_norm, modulation, z_modulation)
         self.block_id = block_id
         if control and block_id is not None:
             if block_id == 0:
-                self.before_proj = nn.Linear(self.dim, self.dim)
-            self.after_proj = nn.Linear(self.dim, self.dim)
+                self.before_proj = nn.Linear(dim, dim)
+            self.after_proj = nn.Linear(dim, dim)
 
 
     def forward(self, c: torch.Tensor, x: torch.Tensor, x_mask: torch.Tensor, freqs_cis: torch.Tensor, adaln_input: torch.Tensor=None):
@@ -241,8 +237,6 @@ class Lumina2DiT(nn.Module):
     ):
         super().__init__()
         assert (dim // n_heads) == sum(axes_dims)
-        self.axes_dims = axes_dims
-        self.axes_lens = axes_lens
 
         self.use_dynamicPE = shared.opts.dynamicPE_lumina2
         if self.use_dynamicPE > 0:
@@ -251,10 +245,8 @@ class Lumina2DiT(nn.Module):
             self.rope_embedder = EmbedND(theta=rope_theta, axes_dim=axes_dims)
 
         self.dim = dim
-        self.n_heads = n_heads
 
-        self.in_channels = in_channels
-        self.out_channels = in_channels
+        out_channels = in_channels
         self.patch_size = patch_size
         self.pad_tokens_multiple = pad_tokens_multiple
 
@@ -263,7 +255,6 @@ class Lumina2DiT(nn.Module):
         self.context_refiner = nn.ModuleList(
             [
                 JointTransformerBlock(
-                    layer_id,
                     dim,
                     n_heads,
                     n_kv_heads,
@@ -309,7 +300,6 @@ class Lumina2DiT(nn.Module):
             self.control_layers = nn.ModuleList(
                 [
                     JointTransformerBlockControl(
-                        i, 
                         dim, 
                         n_heads, 
                         n_kv_heads, 
@@ -328,7 +318,6 @@ class Lumina2DiT(nn.Module):
             self.control_noise_refiner = nn.ModuleList(
                 [
                     JointTransformerBlockControl(
-                        layer_id + 1000,
                         dim,
                         n_heads,
                         n_kv_heads,
@@ -356,7 +345,6 @@ class Lumina2DiT(nn.Module):
         self.noise_refiner = nn.ModuleList(
             [
                 JointTransformerBlock(
-                    layer_id + 1000,
                     dim,
                     n_heads,
                     n_kv_heads,
@@ -374,7 +362,6 @@ class Lumina2DiT(nn.Module):
         self.layers = nn.ModuleList(
             [
                 JointTransformerBlock(
-                    layer_id,
                     dim,
                     n_heads,
                     n_kv_heads,
@@ -389,7 +376,7 @@ class Lumina2DiT(nn.Module):
             ]
         )
 
-        self.final_layer = FinalLayer(dim, patch_size, self.out_channels, z_modulation=z_modulation)
+        self.final_layer = FinalLayer(dim, patch_size, out_channels, z_modulation=z_modulation)
 
         if self.pad_tokens_multiple is not None:
             self.x_pad_token = nn.Parameter(torch.empty((1, dim)))
@@ -475,7 +462,7 @@ class Lumina2DiT(nn.Module):
             control = torch.unbind(control)[:-1]
 
         for layer in self.noise_refiner:
-            x = layer(x, None, freqs_cis[:, num_tokens:], t, hints or control, strength=1.0)
+            x = layer(x, None, freqs_cis[:, num_tokens:], t, None, hints or control, strength=1.0)
 
         for layer in self.context_refiner:
             context = layer(context, None, freqs_cis[:, :num_tokens])
