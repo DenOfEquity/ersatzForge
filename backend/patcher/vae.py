@@ -7,17 +7,16 @@ from backend.patcher.base import ModelPatcher
 
 
 @torch.inference_mode()
-def tiled_scale(samples, function, tile=(64, 64), overlap=8, upscale_amount=4, out_channels=3, output_device="cpu"):
+def tiled_scale(samples, function, tile=(64, 64), overlap=8, upscale_amount=4, output_device="cpu"):
     dims = len(tile)
     B, _, H, W = samples.shape
-    shapeF = [B, out_channels, round(H * upscale_amount), round(W * upscale_amount)]
-    shape1 = [1, out_channels, round(H * upscale_amount), round(W * upscale_amount)]
-    output = torch.empty(shapeF, device=output_device)
 
-    for b in trange(samples.shape[0]):
+    output = None
+
+    for b in trange(B):
         s = samples[b:b + 1]
-        out = torch.zeros(shape1, device=output_device)
-        out_div = torch.zeros(shape1, device=output_device)
+        o_mask = None
+        o_div = None
 
         for it in itertools.product(*(range(0, a[0], a[1] - overlap) for a in zip(s.shape[2:], tile))):
             s_in = s
@@ -30,18 +29,24 @@ def tiled_scale(samples, function, tile=(64, 64), overlap=8, upscale_amount=4, o
                 upscaled.append(round(pos * upscale_amount))
 
             ps = function(s_in).to(output_device)
+
+            if output is None:
+                output = torch.empty((B, ps.shape[1], int(H * upscale_amount), int(W * upscale_amount)), device=output_device)
+            if o_mask is None:
+                o_mask = torch.zeros((1,) + tuple(output.shape[1:]), device=output_device)
+                o_div  = torch.zeros((1,) + tuple(output.shape[1:]), device=output_device)
             mask = torch.ones_like(ps)
 
             feather = round(overlap * upscale_amount)
             for t in range(feather):
                 for d in range(2, dims + 2):
                     m = mask.narrow(d, t, 1)
-                    m *= ((1.0 / feather) * (t + 1))
+                    m *= (t + 1) / feather
                     m = mask.narrow(d, mask.shape[d] - 1 - t, 1)
-                    m *= ((1.0 / feather) * (t + 1))
+                    m *= (t + 1) / feather
 
-            o = out
-            o_d = out_div
+            o = o_mask
+            o_d = o_div
             for d in range(dims):
                 o = o.narrow(d + 2, upscaled[d], mask.shape[d + 2])
                 o_d = o_d.narrow(d + 2, upscaled[d], mask.shape[d + 2])
@@ -49,14 +54,14 @@ def tiled_scale(samples, function, tile=(64, 64), overlap=8, upscale_amount=4, o
             o += ps * mask
             o_d += mask
 
-        output[b:b + 1] = out / out_div
+        output[b:b + 1] = o_mask / o_div
     return output
 
 
 # this tiled decoder lightly modified from diffusers.models.autoencoders.autoencoder_kl.py
 # faster than original webUI tiled method (1 pass instead of 3) and better blending
 @torch.inference_mode()
-def tiled_decode_diffusers(samples, function, tile_x=64, tile_y=64, overlap=8, upscale=4, out_channels=3, device="cpu"):
+def tiled_decode_diffusers(samples, function, tile_x=64, tile_y=64, overlap=8, upscale=4, device="cpu"):
     def blend_v(a: torch.Tensor, b: torch.Tensor, blend_extent: int) -> torch.Tensor:
         blend_extent = min(a.shape[2], b.shape[2], blend_extent)
         for y in range(blend_extent):
@@ -69,7 +74,7 @@ def tiled_decode_diffusers(samples, function, tile_x=64, tile_y=64, overlap=8, u
             b[:, :, :, x] = a[:, :, :, -blend_extent + x] * (1 - x / blend_extent) + b[:, :, :, x] * (x / blend_extent)
         return b
 
-    output = torch.empty([samples.shape[0], out_channels, samples.shape[-2] * upscale, samples.shape[-1] * upscale], device=device)
+    output = None
 
     # Split samples into overlapping tiles and decode them separately.
     # The tiles have an overlap to avoid seams between tiles.
@@ -98,13 +103,17 @@ def tiled_decode_diffusers(samples, function, tile_x=64, tile_y=64, overlap=8, u
                 result_row.append(tile[:, :, :row_limitY, :row_limitX])
             result_rows.append(torch.cat(result_row, dim=3))
 
-        output[b:b+1] = torch.cat(result_rows, dim=2)
+        image = torch.cat(result_rows, dim=2)
+        if output is None:
+            output = torch.empty((samples.shape[0],) + tuple(image.shape[1:]), device=device)
+        output[b:b+1] = image
+
     return output
 
 
 # best run on strips of either full width or full height
 @torch.inference_mode()
-def tiled_decode_DoE(samples, function, tile_x=64, tile_y=64, overlap=8, upscale=4, out_channels=3, device="cpu"):
+def tiled_decode_DoE(samples, function, tile_x=64, tile_y=64, overlap=8, upscale=4, device="cpu"):
     def blend_v(a: torch.Tensor, b: torch.Tensor, blend_extent: int) -> torch.Tensor:
         blend_extent = min(a.shape[2], b.shape[2], blend_extent)
         for y in range(blend_extent):
@@ -126,7 +135,7 @@ def tiled_decode_DoE(samples, function, tile_x=64, tile_y=64, overlap=8, upscale
 
     o_tile_y = tile_y
     o_tile_x = tile_x
-    output = torch.empty([samples.shape[0], out_channels, samples.shape[-2] * upscale, samples.shape[-1] * upscale], device=device)
+    output = None
     tile_x -= overlap_x
     tile_y -= overlap_y
     tile_x = min(samples.shape[-1], tile_x)
@@ -191,7 +200,12 @@ def tiled_decode_DoE(samples, function, tile_x=64, tile_y=64, overlap=8, upscale
                 result_row.append(tile[:, :, :row_limitY, :row_limitX])
             result_rows.append(torch.cat(result_row, dim=3))
 
-        output[b:b+1] = torch.cat(result_rows, dim=2)
+        image = torch.cat(result_rows, dim=2)
+
+        if output is None:
+            output = torch.empty((samples.shape[0],) + tuple(image.shape[1:]), device=device)
+        output[b:b+1] = image
+
     return output
 
 
@@ -202,7 +216,7 @@ class VAE:
 
         self.memory_used_encode = lambda shape, dtype: (526 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
         if model.__class__.__name__ in ["AutoencoderKLWan22", "AutoencoderQwen21"]:
-            self.memory_used_decode = lambda shape, dtype: (8 * 64854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
+            self.memory_used_decode = lambda shape, dtype: (8 * 72854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
         else:
             self.memory_used_decode = lambda shape, dtype: (72854 * shape[-2] * shape[-1]) * memory_management.dtype_size(dtype)
 
@@ -218,11 +232,6 @@ class VAE:
             self.decode_upscale = 2
         else:
             self.decode_upscale = 1
-
-        if model.__class__.__name__ == "AutoencoderQwen21":
-            self.channels = 4
-        else:
-            self.channels = 3
 
         self.latent_channels = int(model.config.latent_channels)
 
@@ -272,13 +281,13 @@ class VAE:
 
         match method:
             case "diffusers":
-                output = tiled_decode_diffusers(samples, decode_fn, tile_x, tile_y, overlap, upscale=upscale, out_channels=self.channels, device=self.output_device) / 2.0
+                output = tiled_decode_diffusers(samples, decode_fn, tile_x, tile_y, overlap, upscale=upscale, device=self.output_device) / 2.0
             case "DoE":
-                output = tiled_decode_DoE(samples, decode_fn, tile_x, tile_y, overlap, upscale=upscale, out_channels=self.channels, device=self.output_device) / 2.0
+                output = tiled_decode_DoE(samples, decode_fn, tile_x, tile_y, overlap, upscale=upscale, device=self.output_device) / 2.0
             case _:
-                output = (tiled_scale(samples, decode_fn, (tile_x // 2, tile_y * 2), overlap, upscale_amount=upscale, out_channels=self.channels, output_device=self.output_device) +
-                          tiled_scale(samples, decode_fn, (tile_x * 2, tile_y // 2), overlap, upscale_amount=upscale, out_channels=self.channels, output_device=self.output_device) +
-                          tiled_scale(samples, decode_fn, (tile_x, tile_y),          overlap, upscale_amount=upscale, out_channels=self.channels, output_device=self.output_device)) / 6.0
+                output = (tiled_scale(samples, decode_fn, (tile_x // 2, tile_y * 2), overlap, upscale_amount=upscale, output_device=self.output_device) +
+                          tiled_scale(samples, decode_fn, (tile_x * 2, tile_y // 2), overlap, upscale_amount=upscale, output_device=self.output_device) +
+                          tiled_scale(samples, decode_fn, (tile_x, tile_y),          overlap, upscale_amount=upscale, output_device=self.output_device)) / 6.0
         
         return torch.clamp(output, min=0.0, max=1.0)
 
@@ -289,9 +298,9 @@ class VAE:
             overlap = self.tile_info[2]
 
         encode_fn = lambda a: self.first_stage_model.encode((2. * a - 1.).to(self.vae_dtype).to(self.device)).to(torch.float32)
-        samples  = tiled_scale(pixel_samples, encode_fn, (tile_x, tile_y),          overlap, upscale_amount=(1 / self.downscale_ratio), out_channels=self.latent_channels, output_device=self.output_device)
-        samples += tiled_scale(pixel_samples, encode_fn, (tile_x * 2, tile_y // 2), overlap, upscale_amount=(1 / self.downscale_ratio), out_channels=self.latent_channels, output_device=self.output_device)
-        samples += tiled_scale(pixel_samples, encode_fn, (tile_x // 2, tile_y * 2), overlap, upscale_amount=(1 / self.downscale_ratio), out_channels=self.latent_channels, output_device=self.output_device)
+        samples  = tiled_scale(pixel_samples, encode_fn, (tile_x, tile_y),          overlap, upscale_amount=(1 / self.downscale_ratio), output_device=self.output_device)
+        samples += tiled_scale(pixel_samples, encode_fn, (tile_x * 2, tile_y // 2), overlap, upscale_amount=(1 / self.downscale_ratio), output_device=self.output_device)
+        samples += tiled_scale(pixel_samples, encode_fn, (tile_x // 2, tile_y * 2), overlap, upscale_amount=(1 / self.downscale_ratio), output_device=self.output_device)
         samples /= 3.0
         return samples
 
@@ -301,6 +310,7 @@ class VAE:
             do_tiled = True
 
         if not do_tiled:
+            pixel_samples = None
             try:
                 memory_used = self.memory_used_decode(samples_in.shape, self.vae_dtype)
                 memory_management.load_models_gpu([self.patcher], memory_used)
@@ -308,10 +318,13 @@ class VAE:
                 batch_number = int(free_memory / memory_used)
                 batch_number = max(1, batch_number)
 
-                pixel_samples = torch.empty((samples_in.shape[0], self.channels, round(samples_in.shape[-2] * self.downscale_ratio * self.decode_upscale), round(samples_in.shape[-1] * self.downscale_ratio * self.decode_upscale)), device=self.output_device)
                 for x in range(0, samples_in.shape[0], batch_number):
                     samples = samples_in[x:x + batch_number].to(self.vae_dtype).to(self.device)
-                    pixel_samples[x:x + batch_number] = torch.clamp((self.first_stage_model.decode(samples).to(self.output_device).to(torch.float32) + 1.0) / 2.0, min=0.0, max=1.0)
+                    output = torch.clamp((self.first_stage_model.decode(samples).to(self.output_device).to(torch.float32) + 1.0) / 2.0, min=0.0, max=1.0)
+                    if pixel_samples is None:
+                        pixel_samples = torch.empty((samples_in.shape[0],) + tuple(output.shape[1:]), device=self.output_device)
+                    pixel_samples[x:x + batch_number] = output
+
             except memory_management.OOM_EXCEPTION:
                 print("Warning: Ran out of memory when regular VAE decoding, retrying with tiled VAE decoding.")
                 do_tiled = True
@@ -338,16 +351,20 @@ class VAE:
             do_tiled = True
 
         if not do_tiled:
+            samples = None
             try:
                 memory_used = self.memory_used_encode(pixel_samples.shape, self.vae_dtype)
                 memory_management.load_models_gpu([self.patcher], memory_required=memory_used)
                 free_memory = memory_management.get_free_memory(self.device)
                 batch_number = int(free_memory / memory_used)
                 batch_number = max(1, batch_number)
-                samples = torch.empty((pixel_samples.shape[0], self.latent_channels, round(pixel_samples.shape[-2] // self.downscale_ratio), round(pixel_samples.shape[-1] // self.downscale_ratio)), device=self.output_device)
+
                 for x in range(0, pixel_samples.shape[0], batch_number):
                     pixels_in = (2. * pixel_samples[x:x + batch_number] - 1.).to(self.vae_dtype).to(self.device)
-                    samples[x:x + batch_number] = self.first_stage_model.encode(pixels_in).to(self.output_device).to(torch.float32)
+                    output = self.first_stage_model.encode(pixels_in).to(self.output_device).to(torch.float32)
+                    if samples is None:
+                        samples = torch.empty((pixel_samples.shape[0],) + tuple(output.shape[1:]), device=self.output_device)
+                    samples[x:x + batch_number] = output
 
             except memory_management.OOM_EXCEPTION:
                 print("Warning: Ran out of memory when regular VAE encoding, retrying with tiled VAE encoding.")
