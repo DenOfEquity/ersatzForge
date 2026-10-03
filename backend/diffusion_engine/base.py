@@ -3,6 +3,7 @@ import safetensors.torch as sf
 
 from backend import utils
 from modules.shared import opts
+from modules_forge import colour_code as cc
 
 
 class ForgeObjects:
@@ -68,7 +69,7 @@ class ForgeDiffusionEngine:
                         return
                     shift = 0.0
             except Exception:
-                print (f"[Shift] Error parsing Setting for '{option}' - using original sigmas.")
+                print (f"{cc.WARNING}[Shift]{cc.MINOR} Error parsing Setting{cc.RESET} '{option}' - using original sigmas.")
                 timesteps = self.original_sigmas.clone()
                 self.last_shift = (0, 0, 0)
 
