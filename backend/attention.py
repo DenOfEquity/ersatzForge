@@ -9,16 +9,12 @@ from backend.misc.sub_quadratic_attention import efficient_dot_product_attention
 # ops = backend.operations.ForgeOperations
 
 
-BROKEN_XFORMERS = False
 if memory_management.xformers_enabled():
-    import xformers
-    import xformers.ops
-
     try:
-        x_vers = xformers.__version__
-        BROKEN_XFORMERS = x_vers.startswith("0.0.2") and not x_vers.startswith("0.0.20")
-    except:
-        pass
+        import xformers
+    except ModuleNotFoundError:
+        print("\n\nTo use `xformers`, the `xformers` package must be installed first.\ncommand:\n\tpip install xformers")
+        exit(-1)
 
 if memory_management.sage_attention_enabled():
     try:
@@ -171,21 +167,15 @@ def attention_sub_quad(query, key, value, heads, mask=None, attn_precision=None,
 def attention_xformers(q, k, v, heads, mask=None, attn_precision=None, skip_reshape=False):
     if skip_reshape:
         b, _, _, dim_head = q.shape
-    else:
-        b, _, dim_head = q.shape
-        dim_head //= heads
-
-    if BROKEN_XFORMERS and b * heads > 65535:
-        return attention_pytorch(q, k, v, heads, mask, skip_reshape=skip_reshape)
-
-    if skip_reshape:
         q = q.reshape(b * heads, -1, dim_head)
         k = k.reshape(b * heads, -1, dim_head)
         v = v.reshape(b * heads, -1, dim_head)
     else:
-        q = q.reshape(b, -1, heads, dim_head)
-        k = k.reshape(b, -1, heads, dim_head)
-        v = v.reshape(b, -1, heads, dim_head)
+        b, _, dim_head = q.shape
+        dim_head //= heads
+        q = q.reshape(b, -1, heads, dim_head).contiguous()
+        k = k.reshape(b, -1, heads, dim_head).contiguous()
+        v = v.reshape(b, -1, heads, dim_head).contiguous()
 
     if mask is not None:
         pad = 8 - q.shape[1] % 8
@@ -316,17 +306,23 @@ def slice_attention_single_head_spatial(q, k, v):
 
     mem_free_total = memory_management.get_free_memory(q.device)
 
-    tensor_size = q.shape[0] * q.shape[1] * k.shape[2] * q.element_size()
+    n_elements = q.shape[0] * q.shape[1] * k.shape[2]
+    tensor_size = n_elements * q.element_size()
     modifier = 3 if q.element_size() == 2 else 2.5
     mem_required = tensor_size * modifier
     steps = 1
 
     if mem_required > mem_free_total:
-        steps = 2 ** (math.ceil(math.log(mem_required / mem_free_total, 2)))
+        steps = math.ceil(mem_required / mem_free_total)
+
+    if q.device.type == "mps":
+        # MPSGraph rejects tensors with > INT_MAX elements
+        max_elements = 2**31 - 1
+        steps = max(steps, math.ceil(n_elements / max_elements))
 
     while True:
         try:
-            slice_size = q.shape[1] // steps if (q.shape[1] % steps) == 0 else q.shape[1]
+            slice_size = int(q.shape[1] / steps)
             for i in range(0, q.shape[1], slice_size):
                 end = i + slice_size
                 s1 = torch.bmm(q[:, i:end], k) * scale
@@ -342,17 +338,15 @@ def slice_attention_single_head_spatial(q, k, v):
             steps *= 2
             if steps > 128:
                 raise e
-            print("out of memory error, increasing steps and trying again {}".format(steps))
+            print(f"[OOM in slice_attention_single_head_spatial] increasing steps to {steps} and trying again.")
 
     return r1
 
 
 def normal_attention_single_head_spatial(q, k, v):
-    # compute attention
     b, c, h, w = q.shape
 
-    q = q.reshape(b, c, h * w)
-    q = q.permute(0, 2, 1)  # b,hw,c
+    q = q.reshape(b, c, h * w).permute(0, 2, 1)  # b,hw,c
     k = k.reshape(b, c, h * w)  # b,c,hw
     v = v.reshape(b, c, h * w)
 
@@ -363,7 +357,6 @@ def normal_attention_single_head_spatial(q, k, v):
 
 
 def xformers_attention_single_head_spatial(q, k, v):
-    # compute attention
     B, C, H, W = q.shape
     q = q.view(B, C, -1).transpose(1, 2).contiguous()
     k = k.view(B, C, -1).transpose(1, 2).contiguous()
@@ -379,7 +372,6 @@ def xformers_attention_single_head_spatial(q, k, v):
 
 
 def pytorch_attention_single_head_spatial(q, k, v):
-    # compute attention
     B, C, H, W = q.shape
     q = q.view(B, 1, C, -1).transpose(2, 3).contiguous()
     k = k.view(B, 1, C, -1).transpose(2, 3).contiguous()
@@ -389,7 +381,7 @@ def pytorch_attention_single_head_spatial(q, k, v):
         out = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False)
         out = out.transpose(2, 3).reshape(B, C, H, W)
     except memory_management.OOM_EXCEPTION:
-        print("scaled_dot_product_attention OOMed: switched to slice attention")
+        print("[OOM in pytorch_attention_single_head_spatial] switching to sliced attention.")
         out = slice_attention_single_head_spatial(q.view(B, -1, C), k.view(B, -1, C).transpose(1, 2),
                                                   v.view(B, -1, C).transpose(1, 2)).reshape(B, C, H, W)
     return out
