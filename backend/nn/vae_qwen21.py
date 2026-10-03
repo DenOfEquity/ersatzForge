@@ -1,7 +1,10 @@
 # original version: https://github.com/Wan-Video/Wan2.2/blob/main/wan/modules/vae2_2.py
 # Copyright 2024-2025 The Alibaba Wan Team Authors. All rights reserved.
-from diffusers.configuration_utils import ConfigMixin, register_to_config
 
+# this is specifically for Qwen Image 2.1: x -> (b c t h w) where t is always 1
+
+
+from diffusers.configuration_utils import ConfigMixin, register_to_config
 
 import torch
 import torch.nn as nn
@@ -47,15 +50,12 @@ class Resample(nn.Module):
             self.time_conv = nn.Conv3d(dim, dim, (1, 1, 1), stride=(2, 1, 1))
 
     def forward(self, x):
-        b, c, t, h, w = x.size()
-
-        t = x.shape[2]
         x = rearrange(x, "b c t h w -> (b t) c h w")
         if self.mode in ("upsample2d", "upsample3d"):
             x = strip_apply(self.resample, x, scale=2)
         else:
             x = self.resample(x)
-        x = rearrange(x, "(b t) c h w -> b c t h w", t=t)
+        x = rearrange(x, "(b t) c h w -> b c t h w", t=1)
 
         return x
 
@@ -88,10 +88,7 @@ def strip_apply(fn, x, scale=1, halo=1, out=None):
 class ResidualBlock(nn.Module):
     def __init__(self, in_dim, out_dim, dropout=0.0):
         super().__init__()
-        self.in_dim = in_dim
-        self.out_dim = out_dim
 
-        # layers
         self.residual = nn.Sequential(
             RMS_norm(in_dim, images=False),
             nn.SiLU(),
@@ -114,13 +111,7 @@ class ResidualBlock(nn.Module):
 
 
 class Down_ResidualBlock(nn.Module):
-    def __init__(self,
-                 in_dim,
-                 out_dim,
-                 dropout,
-                 mult,
-                 temporal_downsample=False,
-                 down_flag=False):
+    def __init__(self, in_dim, out_dim, dropout, mult, temporal_downsample=False, down_flag=False):
         super().__init__()
 
         # Shortcut path with downsample
@@ -153,13 +144,7 @@ class Down_ResidualBlock(nn.Module):
 
 
 class Up_ResidualBlock(nn.Module):
-    def __init__(self,
-                 in_dim,
-                 out_dim,
-                 dropout,
-                 mult,
-                 temporal_upsample=False,
-                 up_flag=False):
+    def __init__(self, in_dim, out_dim, dropout, mult, temporal_upsample=False, up_flag=False):
         super().__init__()
         # Shortcut path with upsample
         if up_flag:
@@ -196,17 +181,7 @@ class Up_ResidualBlock(nn.Module):
 
 
 class Encoder3d(nn.Module):
-    def __init__(
-        self,
-        dim=128,
-        z_dim=4,
-        dim_mult=[1, 2, 4, 4],
-        num_res_blocks=2,
-        attn_scales=[],
-        temporal_downsample=[True, True, False],
-        dropout=0.0,
-        in_channels=12,
-    ):
+    def __init__(self, dim=128, z_dim=4, dim_mult=[1, 2, 4, 4], num_res_blocks=2, temporal_downsample=[True, True, False], dropout=0.0):
         super().__init__()
 
         # dimensions
@@ -214,7 +189,7 @@ class Encoder3d(nn.Module):
         scale = 1.0
 
         # init block
-        self.conv1 = nn.Conv3d(in_channels, dims[0], (1, 3, 3), padding=(0, 1, 1))
+        self.conv1 = nn.Conv3d(4, dims[0], (1, 3, 3), padding=(0, 1, 1))
         self.conv1._padding = 0
 
         # downsample blocks
@@ -253,15 +228,12 @@ class Encoder3d(nn.Module):
     def forward(self, x):
         x = self.conv1(x)
 
-        ## downsamples
         for layer in self.downsamples:
             x = layer(x)
 
-        ## middle
         for layer in self.middle:
             x = layer(x)
 
-        ## head
         for layer in self.head:
             x = layer(x)
 
@@ -269,24 +241,8 @@ class Encoder3d(nn.Module):
 
 
 class Decoder3d(nn.Module):
-    def __init__(
-        self,
-        dim=128,
-        z_dim=4,
-        dim_mult=[1, 2, 4, 4],
-        num_res_blocks=2,
-        attn_scales=[],
-        temporal_upsample=[False, True, True],
-        dropout=0.0,
-        out_channels=12,
-    ):
+    def __init__(self, dim=128, z_dim=4, dim_mult=[1, 2, 4, 4], num_res_blocks=2, temporal_upsample=[False, True, True], dropout=0.0):
         super().__init__()
-        self.dim = dim
-        self.z_dim = z_dim
-        self.dim_mult = dim_mult
-        self.num_res_blocks = num_res_blocks
-        self.attn_scales = attn_scales
-        self.temporal_upsample = temporal_upsample
 
         # dimensions
         dims = [dim * u for u in [dim_mult[-1]] + dim_mult[::-1]]
@@ -331,11 +287,9 @@ class Decoder3d(nn.Module):
         for layer in self.middle:
             x = layer(x)
 
-        ## upsamples
         for layer in self.upsamples:
             x = layer(x)
 
-        ## head
         for layer in self.head:
             x = layer(x)
 
@@ -357,17 +311,10 @@ class AutoencoderQwen21(nn.Module, ConfigMixin):
         temporal_downsample=[True, True, False], # False, True, True, True in config
         dropout=0.0,
         image_channels=3,
-        patch_size=2,
+        patch_size=1,
     ):
         super().__init__()
-        self.base_dim = base_dim
-        self.z_dim = z_dim
-        self.dim_mult = dim_mult
-        self.num_res_blocks = num_res_blocks
-        self.attn_scales = attn_scales
-        self.temporal_downsample = temporal_downsample
-        self.temporal_upsample = temporal_downsample[::-1]
-        self.patch_size = 1
+        temporal_upsample = temporal_downsample[::-1]
 
         # modules
         self.encoder = Encoder3d(
@@ -375,10 +322,8 @@ class AutoencoderQwen21(nn.Module, ConfigMixin):
             z_dim * 2,
             dim_mult,
             num_res_blocks,
-            attn_scales,
-            self.temporal_downsample,
+            temporal_downsample,
             dropout,
-            in_channels=4,
         )
         self.conv1 = nn.Conv3d(z_dim * 2, z_dim * 2, 1)
         self.conv2 = nn.Conv3d(z_dim, z_dim, 1)
@@ -387,10 +332,8 @@ class AutoencoderQwen21(nn.Module, ConfigMixin):
             z_dim,
             dim_mult,
             num_res_blocks,
-            attn_scales,
-            self.temporal_upsample,
+            temporal_upsample,
             dropout,
-            out_channels=12,
         )
         self.latents_mean = torch.tensor([
             0.5126, 0.7721, -0.0631, 1.3506, -0.7855, -2.1025, -0.3458, 1.3722,
