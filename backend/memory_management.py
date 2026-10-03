@@ -162,7 +162,6 @@ if args.disable_xformers:
 else:
     try:
         import xformers
-        import xformers.ops
 
         XFORMERS_IS_AVAILABLE = True
         try:
@@ -1056,6 +1055,7 @@ def cast_to_device(tensor, device, dtype, copy=False):
     else:
         return tensor.to(device, dtype, copy=copy, non_blocking=non_blocking)
 
+
 def sage_attention_enabled():
     return args.use_sage_attention
 
@@ -1087,17 +1087,6 @@ def xformers_enabled_vae():
 def pytorch_attention_enabled():
     global ENABLE_PYTORCH_ATTENTION
     return ENABLE_PYTORCH_ATTENTION
-
-
-def pytorch_attention_flash_attention():
-    global ENABLE_PYTORCH_ATTENTION
-    if ENABLE_PYTORCH_ATTENTION:
-        # TODO: more reliable way of checking for flash attention?
-        if is_nvidia():  # pytorch flash attention only works on Nvidia
-            return True
-        if is_intel_xpu():
-            return True
-    return False
 
 
 def force_upcast_attention_dtype():
