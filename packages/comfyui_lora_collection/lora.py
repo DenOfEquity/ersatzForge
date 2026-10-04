@@ -66,21 +66,21 @@ def load_lora(lora, to_load):
                 new_lora[k] = lora[k]
         return new_lora
 
-    def convert_qwen21(sd): # make unfused copy: gate_up -> gate_layer+proj
+    def convert_qwen21(sd): # if lora has fused img_mlp but model does not
         new_lora = {}
         for k, v in lora.items():
-            if k.endswith(".img_mlp.gate_up.lora_A.weight"): # duplicate
-                name1 = k[:-22] + ".gate_layer.lora_A.weight"
-                name2 = k[:-22] + ".proj.lora_A.weight"
-                new_lora[name1] = lora[k]
-                new_lora[name2] = lora[k]
-            elif k.endswith(".img_mlp.gate_up.lora_B.weight"): # split
-                name1 = k[:-22] + ".gate_layer.lora_B.weight"
-                name2 = k[:-22] + ".proj.lora_B.weight"
-                new_lora[name1] = lora[k][:12288]
-                new_lora[name2] = lora[k][12288:]
-
-            new_lora[k] = lora[k]
+            ks = k.split(".img_mlp.gate_up.", 1)
+            if len(ks) == 2:
+                name1 = ks[0] + ".img_mlp.gate_layer." + ks[1]
+                name2 = ks[0] + ".img_mlp.proj." + ks[1]
+                if "up" in ks[1] or "B" in ks[1]: # split
+                    new_lora[name1] = lora[k][:12288]
+                    new_lora[name2] = lora[k][12288:]
+                else: #["down", "A"]     # duplicate
+                    new_lora[name1] = lora[k]
+                    new_lora[name2] = lora[k]
+            else:
+                new_lora[k] = lora[k]
         return new_lora
 
     if "img_in.lora_A.weight" in lora and "single_blocks.0.norm.key_norm.scale" in lora:
@@ -92,9 +92,9 @@ def load_lora(lora, to_load):
     if any(k.startswith("base_model.model.") for k in lora.keys()):
         lora = convert_fal(lora)
 
-    if any(k.endswith(".img_mlp.gate_up.lora_A.weight") for k in lora.keys()):
-        lora = convert_qwen21(lora)
-
+    if any(".img_mlp.gate_up." in lk for lk in lora.keys()):
+        if not any(mk.endswith(".img_mlp.gate_up") for mk in to_load):
+            lora = convert_qwen21(lora)
 
     patch_dict = {}
     loaded_keys = set()
