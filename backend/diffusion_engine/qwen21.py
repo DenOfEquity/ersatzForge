@@ -49,7 +49,7 @@ class Qwen21(ForgeDiffusionEngine):
         self.forge_objects_after_applying_lora = self.forge_objects.shallow_copy()
 
     def set_shift(self, sequence_length):
-        self.apply_shift("shift_qwen21", sequence_length, max_sequence_length=8192, terminal=0.02)
+        self.apply_shift("shift_qwen2.1", sequence_length, max_sequence_length=8192, terminal=0.02)
 
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: list[str]):
