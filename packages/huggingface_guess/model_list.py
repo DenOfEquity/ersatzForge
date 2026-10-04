@@ -612,7 +612,7 @@ class Lumina2(BASE):
     unet_extra_config = {}
     latent_format = latent.Flux
 
-    supported_inference_dtypes = [torch.bfloat16, torch.float32]#, torch.float16
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
 
     vae_key_prefix = ["vae."]
     text_encoder_key_prefix = ["text_encoders."]
@@ -754,7 +754,7 @@ class ERNIEImage(BASE):
     unet_extra_config = {}
     latent_format = latent.Flux2
 
-    supported_inference_dtypes = [torch.bfloat16, torch.float32]
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
 
     vae_key_prefix = ["vae."]
     text_encoder_key_prefix = ["text_encoders."]
@@ -799,7 +799,6 @@ class QwenImage21(BASE):
         "image_model": "qwen_image21",
     }
 
-    # scheduler mu at 1024x1024 (base 0.5 @ 256 tokens, max 0.9 @ 8192)
     sampling_settings = {
         "multiplier": 1.0,
         "shift": 0.69,
@@ -810,7 +809,7 @@ class QwenImage21(BASE):
     unet_extra_config = {}
     latent_format = latent.QwenImage21
 
-    supported_inference_dtypes = [torch.bfloat16, torch.float32]
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
 
     vae_key_prefix = ["vae."]
     text_encoder_key_prefix = ["text_encoders."]
