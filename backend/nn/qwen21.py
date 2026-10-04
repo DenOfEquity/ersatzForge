@@ -156,7 +156,7 @@ class QwenImage21TransformerBlock(nn.Module):
         x.add_(mlp)
 
         if x.dtype == torch.float16:
-            x = x.clip(-65504, 65504)
+            x = x.clamp_(-65504, 65504)
 
         return x
 
@@ -213,15 +213,24 @@ class QwenImage21Transformer2DModel(nn.Module):
 
 
     def build_sequence(self, x, context, ref_latents, ref_strengths):
+        b = x.shape[0]
         # text with each reference image spliced in at its slot, target image last
         txt = self.txt_in(context)
         parts, ids = [], []
+
+        # if using full system prompt
+        # conds = (txt[:, 17:24], txt[:, 24:31], txt[:, 31:38], txt[:, 38:45], txt[:, -5:])
+
+        # parts.append(txt[:, 14:17])
+        # parts.append(txt[:, 45:-5])
+        # pos = txt.shape[1] - 47
 
         conds = (txt[:, 8:15], txt[:, 15:22], txt[:, 22:29], txt[:, 29:36], txt[:, -5:])
 
         parts.append(txt[:, 5:8])
         parts.append(txt[:, 36:-5])
         pos = txt.shape[1] - 38
+
         ids.append(torch.arange(0, pos, device=x.device, dtype=torch.float32).unsqueeze(1).expand(pos, 3))
 
         for (img, str, cond) in zip(ref_latents + [x], ref_strengths + [1.0], conds):
@@ -232,7 +241,10 @@ class QwenImage21Transformer2DModel(nn.Module):
                 pos += cond_len
 
                 h, w = img.shape[-2:]
-                parts.append(self.img_in(img.flatten(2).transpose(1, 2)).mul_(str)) # mul on img or result of img_in is identical
+                p_img = self.img_in(img.flatten(2).transpose(1, 2)).mul_(str)
+                if b > 1: # batch
+                    p_img = p_img.expand(b, *p_img.shape[1:])
+                parts.append(p_img)
 
                 hh = torch.arange(-(h - h // 2), h // 2, device=x.device, dtype=torch.float32)
                 ww = torch.arange(-(w - w // 2), w // 2, device=x.device, dtype=torch.float32)
@@ -249,7 +261,7 @@ class QwenImage21Transformer2DModel(nn.Module):
         B, C, H, W = x.shape
         dtype = x.dtype
 
-        timestep = timesteps[0].item()
+        timestep = 1.0#timesteps[0].item() # seems better fidelity without this scaling, maybe use ** 0.5
         ref_strengths = [s*timestep for s in getattr(shared, "klein_strength", (0.0, 0.0, 0.0, 0.0))]
         ref_latents = getattr(shared, "klein_latents", [None, None, None, None]) # lengths must match, currently 4 hardcoded
 
