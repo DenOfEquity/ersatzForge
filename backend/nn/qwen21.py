@@ -89,6 +89,7 @@ def _apply_rope1(x, freqs_cis):
 
     return x_out.reshape(*x.shape).type_as(x)
 
+
 class Attention(nn.Module):
     def __init__(self, dim, heads, dim_head, eps=1e-6):
         super().__init__()
@@ -101,24 +102,29 @@ class Attention(nn.Module):
         self.norm_q = nn.RMSNorm(dim_head, eps=eps)
         self.norm_k = nn.RMSNorm(dim_head, eps=eps)
 
-    def forward(self, x, pe, prefix_len, negpip):
-        # (B, N, H, D) throughout
+    def forward(self, x, pe, prefix_len, negpip, segments):
         B, N, _ = x.shape
 
         q = self.to_q(x).view(B, N, self.heads, -1)
         q = self.norm_q(q)
-        q = _apply_rope1(q, pe)
+        q = _apply_rope1(q, pe).flatten(2)
 
         k = self.to_k(x).view(B, N, self.heads, -1)
         k = self.norm_k(k)
-        k = _apply_rope1(k, pe)
+        k = _apply_rope1(k, pe).flatten(2)
 
         v = self.to_v(x)
         if negpip is not None:
             y_len = len(negpip)
             v[:, :y_len, :] *= negpip[:, None]
 
-        attn = attention_function(q.flatten(2), k.flatten(2), v, self.heads)
+        # segmented attention, a little faster and seems better for (multiple) references
+        attn = torch.empty_like(x)
+        start = 0
+        for s in segments:
+            attn[:, start:start+s] = attention_function(q[:, start:start+s], k[:, :start+s], v[:, :start+s], self.heads)#, mask=mask)
+            start += s
+
         return self.to_out[0](attn)
 
 
@@ -135,13 +141,13 @@ class QwenImage21TransformerBlock(nn.Module):
         self.img_norm2 = nn.LayerNorm(dim, elementwise_affine=False, eps=eps)
         self.img_mlp = SwiGLUFeedForward(dim, dim * mlp_ratio, fused=fused_mlp)
 
-    def forward(self, x, mod, pe, prefix_len, negpip):
+    def forward(self, x, mod, pe, prefix_len, negpip, segments):
         (s_prefix1, s_target1), (g_prefix1, g_target1), (s_prefix2, s_target2), (g_prefix2, g_target2) = mod
         norm = self.img_norm1(x)
         norm[:, :prefix_len].mul_(s_prefix1)
         norm[:, prefix_len:].mul_(s_target1)
 
-        attn = self.attn(norm, pe, prefix_len, negpip)
+        attn = self.attn(norm, pe, prefix_len, negpip, segments)
         attn[:, :prefix_len].mul_(g_prefix1)
         attn[:, prefix_len:].mul_(g_target1)
         x.add_(attn)
@@ -191,23 +197,23 @@ class QwenImage21Transformer2DModel(nn.Module):
         super().__init__()
 
         self.out_channels = out_channels
-        self.inner_dim = num_attention_heads * attention_head_dim
+        inner_dim = num_attention_heads * attention_head_dim
 
         self.pe_embedder = EmbedND(theta=10000, axes_dim=list(axes_dims_rope))
-        self.time_text_embed = TimestepProjEmbeddings(self.inner_dim)
-        self.txt_in = TextProjection(context_in_dim, self.inner_dim, eps=eps)
-        self.img_in = nn.Linear(in_channels, self.inner_dim, bias=False)
+        self.time_text_embed = TimestepProjEmbeddings(inner_dim)
+        self.txt_in = TextProjection(context_in_dim, inner_dim, eps=eps)
+        self.img_in = nn.Linear(in_channels, inner_dim, bias=False)
 
         # one modulation shared by every block
-        self.modulation = nn.Sequential(nn.SiLU(), nn.Linear(self.inner_dim, 4 * self.inner_dim, bias=False))
+        self.modulation = nn.Sequential(nn.SiLU(), nn.Linear(inner_dim, 4 * inner_dim, bias=False))
 
         self.transformer_blocks = nn.ModuleList([
-            QwenImage21TransformerBlock(self.inner_dim, num_attention_heads, attention_head_dim, mlp_ratio=mlp_ratio, eps=eps, fused_mlp=fused_mlp)
+            QwenImage21TransformerBlock(inner_dim, num_attention_heads, attention_head_dim, mlp_ratio=mlp_ratio, eps=eps, fused_mlp=fused_mlp)
             for _ in range(num_layers)
         ])
 
-        self.norm_out = LastLayer(self.inner_dim, eps=eps)
-        self.proj_out = nn.Linear(self.inner_dim, out_channels, bias=False)
+        self.norm_out = LastLayer(inner_dim, eps=eps)
+        self.proj_out = nn.Linear(inner_dim, out_channels, bias=False)
 
         # text + reference K/V are step-independent (t = 0 modulation, causal prefix), cached for one sampling run
 
@@ -216,7 +222,7 @@ class QwenImage21Transformer2DModel(nn.Module):
         b = x.shape[0]
         # text with each reference image spliced in at its slot, target image last
         txt = self.txt_in(context)
-        parts, ids = [], []
+        parts, ids, segments = [], [], []
 
         # if using full system prompt
         # conds = (txt[:, 17:24], txt[:, 24:31], txt[:, 31:38], txt[:, 38:45], txt[:, -5:])
@@ -230,6 +236,7 @@ class QwenImage21Transformer2DModel(nn.Module):
         parts.append(txt[:, 5:8])
         parts.append(txt[:, 36:-5])
         pos = txt.shape[1] - 38
+        segments.append(pos)
 
         ids.append(torch.arange(0, pos, device=x.device, dtype=torch.float32).unsqueeze(1).expand(pos, 3))
 
@@ -251,10 +258,11 @@ class QwenImage21Transformer2DModel(nn.Module):
 
                 ids.append(torch.stack([torch.full((h, w), pos, device=x.device, dtype=torch.float32), hh[:, None].expand(h, w), ww[None, :].expand(h, w)], dim=-1).flatten(0, 1))
                 pos += max(h, w)
+                segments.append(cond_len + h*w)
 
         # (1, N, 1, ...): the layout the fused rms_rope wants for (B, N, H, D) queries
         pe = self.pe_embedder(torch.cat(ids, dim=0).unsqueeze(0)).transpose(1, 2).contiguous()
-        return torch.cat(parts, dim=1), pe
+        return torch.cat(parts, dim=1), pe, segments
 
 
     def forward(self, x, timesteps, context, negpip=None, **kwargs):
@@ -265,7 +273,7 @@ class QwenImage21Transformer2DModel(nn.Module):
         ref_strengths = [s*timestep for s in getattr(shared, "klein_strength", (0.0, 0.0, 0.0, 0.0))]
         ref_latents = getattr(shared, "klein_latents", [None, None, None, None]) # lengths must match, currently 4 hardcoded
 
-        hidden_states, pe = self.build_sequence(x, context, ref_latents, ref_strengths)
+        hidden_states, pe, segments = self.build_sequence(x, context, ref_latents, ref_strengths)
         prefix_len = hidden_states.shape[1] - H * W
 
         t = timesteps[:1].to(dtype)
@@ -277,7 +285,7 @@ class QwenImage21Transformer2DModel(nn.Module):
             negpip = negpip[0]
 
         for block in self.transformer_blocks:
-            hidden_states = block(hidden_states, mod, pe, prefix_len, negpip)
+            hidden_states = block(hidden_states, mod, pe, prefix_len, negpip, segments)
 
         hidden_states = self.norm_out(hidden_states[:, prefix_len:], temb[1:])
         hidden_states = self.proj_out(hidden_states)
