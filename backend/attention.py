@@ -1,12 +1,10 @@
+import einops
 import math
 import torch
-import einops
 
 from backend.args import args
 from backend import memory_management
 from backend.misc.sub_quadratic_attention import efficient_dot_product_attention
-# import backend.operations
-# ops = backend.operations.ForgeOperations
 
 
 if memory_management.xformers_enabled():
@@ -14,7 +12,7 @@ if memory_management.xformers_enabled():
         import xformers
     except ModuleNotFoundError:
         print("\n\nTo use `xformers`, the `xformers` package must be installed first.\ncommand:\n\tpip install xformers")
-        exit(-1)
+        memory_management.XFORMERS_IS_AVAILABLE = False # fall back to default
 
 if memory_management.sage_attention_enabled():
     try:
@@ -173,26 +171,26 @@ def attention_xformers(q, k, v, heads, mask=None, attn_precision=None, skip_resh
     else:
         b, _, dim_head = q.shape
         dim_head //= heads
-        q = q.reshape(b, -1, heads, dim_head).contiguous()
-        k = k.reshape(b, -1, heads, dim_head).contiguous()
-        v = v.reshape(b, -1, heads, dim_head).contiguous()
+        q = q.reshape(b, -1, heads, dim_head)
+        k = k.reshape(b, -1, heads, dim_head)
+        v = v.reshape(b, -1, heads, dim_head)
 
     if mask is not None:
-        pad = 8 - q.shape[1] % 8
-        mask_out = torch.empty([q.shape[0], q.shape[1], q.shape[1] + pad], dtype=q.dtype, device=q.device)
-        mask_out[:, :, :mask.shape[-1]] = mask
-        mask = mask_out[:, :, :mask.shape[-1]]
+        if mask.ndim == 2:
+            mask = mask.unsqueeze(0)
+        if mask.ndim == 3:
+            mask = mask.unsqueeze(1)
+
+        pad = 8 - mask.shape[-1] % 8
+        mask_out = torch.empty([mask.shape[0], mask.shape[1], q.shape[1], mask.shape[-1] + pad], device=q.device, dtype=q.dtype)
+        mask_out[..., : mask.shape[-1]] = mask
+        mask = mask_out[..., : mask.shape[-1]]
+        mask = mask.expand(b, heads, -1, -1)
 
     out = xformers.ops.memory_efficient_attention(q, k, v, attn_bias=mask)
 
     if skip_reshape:
         out = einops.rearrange(out, "(b h) z d -> b z (h d)", b=b, h=heads, d=dim_head).contiguous()
-        # out = (
-            # out.unsqueeze(0)
-            # .reshape(b, heads, -1, dim_head)
-            # .permute(0, 2, 1, 3)
-            # .reshape(b, -1, heads * dim_head)
-        # )
     else:
         out = out.reshape(b, -1, heads * dim_head)
 
