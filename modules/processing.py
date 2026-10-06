@@ -429,7 +429,7 @@ class StableDiffusionProcessing:
         self.step_multiplier = total_steps // self.steps
         self.firstpass_steps = total_steps
 
-        shared.sd_model.set_shift(self.width*self.height//(opt_f*opt_f))
+        shared.sd_model.set_shift(self.width*self.height // (opt_f*opt_f))
         shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
 
         if self.cfg_scale == 1:
@@ -769,7 +769,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
     elif p.sd_model.is_krea2:
         shift_setting("shift_krea2", "Shift Krea2")
     elif p.sd_model.is_qwen21:
-        shift_setting("shift_qwen2.1", "Shift Qwen2.1")
+        shift_setting("shift_qwen2.1", "Shift Qwen2_1")
     elif p.sd_model.is_cosmos_predict2:
         shift_setting("shift_anima", "Shift Anima")
     elif p.sd_model.is_flux2:
@@ -1625,7 +1625,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         steps = self.hr_second_pass_steps or self.steps
         total_steps = sampler_config.total_steps(steps) if sampler_config else steps
 
-        shared.sd_model.set_shift(self.width*self.height//(opt_f*opt_f))
+        shared.sd_model.set_shift(self.hr_upscale_to_x*self.hr_upscale_to_y // (opt_f*opt_f))
         shared.sd_model.set_clip_skip(int(opts.CLIP_stop_at_last_layers))
 
         if self.hr_cfg == 1:

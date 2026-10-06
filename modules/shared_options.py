@@ -214,7 +214,7 @@ options_templates.update(options_section(("optimizations", "Optimizations", "sd"
 }))
 
 options_templates.update(options_section(("compatibility", "Compatibility", "sd"), {
-    "use_old_karras_scheduler_sigmas": OptionInfo(False, "Use old karras scheduler sigmas (0.1 to 10).", infotext="Old Karras sigmas"),
+    "use_old_karras_scheduler_sigmas": OptionInfo(False, "Use old Karras scheduler sigmas (0.1 to 10).", infotext="Old Karras sigmas"),
     "hires_fix_use_firstpass_conds": OptionInfo(False, "For hires fix, calculate conds of second pass using extra networks of first pass."),
     "use_old_scheduling": OptionInfo(False, "Use old prompt editing timelines.", infotext="Old prompt editing timelines").info("For [red:green:N]; OLD: If N < 1, it's a fraction of steps (hires fix uses range from 0 to 1), if N >= 1, it's an absolute number of steps; NEW: If N has a decimal point in it, it's a fraction of steps (hires fix uses range from 1 to 2), otherwise it's an absolute number of steps"),
 }))
@@ -328,7 +328,7 @@ options_templates.update(options_section(("sampler-params", "Sampler parameters"
     "s_noise": OptionInfo(1.0, "sigma noise", gr.Slider, {"minimum": 0.0, "maximum": 1.1, "step": 0.001}, infotext="Sigma noise").info("amount of additional noise to counteract loss of detail during sampling"),
     "sigma_min": OptionInfo(0.0, "sigma min", gr.Slider, {"minimum": 0.0, "maximum": 2.0, "step": 0.001}, infotext="Sigma min").info("0 = default (~0.03); minimum noise strength for k-diffusion noise scheduler"),
     "sigma_max": OptionInfo(0.0, "sigma max", gr.Slider, {"minimum": 0.0, "maximum": 120.0, "step": 0.001}, infotext="Sigma max").info("0 = default (~14.6); maximum noise strength for k-diffusion noise scheduler"),
-    "rho":  OptionInfo(0.0, "rho", gr.Number, infotext="Schedule rho").info("0 = default (7 for karras, 1 for polyexponential); higher values result in a steeper noise schedule (decreases faster)"),
+    "rho":  OptionInfo(0.0, "rho", gr.Number, {"minimum": 0.0, "maximum": 120.0, "step": 0.01}, infotext="Schedule rho").info("0 = default (Karras: 7, polyexponential: 1); too low values will cause bad/broken images, higher values result in a steeper initial noise schedule"),
     "eta_noise_seed_delta": OptionInfo(0, "Eta noise seed delta", gr.Number, {"precision": 0}, infotext="ENSD").info("ENSD; does not improve anything, just produces different results for ancestral samplers - only useful for reproducing images"),
     "always_discard_next_to_last_sigma": OptionInfo(False, "Always discard next-to-last sigma", infotext="Discard penultimate sigma").link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/6044"),
     "sgm_noise_multiplier": OptionInfo(False, "SGM noise multiplier", infotext="SGM noise multiplier").link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/12818").info("Match initial noise to official SDXL implementation - only useful for reproducing images"),
@@ -400,7 +400,7 @@ Or leave blank, to use webUI default values.
     "shift_schnell": shared.OptionInfo("", "Shift - Flux1.Schnell / Chroma (default: 1.0)", gr.Textbox, {"max_lines": 1}, infotext="Shift Schnell"),
     "shift_klein":   shared.OptionInfo("", "Shift - Flux2 Klein (default: 3.0 or 0.5, 1.15)", gr.Textbox, {"max_lines": 1}, infotext="Shift Klein"),
     "shift_krea2":   shared.OptionInfo("", "Shift - Krea2 (default: 1.15 or 0.5, 1.15)", gr.Textbox, {"max_lines": 1}, infotext="Shift Krea2"),
-    "shift_qwen2.1": shared.OptionInfo("", "Shift - QwenImage2.1 (default: 3.0 or 0.5, 0.9)", gr.Textbox, {"max_lines": 1}, infotext="Shift Qwen2.1"),
+    "shift_qwen2.1": shared.OptionInfo("", "Shift - QwenImage2.1 (default: 3.0 or 0.5, 0.9)", gr.Textbox, {"max_lines": 1}, infotext="Shift Qwen2_1"),
     "shift_sd3":     shared.OptionInfo("", "Shift - SD3 (default: 3.0)", gr.Textbox, {"max_lines": 1}, infotext="Shift SD3"),
     "shift_zimage":  shared.OptionInfo("", "Shift - Z-Image (default: 3.0)", gr.Textbox, {"max_lines": 1}, infotext="Shift ZImage"),
 
