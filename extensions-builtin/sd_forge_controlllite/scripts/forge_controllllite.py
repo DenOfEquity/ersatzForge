@@ -1,3 +1,4 @@
+import importlib
 import torch
 
 from modules_forge.shared import add_supported_control_model
@@ -8,6 +9,7 @@ from lib_controllllite.lib_controllllite_anima import (
     infer_anima_config,
     load_lllite_weights_from_dict,
 )
+
 
 opLLLiteLoader = LLLiteLoader().load_lllite
 
@@ -26,10 +28,14 @@ class ControlLLLiteAnimaPatcher(ControlModelPatcher):
         model_filename = process.sd_model.sd_checkpoint_info.filename
 
         if self._lllite_net is None or self.patched_model_id != model_filename:
+            networks = importlib.import_module("networks") # "extensions-builtin.sd_forge_lora.networks"
+            self.state_dict = networks.anima_expanded(unet, self.state_dict)
+
             cfg = infer_anima_config(self.state_dict)
             self._lllite_net = ControlNetLLLiteDiT(dit, **cfg)
             load_lllite_weights_from_dict(self._lllite_net, self.state_dict)
             self.patched_model_id = model_filename
+
 
         device = unet.load_device
         dtype = unet.model.computation_dtype
@@ -81,9 +87,11 @@ class ControlLLLitePatcher(ControlModelPatcher):
         if any("lllite_dit" in k for k in state_dict):
             inpaint_masked_input = metadata.get("lllite.inpaint_masked_input", "false").lower() in ("true", "1", "yes")
             return ControlLLLiteAnimaPatcher(state_dict, inpaint_masked_input=inpaint_masked_input)
-        if not any("lllite" in k for k in state_dict):
-            return None
-        return ControlLLLitePatcher(state_dict)
+
+        if any("lllite" in k for k in state_dict):
+            return ControlLLLitePatcher(state_dict)
+
+        return None
 
     def __init__(self, state_dict):
         super().__init__()
