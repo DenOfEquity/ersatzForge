@@ -80,6 +80,15 @@ class NetworkOnDisk:
         elif str(self.metadata.get("ss_network_module", "")) == "networks.lora_anima":
             return "SdVersion.Anima"
 
+        elif str(self.metadata.get("modelspec.architecture", "")).startswith("Qwen-Image-2.1"):
+            return "SdVersion.Qwen2.1"
+        elif str(self.metadata.get("ss_base_model_version", "")).lower() == "qwen_image_2":
+            return "SdVersion.Qwen2.1"
+        elif str(self.metadata.get("ss_architecture", "")).lower() == "qwenimage21":
+            return "SdVersion.Qwen2.1"
+        elif "qwen_image21" in str(self.metadata.get("ss_network_module", "")).lower():
+            return "SdVersion.Qwen2.1"
+
         elif str(self.metadata.get("modelspec.architecture", "")).startswith("ernie"):
             return "SdVersion.ERNIE"
         elif str(self.metadata.get("ss_base_model_version", "")).lower() == "ernie_image":

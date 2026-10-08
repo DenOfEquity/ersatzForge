@@ -99,6 +99,9 @@ function setupExtraNetworksForTab(tabname) {
                 else if (UIpreset == "zimage") {
                     if (sdversion != "SdVersion.Zimage") visible = false;
                 }
+                else if (UIpreset == "qwen2.1") {
+                    if (sdversion != "SdVersion.Qwen2.1") visible = false;
+                }
 
                 if (visible) {
                     elem.classList.remove("hidden");

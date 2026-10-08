@@ -134,7 +134,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         ]
 
     def create_extra_default_items_in_left_column(self):
-        self.select_sd_version = gr.Radio(["SD1", "SD2", "SDXL", "SD3", "Anima", "ERNIE", "Flux", "Klein", "Krea2", "Zimage", "Unknown"], value="Unknown", label="Base model", interactive=True)
+        self.select_sd_version = gr.Radio(["SD1", "SD2", "SDXL", "SD3", "Anima", "ERNIE", "Flux", "Klein", "Krea2", "Qwen2.1", "Zimage", "Unknown"], value="Unknown", label="Base model", interactive=True)
 
     def create_editor(self):
         self.create_default_editor_elems()
@@ -144,7 +144,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         with gr.Row():
             self.edit_negative_text = gr.Text(label="Negative prompt", placeholder="Will be added to negative prompt", value="", elem_id="lora_negative")
             self.preferred_weight = gr.Number(label="LoRA weight", minimum=-50.0, maximum=50.0, value=1.0, step=0.01, scale=0)
-        self.edit_notes = gr.TextArea(label="Notes", lines=3)
+        self.edit_notes = gr.TextArea(label="Notes", lines=3, elem_id="loras_notes")
 
         def select_tag(activation_text, evt: gr.SelectData):
             tag = evt.value[0]
