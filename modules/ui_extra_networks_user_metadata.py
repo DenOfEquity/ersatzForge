@@ -160,14 +160,20 @@ class UserMetadataEditor:
 
             self.create_editor()
 
-    def save_preview(self, index, gallery, name):
+    def save_preview(self, index, gallery_t, gallery_i, name):
+        index = int(index)
+        if index >= 65536:
+            gallery = gallery_i
+            index -= 65536
+        else:
+            gallery = gallery_t
+
         if not gallery or len(gallery) == 0:
             gr.Info("No gallery: preview image not changed.", 5)
             return self.get_card_html(name)
 
         item = self.page.items.get(name, {})
 
-        index = int(index)
         index = max(index, 0)
         index = min(index, len(gallery)-1)
 
@@ -194,11 +200,11 @@ class UserMetadataEditor:
         item['preview'] = self.page.find_preview(item["local_preview"])
         return self.get_card_html(name)
 
-    def setup_ui(self, gallery):
+    def setup_ui(self, gallery_t, gallery_i):
         self.button_replace_preview.click(
             fn=self.save_preview,
-            js=f"function(x, y, z){{return [selected_gallery_index_id('{self.tabname + '_gallery_container'}'), y, z]}}",
-            inputs=[self.edit_name_input, gallery, self.edit_name_input],
+            js=f"function(a, x, y, z){{return [selected_gallery_index_id_active_tab(), x, y, z]}}",
+            inputs=[self.edit_name_input, gallery_t, gallery_i, self.edit_name_input],
             outputs=[self.html_preview],
             show_progress="hidden"
         ).then(

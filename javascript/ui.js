@@ -42,6 +42,17 @@ function selected_gallery_index_id(gallery_container) {
     return Array.from(gallery_container_buttons(gallery_container)).findIndex(elem => elem.classList.contains("selected"));
 }
 
+function selected_gallery_index_id_active_tab() {
+	var tabname = get_uiCurrentTab().innerText == "Txt2img" ? "txt2img" : "img2img";
+	var gallery = tabname + "_gallery_container";
+    var index = Array.from(gallery_container_buttons(gallery)).findIndex(elem => elem.classList.contains("selected"));
+    if (tabname == "img2img") {
+        index += 65536;
+    }
+    return index;
+}
+
+
 function extract_image_from_gallery(gallery) {
     if (gallery.length == 0) {
         return [null];

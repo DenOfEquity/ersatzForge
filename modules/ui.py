@@ -7,6 +7,7 @@ import warnings
 from contextlib import ExitStack
 
 import gradio as gr
+from packages.gradio_modal import Modal
 
 from PIL import Image, PngImagePlugin  # noqa: F401
 from modules.call_queue import wrap_gradio_gpu_call, wrap_queued_call, wrap_gradio_call, wrap_gradio_call_no_job # noqa: F401
@@ -245,16 +246,14 @@ def create_ui():
         dummy_component = gr.Textbox(visible=False, interactive=False)
         dummy_component_number = gr.Number(visible=False, interactive=False)
 
-        extra_tabs = gr.Tabs(elem_id="txt2img_extra_tabs", elem_classes=["extra-networks"])
-        extra_tabs.__enter__()
-
-        with gr.Tab("Generation", id="txt2img_generation") as txt2img_generation_tab, ResizeHandleRow(equal_height=False):
+        with ResizeHandleRow(equal_height=False):
             with ExitStack() as stack:
                 stack.enter_context(gr.Column(variant="compact", elem_id="txt2img_settings"))
 
                 scripts.scripts_txt2img.prepare_ui()
 
                 toprow.create_inline_toprow_prompts()   # forced prompt first
+                modal_show_btn_txt2img = gr.Button("Show Extra Networks")
 
                 for category in ordered_ui_categories():
                     if category == "dimensions":
@@ -387,7 +386,7 @@ def create_ui():
                     show_progress="hidden",
                 )
 
-            output_panel = ui_common.create_output_panel("txt2img", opts.outdir_txt2img_samples, toprow)
+            output_panel_t = ui_common.create_output_panel("txt2img", opts.outdir_txt2img_samples, toprow)
 
             txt2img_inputs = [
                 dummy_component,
@@ -419,10 +418,10 @@ def create_ui():
             ] + custom_inputs
 
             txt2img_outputs = [
-                output_panel.gallery,
-                output_panel.generation_info,
-                output_panel.infotext,
-                output_panel.html_log,
+                output_panel_t.gallery,
+                output_panel_t.generation_info,
+                output_panel_t.infotext,
+                output_panel_t.html_log,
             ]
 
             txt2img_args = dict(
@@ -436,7 +435,7 @@ def create_ui():
             toprow.prompt.submit(**txt2img_args)
             toprow.submit.click(**txt2img_args)
 
-            txt2img_upscale_inputs = txt2img_inputs[0:1] + [output_panel.gallery, dummy_component_number, output_panel.generation_info] + txt2img_inputs[1:]
+            txt2img_upscale_inputs = txt2img_inputs[0:1] + [output_panel_t.gallery, dummy_component_number, output_panel_t.generation_info] + txt2img_inputs[1:]
             toprow.button_upscale.click(
                 fn=wrap_gradio_gpu_call(modules.txt2img.txt2img_upscale, extra_outputs=[None, "", ""]),
                 js="submit_txt2img_upscale",
@@ -484,9 +483,6 @@ def create_ui():
                 toprow.token_button.click(fn=update_token_counter, inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress="hidden")
                 toprow.negative_token_button.click(fn=update_negative_prompt_token_counter, inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress="hidden")
 
-        extra_networks_ui = ui_extra_networks.create_ui(txt2img_interface, [txt2img_generation_tab], "txt2img")
-        ui_extra_networks.setup_ui(extra_networks_ui, output_panel.gallery)
-
         # with gr.Tab("Misc.", id="txt2img_misc"):
             # with gr.Accordion(open=False, label="Markdown"):
                 # with gr.Row():
@@ -501,7 +497,6 @@ def create_ui():
 
         # prompt history
 
-        extra_tabs.__exit__()
 
     scripts.scripts_current = scripts.scripts_img2img
     scripts.scripts_img2img.initialize_scripts(is_img2img=True)
@@ -509,16 +504,14 @@ def create_ui():
     with gr.Blocks(analytics_enabled=False, head=canvas_head) as img2img_interface:
         toprow = ui_toprow.Toprow(id_part="img2img")
 
-        extra_tabs = gr.Tabs(elem_id="img2img_extra_tabs", elem_classes=["extra-networks"])
-        extra_tabs.__enter__()
-
-        with gr.Tab("Generation", id="img2img_generation") as img2img_generation_tab, ResizeHandleRow(equal_height=False):
+        with ResizeHandleRow(equal_height=False):
             with ExitStack() as stack:
                 stack.enter_context(gr.Column(variant="compact", elem_id="img2img_settings"))
 
                 scripts.scripts_img2img.prepare_ui()
 
                 toprow.create_inline_toprow_prompts()  # forced prompts first
+                modal_show_btn_img2img = gr.Button("Show Extra Networks")
 
                 with gr.Tabs(elem_id="mode_img2img"):  # forced image second
                     img2img_selected_tab = gr.State(value=0)
@@ -660,7 +653,7 @@ def create_ui():
                         scripts.scripts_img2img.setup_ui_for_section(category)
 
 
-            output_panel = ui_common.create_output_panel("img2img", opts.outdir_img2img_samples, toprow)
+            output_panel_i = ui_common.create_output_panel("img2img", opts.outdir_img2img_samples, toprow)
 
             submit_img2img_inputs = [
                 dummy_component,
@@ -707,10 +700,10 @@ def create_ui():
                 js="submit_img2img",
                 inputs=submit_img2img_inputs,
                 outputs=[
-                    output_panel.gallery,
-                    output_panel.generation_info,
-                    output_panel.infotext,
-                    output_panel.html_log,
+                    output_panel_i.gallery,
+                    output_panel_i.generation_info,
+                    output_panel_i.infotext,
+                    output_panel_i.html_log,
                 ],
                 show_progress="hidden",
             )
@@ -765,11 +758,6 @@ def create_ui():
             parameters_copypaste.register_paste_params_button(parameters_copypaste.ParamBinding(
                 paste_button=toprow.paste, tabname="img2img", source_text_component=toprow.prompt, source_image_component=None,
             ))
-
-        extra_networks_ui_img2img = ui_extra_networks.create_ui(img2img_interface, [img2img_generation_tab], "img2img")
-        ui_extra_networks.setup_ui(extra_networks_ui_img2img, output_panel.gallery)
-
-        extra_tabs.__exit__()
 
     with gr.Blocks(analytics_enabled=False) as space_interface:
         forge_space.main_entry()
@@ -829,6 +817,26 @@ def create_ui():
         shared.tab_names.append(label)
 
     with gr.Blocks(theme=shared.gradio_theme, analytics_enabled=False, title="ersatzForge", head=canvas_head) as demo:
+        with Modal(visible=False, elem_id="extra_networks_modal") as modal:
+            extra_tabs = gr.Tabs(elem_id="txt2img_extra_tabs", elem_classes=["extra-networks"])
+            extra_tabs.__enter__()
+            extra_networks_ui = ui_extra_networks.create_ui(txt2img_interface, "txt2img")
+            ui_extra_networks.setup_ui(extra_networks_ui, output_panel_t.gallery, output_panel_i.gallery)
+            extra_tabs.__exit__()
+
+        modal_visible = gr.Number(value=0, visible=False, interactive=False)
+
+        def modal_toggle(visible):
+            if visible:
+                return gr.update(visible=False), 0
+            return gr.update(visible=True), 1
+        def modal_hidden():
+            return gr.update(value=0)
+
+        modal.blur(fn=modal_hidden, inputs=None, outputs=[modal_visible], show_progress="hidden")
+        modal_show_btn_txt2img.click(fn=modal_toggle, inputs=[modal_visible], outputs=[modal, modal_visible], show_progress="hidden")
+        modal_show_btn_img2img.click(fn=modal_toggle, inputs=[modal_visible], outputs=[modal, modal_visible], show_progress="hidden")
+
         quicksettings_row = settings.add_quicksettings()
 
         parameters_copypaste.connect_paste_params_buttons()

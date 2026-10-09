@@ -252,10 +252,9 @@ class ExtraNetworksPage:
         onclick = item.get("onclick", None)
         if onclick is None:     #   this path is 'Textual Inversion' and 'Lora'
             # Don't quote prompt/neg_prompt since they are stored as js strings already.
-            onclick_js_tpl = "cardClicked('{tabname}', {prompt}, {neg_prompt}, {allow_neg});"
+            onclick_js_tpl = "cardClicked({prompt}, {neg_prompt}, {allow_neg});"
             onclick = onclick_js_tpl.format(
                 **{
-                    "tabname": tabname,
                     "prompt": item["prompt"],
                     "neg_prompt": item.get("negative_prompt", "''"),
                     "allow_neg": str(self.allow_negative_prompt).lower(),
@@ -701,7 +700,7 @@ def pages_in_preferred_order(pages):
     return sorted(pages, key=lambda x: x.name)
 
 
-def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
+def create_ui(interface: gr.Blocks, tabname):
     ui = ExtraNetworksUi()
     ui.pages = []
     ui.pages_contents = []
@@ -712,11 +711,9 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
     related_tabs = []
 
     for page in ui.stored_extra_pages:
-        with gr.Tab(page.title, id=f"{tabname}_{page.extra_networks_tabname}", elem_id=f"{tabname}_{page.extra_networks_tabname}", elem_classes=["extra-page"]) as tab:
-            with gr.Column(elem_id=f"{tabname}_{page.extra_networks_tabname}_prompts", elem_classes=["extra-page-prompts"]):
-                pass
-
-            elem_id = f"{tabname}_{page.extra_networks_tabname}_cards_html"
+        extra_networks_tabname = tabname + "_" + page.extra_networks_tabname
+        with gr.Tab(page.title, id=f"{extra_networks_tabname}", elem_id=f"{extra_networks_tabname}", elem_classes=["extra-page"]) as tab:
+            elem_id = f"{extra_networks_tabname}_cards_html"
             page_elem = gr.HTML(page.create_html(tabname, empty=True), elem_id=elem_id)
             ui.pages.append(page_elem)
 
@@ -726,14 +723,12 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
 
             related_tabs.append(tab)
 
-    for tab in unrelated_tabs:
-        tab.select(fn=None, js=f"function(){{extraNetworksUnrelatedTabSelected('{tabname}');}}", inputs=None, outputs=None, show_progress="hidden")
-
     for page, tab in zip(ui.stored_extra_pages, related_tabs):
+        extra_networks_tabname = tabname + "_" + page.extra_networks_tabname
         jscode = (
             "function(){{"
-            f"extraNetworksTabSelected('{tabname}', '{tabname}_{page.extra_networks_tabname}_prompts', {str(page.allow_prompt).lower()}, {str(page.allow_negative_prompt).lower()}, '{tabname}_{page.extra_networks_tabname}');"
-            f"applyExtraNetworkFilter('{tabname}_{page.extra_networks_tabname}');"
+             f"applyExtraNetworkFilter('{extra_networks_tabname}');"
+             f"extraNetworksTabSelected('{tabname}', '{extra_networks_tabname}');"
             "}}"
         )
         tab.select(fn=None, js=jscode, inputs=None, outputs=None, show_progress="hidden")
@@ -744,8 +739,8 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
             create_html()
             return ui.pages_contents
 
-        button_refresh = gr.Button("Refresh", elem_id=f"{tabname}_{page.extra_networks_tabname}_extra_refresh_internal", visible=False)
-        button_refresh.click(fn=refresh, inputs=None, outputs=ui.pages).then(fn=lambda: None, js="function(){ " + f"applyExtraNetworkFilter('{tabname}_{page.extra_networks_tabname}');" + " }").then(fn=lambda: None, js='setupAllResizeHandles')
+        button_refresh = gr.Button("Refresh", elem_id=f"{extra_networks_tabname}_extra_refresh_internal", visible=False)
+        button_refresh.click(fn=refresh, inputs=None, outputs=ui.pages).then(fn=lambda: None, js="function(){{ " + f"applyExtraNetworkFilter('{extra_networks_tabname}');" + " }}").then(fn=lambda: None, js="setupAllResizeHandles")
 
     def create_html():
         ui.pages_contents = [pg.create_html(ui.tabname) for pg in ui.stored_extra_pages]
@@ -755,7 +750,7 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
             create_html()
         return ui.pages_contents
 
-    interface.load(fn=pages_html, inputs=None, outputs=ui.pages, show_progress="hidden").then(fn=lambda: None, js='setupAllResizeHandles')
+    interface.load(fn=pages_html, inputs=None, outputs=ui.pages, show_progress="hidden").then(fn=lambda: None, js="setupAllResizeHandles")
 
     return ui
 
@@ -767,6 +762,6 @@ def path_is_parent(parent_path, child_path):
     return child_path.startswith(parent_path)
 
 
-def setup_ui(ui, gallery):
+def setup_ui(ui, gallery_t, gallery_i):
     for editor in ui.user_metadata_editors:
-        editor.setup_ui(gallery)
+        editor.setup_ui(gallery_t, gallery_i)

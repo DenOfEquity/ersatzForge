@@ -28,6 +28,11 @@ function setupExtraNetworksForTab(tabname) {
         });
     }
 
+    registerPrompt(tabname, tabname + "_prompt");
+    registerPrompt(tabname, tabname + "_neg_prompt");
+
+    if (tabname === "img2img") return;
+
     var tabnav = gradioApp().querySelector("#" + tabname + "_extra_tabs > div.tab-nav");
     var controlsDiv = document.createElement("DIV");
     controlsDiv.classList.add("extra-networks-controls-div");
@@ -36,7 +41,6 @@ function setupExtraNetworksForTab(tabname) {
 
     var this_tab = gradioApp().querySelector("#" + tabname + "_extra_tabs");
     this_tab.querySelectorAll(":scope > [id^='" + tabname + "_']").forEach(function(elem) {
-        // tabname_full = {tabname}_{extra_networks_tabname}
         var tabname_full = elem.id;
         var search = gradioApp().querySelector("#" + tabname_full + "_extra_search");
         var sort_dir = gradioApp().querySelector("#" + tabname_full + "_extra_sort_dir");
@@ -168,9 +172,6 @@ function setupExtraNetworksForTab(tabname) {
             extraNetworksShowControlsForPage(tabname, tabname_full);
         }
     });
-
-    registerPrompt(tabname, tabname + "_prompt");
-    registerPrompt(tabname, tabname + "_neg_prompt");
 }
 
 
@@ -206,15 +207,7 @@ function extraNetworksShowControlsForPage(tabname, tabname_full) {
 }
 
 
-function extraNetworksUnrelatedTabSelected(tabname) { // called from python when user selects an unrelated tab (generate)
-    extraNetworksMovePromptToTab(tabname, "", false, false);
-
-    extraNetworksShowControlsForPage(tabname, null);
-}
-
-function extraNetworksTabSelected(tabname, id, showPrompt, showNegativePrompt, tabname_full) { // called from python when user selects an extra networks tab
-    extraNetworksMovePromptToTab(tabname, id, showPrompt, showNegativePrompt);
-
+function extraNetworksTabSelected(tabname, tabname_full) { // called from python when user selects an extra networks tab
     extraNetworksShowControlsForPage(tabname, tabname_full);
 }
 
@@ -300,7 +293,9 @@ function updatePromptArea(text, textArea, isNeg) {
     updateInput(textArea);
 }
 
-function cardClicked(tabname, textToAdd, textToAddNegative, allowNegativePrompt) {
+function cardClicked(textToAdd, textToAddNegative, allowNegativePrompt) {
+    var tabname = get_uiCurrentTab().innerText == "Txt2img" ? "txt2img" : "img2img";
+
     if (textToAddNegative.length > 0) {
         updatePromptArea(textToAdd, gradioApp().querySelector("#" + tabname + "_prompt > label > textarea"));
         updatePromptArea(textToAddNegative, gradioApp().querySelector("#" + tabname + "_neg_prompt > label > textarea"), true);
@@ -444,7 +439,6 @@ function extraNetworksTreeOnClick(event, tabname, extra_networks_tabname) {
 
 function extraNetworksControlSortOnClick(event, tabname, extra_networks_tabname) {
     /** Handles `onclick` events for Sort Mode buttons. */
-
     var self = event.currentTarget;
     var parent = event.currentTarget.parentElement;
 
@@ -498,15 +492,16 @@ function extraNetworksControlTreeViewOnClick(event, tabname, extra_networks_tabn
     pane.classList.toggle("extra-network-dirs-hidden", show);
 }
 
-function clickLoraRefresh(preset) {
-    const targets = ["txt2img_lora", "txt2img_checkpoints", "txt2img_textual_inversion", "img2img_lora", "img2img_checkpoints", "img2img_textual_inversion"];
+function clickLoraRefresh() {
+    const targets = ["txt2img_checkpoints", "txt2img_hypernetworks", "txt2img_loras", "txt2img_textual_inversions"];
     targets.forEach(function(t) {
         const tab = gradioApp().getElementById(t + "-button");
         if (tab && tab.getAttribute("aria-selected") == "true") {
-            const applyFunction = extraNetworksApplyFilter[t];
-            if (applyFunction) {
-                applyFunction(true);
-            }
+			var applyFunction = extraNetworksApplyFilter[t];
+
+			if (applyFunction) {
+				applyFunction(true);
+			}
         }
     });
 }
