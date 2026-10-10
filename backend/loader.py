@@ -231,7 +231,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             return model
 
         if cls_name in ["Qwen3Model", "Qwen3VLModel", "Qwen3ForCausalLM"]:
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Qwen3 text encoder!"
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Qwen3-VL text encoder!" if cls_name == "Qwen3VLModel" else "Missing Qwen3 text encoder!"
 
             config = read_arbitrary_config(config_path)
 
@@ -270,7 +270,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             return model
 
         if cls_name in ["T5EncoderModel", "UMT5EncoderModel"]:
-            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing T5 text encoder!"
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing T5 text encoder!" if cls_name == "T5EncoderModel" else "Missing UMT5 text encoder!"
 
             from backend.nn.t5 import IntegratedT5
             config = read_arbitrary_config(config_path)
@@ -964,6 +964,10 @@ def preprocess_state_dict(sd):
     for k in list(sd.keys()):
         if k.endswith(".comfy_quant"):
             sd.pop(k)
+        elif k.endswith("._weight_qdata"):
+            sd[k[:-13] + "weight"] = sd.pop(k)
+        elif k.endswith("._weight_scale"):
+            sd[k[:-13] + "weight_scale"] = sd.pop(k)
 
     if not any(k.startswith(("model.diffusion_model", "net.")) for k in sd.keys()):
         sd = {f"model.diffusion_model.{k}": v for k, v in sd.items()}
