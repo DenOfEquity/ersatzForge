@@ -218,8 +218,8 @@ input[type="checkbox"].input-accordion-checkbox{
     right: 1em;
     min-width: 0 !important;
     width: auto;
-    z-index: 100;
-    top: -0.5em;
+    z-index: 10;
+    top: -0.4em;
 }
 
 .block.token-counter-visible{
