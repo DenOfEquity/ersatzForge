@@ -925,14 +925,6 @@ footer {
     gap: 0;
 }
 
-.extra-page-prompts{
-    margin-bottom: 0;
-}
-
-.extra-page-prompts.extra-page-prompts-active{
-    margin-bottom: 1em;
-}
-
 .extra-networks > div.tab-nav{
     min-height: 2.7rem;
 }
@@ -962,10 +954,6 @@ footer {
 .extra-networks .tab-nav .sort {
     width: 12em;
     max-width: 12em;
-}
-
-#txt2img_extra_view, #img2img_extra_view {
-    width: auto;
 }
 
 .extra-network-pane .nocards{
@@ -1164,14 +1152,6 @@ div.accordions > div.input-accordion.input-accordion-open{
     flex-flow: column;
 }
 
-
-/* sticky right hand columns */
-
-#img2img_results, #txt2img_results, #extras_results {
-    position: sticky;
-    top: 0.5em;
-}
-
 body.resizing {
     cursor: col-resize !important;
 }
@@ -1205,7 +1185,8 @@ body.resizing .resize-handle {
 /* ========================= */
 .extra-network-pane {
     display: flex;
-    height: calc(100vh - 24rem);
+    height: 100%; /* calc(100vh - 24rem) */
+    max-height: 100%;
     resize: vertical;
     min-height: 52rem;
     flex-direction: column;
@@ -1225,6 +1206,11 @@ body.resizing .resize-handle {
     overflow: hidden;
 }
 
+.extra-network-dirs {
+    position: absolute;
+    z-index: 95;
+}
+
 .extra-network-dirs-hidden .extra-network-dirs{ display: none; }
 .extra-network-dirs-hidden .extra-network-tree{ display: none; }
 .extra-network-dirs-hidden .resize-handle { display: none; }
@@ -1233,14 +1219,15 @@ body.resizing .resize-handle {
 .extra-network-pane .extra-network-tree {
     flex: 1;
     font-size: 1rem;
-    border: 1px solid var(--block-border-color);
     overflow: clip auto !important;
+	max-height: 50vh;
 }
 
 .extra-network-pane .extra-network-cards {
-    flex: 3;
-    overflow: clip auto !important;
-    border: 1px solid var(--block-border-color);
+    flex: 1;
+    overflow: auto  !important;
+	max-height: 50vh;
+	/* need a max-height here, but variable size */
 }
 
 .extra-network-pane .extra-network-tree .tree-list {
