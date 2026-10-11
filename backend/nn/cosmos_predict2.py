@@ -8,7 +8,7 @@ import torch
 from torch import nn
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
-from typing import Callable, Optional, Tuple
+from typing import Optional, Tuple
 import math
 from torchvision import transforms
 
@@ -275,9 +275,10 @@ class Attention(nn.Module):
         v = self.v_proj(context)
         v = rearrange(v, "b ... (h d) -> b h ... d", h=self.n_heads, d=self.head_dim)
         if not self.is_selfattn:
+            v = v.squeeze(2)
             if negpip is not None:
                 y_len = len(negpip)
-                v[:, :, :, :y_len, :] *= negpip[:, None]
+                v[:, :, :y_len, :] *= negpip[:, None]
 
         result = attention_function(q, k, v, self.n_heads, skip_reshape=True)
 
@@ -411,9 +412,7 @@ class FinalLayer(nn.Module):
     ):
         super().__init__()
         self.layer_norm = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        self.linear = nn.Linear(
-            hidden_size, spatial_patch_size * spatial_patch_size * temporal_patch_size * out_channels, bias=False
-        )
+        self.linear = nn.Linear(hidden_size, spatial_patch_size * spatial_patch_size * temporal_patch_size * out_channels, bias=False)
         self.hidden_size = hidden_size
         n_adaln_chunks = 2
         self.use_adaln_lora = use_adaln_lora
@@ -425,7 +424,8 @@ class FinalLayer(nn.Module):
             )
         else:
             self.adaln_modulation = nn.Sequential(
-                nn.SiLU(), nn.Linear(hidden_size, n_adaln_chunks * hidden_size, bias=False)
+                nn.SiLU(),
+                nn.Linear(hidden_size, n_adaln_chunks * hidden_size, bias=False)
             )
 
     def forward(
