@@ -129,7 +129,7 @@ class UiSettings:
             with gr.Row():
                 self.search_input = gr.Textbox(value="", elem_id="settings_search", max_lines=1, placeholder="Search...", show_label=False, scale=0)
                 self.submit = gr.Button(value="Apply settings", variant="primary", elem_id="settings_submit", scale=0)
-                self.result = gr.HTML(elem_id="settings_result", scale=4)
+                self.result = gr.HTML(elem_id="settings_result")
                 restart_gradio = gr.Button(value="Reload UI", variant="primary", elem_id="settings_restart_gradio", scale=0)
 
             self.quicksettings_names = opts.quick_setting_list
