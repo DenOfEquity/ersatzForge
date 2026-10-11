@@ -513,13 +513,14 @@ class ExtraNetworksPage:
                         subdir = subdir[1:]
 
                     is_empty = len(os.listdir(x)) == 0
-                    if not is_empty and not subdir.endswith(os.path.sep):
-                        subdir = subdir + os.path.sep
+                    if not is_empty:
+                        if not subdir.endswith(os.path.sep):
+                            subdir = subdir + os.path.sep
 
-                    if (os.path.sep + "." in subdir or subdir.startswith(".")) and not shared.opts.extra_networks_show_hidden_directories:
-                        continue
+                        if (os.path.sep + "." in subdir or subdir.startswith(".")) and not shared.opts.extra_networks_show_hidden_directories:
+                            continue
 
-                    subdirs[subdir] = 1
+                        subdirs[subdir] = 1
 
         if subdirs:
             subdirs = {"": 1, **subdirs}
@@ -587,14 +588,15 @@ class ExtraNetworksPage:
         page_params = {
             "tabname": tabname,
             "extra_networks_tabname": self.extra_networks_tabname,
-            "data_sortdir": 'Ascending',
-            "sort_path_active": ' extra-network-control--enabled',
-            "sort_name_active": '',
-            "sort_date_modified_active": '',
+            "data_sortdir": "Ascending",
+            "sort_path_active": " extra-network-control--enabled",
+            "sort_name_active": "",
+            "sort_date_modified_active": "",
             "tree_view_btn_extra_class": "extra-network-control--enabled" if show_tree else "",
             "items_html": self.create_card_view_html(tabname, none_message="Loading..." if empty else None),
             "extra_networks_tree_view_default_width": shared.opts.extra_networks_tree_view_default_width,
             "tree_view_div_default_display_class": "" if show_tree else "extra-network-dirs-hidden",
+            "button_text": "Tree" if show_tree else "Directories",
         }
 
         if shared.opts.extra_networks_tree_view_style == "Tree":

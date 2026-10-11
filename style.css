@@ -481,8 +481,21 @@ div.toprow-compact-tools{
 #settings > div.tab-nav{
     float: left;
     display: block;
-    margin-left: 0;
-    width: 10em;
+    width: 15em;
+    max-height: calc(100vh - 20em);
+    overflow-y: auto;
+    margin: 0 1em 0 0;
+	border-right: 1px var(--border-color-primary) solid;
+}
+
+#settings > div.gradio-tabitem{
+	max-height: calc(100vh - 20em);
+	overflow-y: auto;
+	padding-right: 2em !important;
+}
+
+#settings_search {
+	max-width: 20em;
 }
 
 #settings > div.tab-nav button{
@@ -1046,8 +1059,8 @@ footer {
 }
 
 .extra-network-pane .card .actions .name{
-    font-size: 1.1em;
-    font-weight: 500;
+    font-size: 1em;
+    font-weight: 400;
     line-break: anywhere;
 }
 

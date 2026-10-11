@@ -17,7 +17,6 @@
             data-sortkey="date_modified"
             title="Sort by date modified"
             onclick="extraNetworksControlSortOnClick(event, '{tabname}', '{extra_networks_tabname}');"
-			
         >
             Date
         </div>
@@ -56,10 +55,10 @@
         <div
             id="{tabname}_{extra_networks_tabname}_extra_tree_view"
             class="extra-network-control--sort {tree_view_btn_extra_class}"
-            title="Enable Tree View"
+            title="Enable {button_text} View"
             onclick="extraNetworksControlTreeViewOnClick(event, '{tabname}', '{extra_networks_tabname}');"
         >
-            Tree
+            {button_text}
         </div>
         <div
             id="{tabname}_{extra_networks_tabname}_extra_refresh"

@@ -15,7 +15,7 @@ def get_value_for_setting(key):
 
     info = opts.data_labels[key]
     args = info.component_args() if callable(info.component_args) else info.component_args or {}
-    args = {k: v for k, v in args.items() if k not in {'precision'}}
+    args = {k: v for k, v in args.items() if k not in {"precision"}}
 
     return gr.update(value=value, **args)
 
@@ -27,18 +27,19 @@ def create_setting_component(key, is_quicksettings=False):
     info = opts.data_labels[key]
     t = type(info.default)
 
-    args = info.component_args() if callable(info.component_args) else info.component_args
+    args = info.component_args() if callable(info.component_args) else (info.component_args or {})
 
     if info.component is not None:
         comp = info.component
     elif t is str:
         comp = gr.Textbox
+        args["max_lines"] = 1
     elif t is int:
         comp = gr.Number
     elif t is bool:
         comp = gr.Checkbox
     else:
-        raise Exception(f'bad options item type: {t} for key {key}')
+        raise Exception(f"bad options item type: {t} for key {key}")
 
     elem_id = f"setting_{key}"
 
@@ -47,14 +48,14 @@ def create_setting_component(key, is_quicksettings=False):
 
     if info.refresh is not None:
         if is_quicksettings:
-            res = comp(label=info.label, value=fun(), elem_id=elem_id, **(args or {}))
+            res = comp(label=info.label, value=fun(), elem_id=elem_id, **args)
             ui_common.create_refresh_button(res, info.refresh, info.component_args, f"refresh_{key}")
         else:
             with FormRow():
-                res = comp(label=info.label, value=fun(), elem_id=elem_id, **(args or {}))
+                res = comp(label=info.label, value=fun(), elem_id=elem_id, **args)
                 ui_common.create_refresh_button(res, info.refresh, info.component_args, f"refresh_{key}")
     else:
-        res = comp(label=info.label, value=fun(), elem_id=elem_id, **(args or {}))
+        res = comp(label=info.label, value=fun(), elem_id=elem_id, **args)
 
     return res
 
@@ -118,7 +119,7 @@ class UiSettings:
         shared.settings_components = self.component_dict
 
         # we add this as late as possible so that scripts have already registered their callbacks
-        opts.data_labels.update(options_section(('callbacks', "Callbacks", "system"), {
+        opts.data_labels.update(options_section(("callbacks", "Callbacks", "system"), {
             **shared_items.callbacks_order_settings(),
         }))
 
@@ -126,15 +127,16 @@ class UiSettings:
 
         with gr.Blocks(analytics_enabled=False) as settings_interface:
             with gr.Row():
-                self.submit = gr.Button(value="Apply settings", variant='primary', elem_id="settings_submit")
-                restart_gradio = gr.Button(value='Reload UI', variant='primary', elem_id="settings_restart_gradio")
-
-            self.result = gr.HTML(elem_id="settings_result")
+                self.search_input = gr.Textbox(value="", elem_id="settings_search", max_lines=1, placeholder="Search...", show_label=False, scale=0)
+                self.submit = gr.Button(value="Apply settings", variant="primary", elem_id="settings_submit", scale=0)
+                self.result = gr.HTML(elem_id="settings_result", scale=4)
+                restart_gradio = gr.Button(value="Reload UI", variant="primary", elem_id="settings_restart_gradio", scale=0)
 
             self.quicksettings_names = opts.quick_setting_list
-            self.quicksettings_names = {x: i for i, x in enumerate(self.quicksettings_names) if x != 'quicksettings'}
+            self.quicksettings_names = {x: i for i, x in enumerate(self.quicksettings_names) if x != "quicksettings"}
 
             self.quicksettings_list = []
+
 
             previous_section = None
             current_tab = None
@@ -153,7 +155,7 @@ class UiSettings:
                         gr.Group()
                         current_tab = gr.TabItem(id=f"settings_{elem_id}", elem_id=f"settings_{elem_id}", label=text)
                         current_tab.__enter__()
-                        current_row = gr.Column(elem_id=f"column_settings_{elem_id}", variant='compact')
+                        current_row = gr.Column(elem_id=f"column_settings_{elem_id}", variant="compact")
                         current_row.__enter__()
 
                         previous_section = item.section
@@ -182,16 +184,16 @@ class UiSettings:
                     gr.HTML('<a href="./internal/sysinfo-download" class="sysinfo_big_link" download>Download system info</a><br /><a href="./internal/sysinfo" target="_blank">(or open as text in a new page)</a>', elem_id="sysinfo_download")
 
                     with gr.Row():
-                        sysinfo_check_file = gr.File(label="Check system info for validity", type='binary')
+                        sysinfo_check_file = gr.File(label="Check system info for validity", type="binary")
                         sysinfo_check_output = gr.HTML("", elem_id="sysinfo_validity")
 
                 with gr.TabItem("Actions", id="actions", elem_id="settings_tab_actions"):
-                    download_localization = gr.Button(value='Download localization template', elem_id="download_localization")
-                    reload_script_bodies = gr.Button(value='Reload custom script bodies (No ui updates, No restart)', variant='secondary', elem_id="settings_reload_script_bodies")
+                    download_localization = gr.Button(value="Download localization template", elem_id="download_localization")
+                    reload_script_bodies = gr.Button(value="Reload custom script bodies (No ui updates, No restart)", variant="secondary", elem_id="settings_reload_script_bodies")
                     with gr.Row():
-                        unload_sd_model = gr.Button(value='Unload all models', elem_id="sett_unload_sd_model")
+                        unload_sd_model = gr.Button(value="Unload all models", elem_id="sett_unload_sd_model")
                     with gr.Row():
-                        calculate_all_checkpoint_hash = gr.Button(value='Calculate hash for all checkpoint', elem_id="calculate_all_checkpoint_hash")
+                        calculate_all_checkpoint_hash = gr.Button(value="Calculate hash for all checkpoints", elem_id="calculate_all_checkpoint_hash")
                         calculate_all_checkpoint_hash_threads = gr.Number(value=1, label="Number of parallel calculations", elem_id="calculate_all_checkpoint_hash_threads", precision=0, minimum=1)
 
                 with gr.TabItem("Licenses", id="licenses", elem_id="settings_tab_licenses"):
@@ -201,9 +203,7 @@ class UiSettings:
                 self.show_one_page = gr.Button(value="Show only one page", elem_id="settings_show_one_page", visible=False)
                 self.show_one_page.click(lambda: None)
 
-                self.search_input = gr.Textbox(value="", elem_id="settings_search", max_lines=1, placeholder="Search...", show_label=False)
-
-                self.text_settings = gr.Textbox(elem_id="settings_json", value=lambda: opts.dumpjson(), visible=False)
+                self.text_settings = gr.Textbox(elem_id="settings_json", value=lambda: opts.dumpjson(), visible=False, interactive=False)
 
             def call_func_and_return_text(func, text):
                 def handler():
@@ -211,12 +211,12 @@ class UiSettings:
                     func()
                     t.record(text)
 
-                    return f'{text} in {t.total:.1f}s'
+                    return f"{text} in {t.total:.1f}s"
 
                 return handler
 
             unload_sd_model.click(
-                fn=call_func_and_return_text(sd_models.unload_model_weights, 'Unloaded all models'),
+                fn=call_func_and_return_text(sd_models.unload_model_weights, "Unloaded all models"),
                 inputs=None,
                 outputs=[self.result]
             )
@@ -225,7 +225,7 @@ class UiSettings:
                 fn=lambda: None,
                 inputs=None,
                 outputs=None,
-                js='download_localization'
+                js="download_localization"
             )
 
             def reload_scripts():
@@ -240,19 +240,19 @@ class UiSettings:
 
             restart_gradio.click(
                 fn=shared.state.request_restart,
-                js='restart_reload',
+                js="restart_reload",
                 inputs=None,
                 outputs=None,
             )
 
             def check_file(x):
                 if x is None:
-                    return ''
+                    return ""
 
-                if sysinfo.check(x.decode('utf8', errors='ignore')):
-                    return 'Valid'
+                if sysinfo.check(x.decode("utf8", errors="ignore")):
+                    return "Valid"
 
-                return 'Invalid'
+                return "Invalid"
 
             sysinfo_check_file.change(
                 fn=check_file,
@@ -297,7 +297,7 @@ class UiSettings:
 
             if isinstance(component, gr.Textbox):
                 methods = [component.submit, component.blur]
-            elif hasattr(component, 'release'):
+            elif hasattr(component, "release"):
                 methods = [component.release]
             else:
                 methods = [component.change]
@@ -316,7 +316,7 @@ class UiSettings:
             model = sd_models.match_checkpoint_to_name(model)
             return model
 
-        button_set_checkpoint = gr.Button('Change checkpoint', elem_id='change_checkpoint', visible=False)
+        button_set_checkpoint = gr.Button("Change checkpoint", elem_id="change_checkpoint", visible=False)
         button_set_checkpoint.click(
             fn=button_set_checkpoint_change,
             js="function(c){ var ckpt = desiredCheckpointName; if (ckpt == null) ckpt = c; desiredCheckpointName = null; return [ckpt]; }",

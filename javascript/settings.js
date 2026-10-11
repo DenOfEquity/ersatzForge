@@ -38,7 +38,6 @@ onUiLoaded(function() {
         }
     });
 
-    settings_tabs.insertBefore(edit, settings_tabs.firstChild);
     settings_tabs.appendChild(buttonShowAllPages);
 
 
