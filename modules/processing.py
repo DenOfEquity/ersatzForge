@@ -1347,10 +1347,12 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
             if not state.processing_has_refined_job_count:
                 if state.job_count == -1:
                     state.job_count = self.n_iter
-                if getattr(self, 'txt2img_upscale', False):
+                if getattr(self, "txt2img_upscale", False):
+                    self.n_iter = 1
                     total_steps = (self.hr_second_pass_steps or self.steps) * state.job_count
                 else:
                     total_steps = (self.steps + (self.hr_second_pass_steps or self.steps)) * state.job_count
+
                 shared.total_tqdm.updateTotal(total_steps)
                 state.job_count = state.job_count * 2
                 state.processing_has_refined_job_count = True

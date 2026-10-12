@@ -93,7 +93,6 @@ def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_in
     iterate = getattr(shared.opts, "hires_button_iterate", "Disabled")
     if "Enabled" in iterate:
         iterations = p.n_iter
-        p.n_iter = 1
 
         start_denoise = p.denoising_strength
         start_steps = p.hr_second_pass_steps or p.firstpass_steps
@@ -116,8 +115,6 @@ def txt2img_upscale_function(id_task: str, gallery, gallery_index, generation_in
                     p.hr_second_pass_steps = int(max(1, 0.5 + start_steps * (1.0 - 0.5*nextIter)))
                 # print ("QUICKBUTTON: ", p.width, p.height, p.denoising_strength, p.hr_second_pass_steps)
     else:
-        p.n_iter = 1
-
         with closing(p):
             if processed := scripts.scripts_txt2img.run(p, *p.script_args) is None:
                 processed = processing.process_images(p)
