@@ -8,7 +8,7 @@ def create_ui():
     tab_index = gr.State(value=0)
 
     with ResizeHandleRow(equal_height=False, variant="compact"):
-        with gr.Column(variant="compact"):
+        with gr.Column(variant="compact", elem_id="extras_settings"):
             with gr.Tabs(elem_id="mode_extras"):
                 with gr.TabItem("Single Image", id="single_image", elem_id="extras_single_tab") as tab_single:
                     extras_image = gr.Image(label="Source", interactive=True, type="pil", elem_id="extras_image", image_mode="RGBA", height="60vh")

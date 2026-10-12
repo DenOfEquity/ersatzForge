@@ -17,7 +17,7 @@
 
 .tabitem {
   border: 0px !important;
-  padding: 4px 0 0 0 !important;
+  padding: 0px !important;
 }
 
 #quicksettings .gradio-number {
@@ -34,3 +34,9 @@
   overflow-x: auto;
   flex-wrap: nowrap;
 }
+
+/*
+.forge-image-container.plain {
+    background-color: #808080;
+}
+*/

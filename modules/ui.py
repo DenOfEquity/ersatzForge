@@ -1,7 +1,6 @@
 import datetime
 import mimetypes
 import os
-import sys
 from functools import reduce
 import warnings
 from contextlib import ExitStack
@@ -10,26 +9,21 @@ import gradio as gr
 from packages.gradio_modal import Modal
 
 from PIL import Image, PngImagePlugin  # noqa: F401
-from modules.call_queue import wrap_gradio_gpu_call, wrap_queued_call, wrap_gradio_call, wrap_gradio_call_no_job # noqa: F401
 
-from modules import gradio_extensions, sd_schedulers  # noqa: F401
+from modules import gradio_extensions, infotext_utils, prompt_parser, sd_schedulers, shared  # noqa: F401
 from modules import sd_models, script_callbacks, ui_extensions, deepbooru, extra_networks, ui_common, ui_postprocessing, shared_items, ui_settings, timer, sysinfo, ui_checkpoint_merger, scripts, sd_samplers, ui_extra_networks, ui_toprow, launch_utils, ui_loadsave
-from modules.ui_components import FormRow, FormGroup, ToolButton, FormHTML, InputAccordion, ResizeHandleRow
 
+
+from modules.call_queue import wrap_gradio_gpu_call, wrap_queued_call, wrap_gradio_call, wrap_gradio_call_no_job # noqa: F401
+from modules.infotext_utils import PasteField
+from modules.processing_scripts import comments
+from modules.shared import opts, cmd_opts
+from modules.ui_components import FormRow, FormGroup, ToolButton, FormHTML, InputAccordion, ResizeHandleRow
 from modules.ui_gradio_extensions import reload_javascript
 
-from modules.shared import opts, cmd_opts
-
-import modules.infotext_utils as parameters_copypaste
-import modules.shared as shared
-from modules import prompt_parser
-from modules.infotext_utils import PasteField
 from modules_forge.forge_canvas.canvas import ForgeCanvas, canvas_head
 from modules_forge import main_entry, forge_space
-import modules.processing_scripts.comments as comments
 
-
-create_setting_component = ui_settings.create_setting_component
 
 warnings.filterwarnings("default" if opts.show_warnings else "ignore", category=UserWarning)
 warnings.filterwarnings("default" if opts.show_gradio_deprecation_warnings else "ignore", category=gradio_extensions.GradioDeprecationWarning)
@@ -232,7 +226,7 @@ def create_ui():
 
     reload_javascript()
 
-    parameters_copypaste.reset()
+    infotext_utils.reset()
 
     settings = ui_settings.UiSettings()
     settings.register_settings()
@@ -470,8 +464,8 @@ def create_ui():
                 PasteField(hr_distilled_cfg, "HiRes Distilled CFG scale", api="hr_distilled_cfg"),
                 *scripts.scripts_txt2img.infotext_fields
             ]
-            parameters_copypaste.add_paste_fields("txt2img", None, txt2img_paste_fields, override_settings)
-            parameters_copypaste.register_paste_params_button(parameters_copypaste.ParamBinding(
+            infotext_utils.add_paste_fields("txt2img", None, txt2img_paste_fields, override_settings)
+            infotext_utils.register_paste_params_button(infotext_utils.ParamBinding(
                 paste_button=toprow.paste, tabname="txt2img", source_text_component=toprow.prompt, source_image_component=None,
             ))
 
@@ -754,8 +748,8 @@ def create_ui():
                 (inpaint_full_res_padding, "Masked area padding"),
                 *scripts.scripts_img2img.infotext_fields
             ]
-            parameters_copypaste.add_paste_fields("img2img", init_img.background, img2img_paste_fields, override_settings)
-            parameters_copypaste.register_paste_params_button(parameters_copypaste.ParamBinding(
+            infotext_utils.add_paste_fields("img2img", init_img.background, img2img_paste_fields, override_settings)
+            infotext_utils.register_paste_params_button(infotext_utils.ParamBinding(
                 paste_button=toprow.paste, tabname="img2img", source_text_component=toprow.prompt, source_image_component=None,
             ))
 
@@ -775,10 +769,10 @@ def create_ui():
                 generation_info = gr.Textbox(visible=False, elem_id="pnginfo_generation_info", interactive=False)
                 html2 = gr.HTML()
                 with gr.Row():
-                    buttons = parameters_copypaste.create_buttons(["txt2img", "img2img", "extras"])
+                    buttons = infotext_utils.create_buttons(["txt2img", "img2img", "extras"])
 
                 for tabname, button in buttons.items():
-                    parameters_copypaste.register_paste_params_button(parameters_copypaste.ParamBinding(
+                    infotext_utils.register_paste_params_button(infotext_utils.ParamBinding(
                         paste_button=button, tabname=tabname, source_text_component=generation_info, source_image_component=image,
                     ))
 
@@ -824,22 +818,22 @@ def create_ui():
             ui_extra_networks.setup_ui(extra_networks_ui, output_panel_t.gallery, output_panel_i.gallery)
             extra_tabs.__exit__()
 
-        modal_visible = gr.Number(value=0, visible=False, interactive=False)
+        shared.modal_visible = False
 
-        def modal_toggle(visible):
-            if visible:
-                return gr.update(visible=False), 0
-            return gr.update(visible=True), 1
+        def modal_toggle():
+            shared.modal_visible ^= True
+            return gr.update(visible=shared.modal_visible)
+
         def modal_hidden():
-            return gr.update(value=0)
+            shared.modal_visible = False
 
-        modal.blur(fn=modal_hidden, inputs=None, outputs=[modal_visible], show_progress="hidden")
-        modal_show_btn_txt2img.click(fn=modal_toggle, inputs=[modal_visible], outputs=[modal, modal_visible], show_progress="hidden")
-        modal_show_btn_img2img.click(fn=modal_toggle, inputs=[modal_visible], outputs=[modal, modal_visible], show_progress="hidden")
+        modal.blur(fn=modal_hidden, inputs=None, outputs=None, show_progress="hidden")
+        modal_show_btn_txt2img.click(fn=modal_toggle, inputs=None, outputs=[modal], show_progress="hidden")
+        modal_show_btn_img2img.click(fn=modal_toggle, inputs=None, outputs=[modal], show_progress="hidden")
 
         quicksettings_row = settings.add_quicksettings()
 
-        parameters_copypaste.connect_paste_params_buttons()
+        infotext_utils.connect_paste_params_buttons()
 
         with gr.Tabs(elem_id="tabs") as tabs:
             tab_order = {k: i for i, k in enumerate(opts.ui_tab_order)}
@@ -859,15 +853,23 @@ def create_ui():
                 loadsave.add_component(f"webui/Tabs@{tabs.elem_id}", tabs)
                 loadsave.setup_ui()
 
+        # def tab_changed(evt: gr.SelectData):
+            # no_quick_setting = getattr(shared.opts, "tabs_without_quick_settings_bar", [])
+
+            # if evt.value not in ["Txt2img", "Img2img"]:
+                # shared.modal_visible = False
+                # return gr.update(visible=False), gr.update(visible=evt.value not in no_quick_setting)
+ 
+            # return gr.skip(), gr.update(visible=evt.value not in no_quick_setting)
         def tab_changed(evt: gr.SelectData):
-            no_quick_setting = getattr(shared.opts, "tabs_without_quick_settings_bar", [])
-            return gr.update(visible=evt.value not in no_quick_setting)
+            if evt.value not in ["Txt2img", "Img2img"]:
+                shared.modal_visible = False
+                return gr.update(visible=False), gr.update(visible=False)
+ 
+            return gr.skip(), gr.update(visible=True)
 
-        tabs.select(tab_changed, outputs=[quicksettings_row], show_progress="hidden")
 
-        footer = shared.html("footer.html")
-        footer = footer.format(versions=versions_html(), api_docs="/docs" if shared.cmd_opts.api else "https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API")
-        gr.HTML(footer, elem_id="footer")
+        tabs.select(tab_changed, inputs=None, outputs=[modal, quicksettings_row], show_progress="hidden")
 
         settings.add_functionality(demo)
 
@@ -885,27 +887,6 @@ def create_ui():
         demo.ui_loadsave = loadsave
 
     return demo
-
-
-def versions_html():
-    python_version = ".".join([str(x) for x in sys.version_info[0:3]])
-
-    if shared.xformers_available[0]:
-        xformers_version = shared.xformers_available[1]
-    else:
-        xformers_version = "N/A"
-
-    return f"""
-version: <a href="https://github.com/DenOfEquity/ersatzForge">ersatzForge</a>
-&#x2000;•&#x2000;
-python: <span title="{sys.version}">{python_version}</span>
-&#x2000;•&#x2000;
-torch: {shared.torch_version}
-&#x2000;•&#x2000;
-xformers: {xformers_version}
-&#x2000;•&#x2000;
-gradio: {gr.__version__}
-"""
 
 
 def setup_ui_api(app):

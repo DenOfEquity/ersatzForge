@@ -1,4 +1,5 @@
 import gradio as gr
+import sys
 
 from modules import ui_common, shared, script_callbacks, scripts, sd_models, sysinfo, timer, shared_items
 from modules.call_queue import wrap_gradio_call_no_job
@@ -126,8 +127,8 @@ class UiSettings:
         opts.reorder()
 
         with gr.Blocks(analytics_enabled=False) as settings_interface:
-            with gr.Row():
-                self.search_input = gr.Textbox(value="", elem_id="settings_search", max_lines=1, placeholder="Search...", show_label=False, scale=0)
+            with gr.Row(elem_id="settings_toprow"):
+                self.search_input = gr.Textbox(value="", elem_id="settings_search", max_lines=1, placeholder="Search (3+ characters)", show_label=False, scale=0)
                 self.submit = gr.Button(value="Apply settings", variant="primary", elem_id="settings_submit", scale=0)
                 self.result = gr.HTML(elem_id="settings_result")
                 restart_gradio = gr.Button(value="Reload UI", variant="primary", elem_id="settings_restart_gradio", scale=0)
@@ -136,7 +137,6 @@ class UiSettings:
             self.quicksettings_names = {x: i for i, x in enumerate(self.quicksettings_names) if x != "quicksettings"}
 
             self.quicksettings_list = []
-
 
             previous_section = None
             current_tab = None
@@ -152,7 +152,7 @@ class UiSettings:
                             current_row.__exit__()
                             current_tab.__exit__()
 
-                        gr.Group()
+                        # gr.Group()
                         current_tab = gr.TabItem(id=f"settings_{elem_id}", elem_id=f"settings_{elem_id}", label=text)
                         current_tab.__enter__()
                         current_row = gr.Column(elem_id=f"column_settings_{elem_id}", variant="compact")
@@ -178,7 +178,7 @@ class UiSettings:
                     if shared.opts.use_ui_config_json:
                         loadsave.create_ui()
                     else:
-                        gr.Markdown("This page intentionally left blank.")
+                        gr.HTML("<h2>This page intentionally left blank.</h2>")
 
                 with gr.TabItem("Sysinfo", id="sysinfo", elem_id="settings_tab_sysinfo"):
                     gr.HTML('<a href="./internal/sysinfo-download" class="sysinfo_big_link" download>Download system info</a><br /><a href="./internal/sysinfo" target="_blank">(or open as text in a new page)</a>', elem_id="sysinfo_download")
@@ -186,6 +186,31 @@ class UiSettings:
                     with gr.Row():
                         sysinfo_check_file = gr.File(label="Check system info for validity", type="binary")
                         sysinfo_check_output = gr.HTML("", elem_id="sysinfo_validity")
+
+                    def versions_html():
+                        python_version = ".".join([str(x) for x in sys.version_info[0:3]])
+
+                        if shared.xformers_available[0]:
+                            xformers_version = shared.xformers_available[1]
+                        else:
+                            xformers_version = "N/A"
+
+                        return f"""
+                    version: <a href="https://github.com/DenOfEquity/ersatzForge">ersatzForge</a>
+                    &#x2000;•&#x2000;
+                    python: <span title="{sys.version}">{python_version}</span>
+                    &#x2000;•&#x2000;
+                    torch: {shared.torch_version}
+                    &#x2000;•&#x2000;
+                    xformers: {xformers_version}
+                    &#x2000;•&#x2000;
+                    gradio: {gr.__version__}
+                    """
+
+                    footer = shared.html("footer.html")
+                    footer = footer.format(versions=versions_html(), api_docs="/docs" if shared.cmd_opts.api else "https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API")
+                    gr.HTML(footer, elem_id="footer")
+
 
                 with gr.TabItem("Actions", id="actions", elem_id="settings_tab_actions"):
                     download_localization = gr.Button(value="Download localization template", elem_id="download_localization")
@@ -198,10 +223,6 @@ class UiSettings:
 
                 with gr.TabItem("Licenses", id="licenses", elem_id="settings_tab_licenses"):
                     gr.HTML(shared.html("licenses.html"), elem_id="licenses")
-
-                self.show_all_pages = gr.Button(value="Show all pages", elem_id="settings_show_all_pages")
-                self.show_one_page = gr.Button(value="Show only one page", elem_id="settings_show_one_page", visible=False)
-                self.show_one_page.click(lambda: None)
 
                 self.text_settings = gr.Textbox(elem_id="settings_json", value=lambda: opts.dumpjson(), visible=False, interactive=False)
 
