@@ -212,7 +212,7 @@ options_templates.update(options_section(("optimizations", "Optimizations", "sd"
     "token_merging_ratio_hr": OptionInfo(0.0, "Token merging ratio for high-res pass", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}, infotext="Token merging ratio hr").info("only applies if non-zero and overrides above"),
     "persistent_cond_cache": OptionInfo(True, "Persistent cond cache").info("do not recalculate conds from prompts if prompts have not changed since previous calculation"),
 
-    # "qwen2.1_kv_cache": OptionInfo("No cache", "QwenImage2.1 KV Cache location and dtype", gr.Radio, {"choices": ["No cache", "computation dtype", "fp16", "fp8", "computation dtype (CPU)", "fp16 (CPU)", "fp8 (CPU)"]})
+    "qwen2.1_kv_cache": OptionInfo("No cache", "QwenImage2.1 KV Cache location and dtype", gr.Radio, {"choices": ["No cache", "computation dtype", "fp16", "fp8", "computation dtype (CPU)", "fp16 (CPU)", "fp8 (CPU)"]})
 }))
 
 options_templates.update(options_section(("compatibility", "Compatibility", "sd"), {
@@ -271,7 +271,7 @@ options_templates.update(options_section(("ui", "User interface", "ui"), {
 #make a 'useful' list for quicksettings?
     "ui_tab_order": OptionInfo([], "UI tab order", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names), "filterable": False}).needs_reload_ui(),
     "hidden_tabs": OptionInfo([], "Hidden UI tabs", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names)[2:], "filterable": False}).needs_reload_ui(),
-    "tabs_without_quick_settings_bar": OptionInfo(["Spaces"], "UI tabs without Quicksettings bar (top row)", ui_components.DropdownMulti, lambda: {"choices": list(shared.tab_names), "filterable": False}),
+
     "ui_reorder_list": OptionInfo([], "UI item order for Txt2img/Img2img tabs", ui_components.DropdownMulti, lambda: {"choices": list(shared_items.ui_reorder_categories())}).info("selected items appear first").needs_reload_ui(),
     "gradio_theme": OptionInfo("Default", "Gradio theme", ui_components.DropdownEditable, lambda: {"choices": ["Default"] + shared_gradio_themes.gradio_hf_hub_themes}).info("you can also manually enter any of themes from the <a href='https://huggingface.co/spaces/gradio/theme-gallery'>gallery</a>.").needs_reload_ui(),
     "gradio_themes_cache": OptionInfo(True, "Cache gradio themes locally").info("disable to update the selected Gradio theme"),
