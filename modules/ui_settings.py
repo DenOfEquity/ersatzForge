@@ -10,6 +10,8 @@ from modules.ui_gradio_extensions import reload_javascript
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from modules_forge import main_entry
 
+from packages.gradio_modal import Modal
+
 
 def get_value_for_setting(key):
     value = getattr(opts, key)
@@ -298,13 +300,27 @@ class UiSettings:
 
         self.interface = settings_interface
 
-    def add_quicksettings(self):
-        with gr.Row(elem_id="quicksettings", variant="compact") as quicksettings_row:
-            main_entry.make_checkpoint_manager_ui()
-            for _i, k, _item in sorted(self.quicksettings_list, key=lambda x: self.quicksettings_names.get(x[1], x[0])):
-                component = create_setting_component(k, is_quicksettings=True)
-                self.component_dict[k] = component
-        return quicksettings_row
+    def add_quicksettings(self, button):
+        with Modal(visible=True, elem_id="quicksettings_modal", elem_classes=["quicksettings_modal"]) as quicksettings_modal:
+            with gr.Row(elem_id="quicksettings", variant="compact") as quicksettings_row:
+                main_entry.make_checkpoint_manager_ui()
+                for _i, k, _item in sorted(self.quicksettings_list, key=lambda x: self.quicksettings_names.get(x[1], x[0])):
+                    component = create_setting_component(k, is_quicksettings=True)
+                    self.component_dict[k] = component
+
+        shared.quicksettings_modal_visible = True
+
+        def quicksettings_modal_toggle():
+            shared.quicksettings_modal_visible ^= True
+            return gr.update(visible=shared.quicksettings_modal_visible)
+
+        def quicksettings_modal_hidden():
+            shared.quicksettings_modal_visible = False
+
+        quicksettings_modal.blur(fn=quicksettings_modal_hidden, inputs=None, outputs=None, show_progress="hidden")
+        button.click(fn=quicksettings_modal_toggle, inputs=None, outputs=[quicksettings_modal], show_progress="hidden")
+
+        return quicksettings_modal
 
     def add_functionality(self, demo):
         self.submit.click(

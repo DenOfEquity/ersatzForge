@@ -296,15 +296,22 @@ input[type="checkbox"].input-accordion-checkbox{
     font-weight: bold;
 }
 
-#txt2img_generate, #img2img_generate {
+/* .generate-box, .generate-box-compact { */
+	/* position: sticky !important; */
+	/* top: 0em; */
+	/* z-index: 50; */
+/* } */
+
+#txt2img_generate, #img2img_generate, #extras_generate {
     min-height: 4.5em;
 }
 
-#txt2img_generate, #img2img_generate {
-    min-height: 4.5em;
-}
-.generate-box-compact #txt2img_generate, .generate-box-compact #img2img_generate {
+.generate-box-compact #txt2img_generate, .generate-box-compact #img2img_generate, .generate-box-compact #extras_generate {
     min-height: 3em;
+}
+
+#txt2img_gallery, #img2img_gallery, #extras_gallery {
+	margin: 6px 0px;
 }
 
 @media screen and (min-width: 2500px) {
@@ -323,9 +330,6 @@ input[type="checkbox"].input-accordion-checkbox{
     gap: 0.4em;
 }
 
-.generate-box{
-    position: relative;
-}
 .gradio-button.generate-box-skip, .gradio-button.generate-box-interrupt{
     position: absolute;
     width: 50%;
@@ -336,13 +340,13 @@ input[type="checkbox"].input-accordion-checkbox{
 .gradio-button.generate-box-skip:hover, .gradio-button.generate-box-interrupt:hover{
     background: #c2cfdb;
 }
-.gradio-button.generate-box-interrupt{
-    left: 0;
-    border-radius: 0.5rem 0 0 0.5rem;
-}
 .gradio-button.generate-box-skip{
     right: 0;
     border-radius: 0 0.5rem 0.5rem 0;
+}
+.gradio-button.generate-box-interrupt{
+    left: 0;
+    border-radius: 0.5rem 0 0 0.5rem;
 }
 
 #img2img_scale_resolution_preview.block{
@@ -418,41 +422,41 @@ div.toprow-compact-tools{
     width: 100% !important;
 }
 
-#txt2img_settings, #img2img_settings {
-    float: left;
-    display: block;
-    max-height: calc(100vh - 11em);
-    overflow-y: auto;
-	margin-top: 0.5em;
-	padding-right: 1em !important;
-}
-#txt2img_results, #img2img_results {
-    float: right;
-    display: block;
-    max-height: calc(100vh - 11em);
-    overflow-y: auto;
-	margin-top: 0.5em;
-	padding-left: 1em !important;
-	padding-right: 1em !important;
-}
-#extras_settings {
-    float: left;
-    display: block;
-    max-height: calc(100vh - 4em);
-    overflow-y: auto;
-	margin-top: 0.5em;
-	padding-right: 1em !important;
-}
-#extras_results {
-    float: right;
-    display: block;
-    max-height: calc(100vh - 4em);
-    overflow-y: auto;
-	margin-top: 0.5em;
-	padding-left: 1em !important;
-	padding-right: 1em !important;
+#tabs {
+	top: 1.5em;
 }
 
+#button_show_quicksettings {
+	height: 1.5em;
+	position: fixed;
+	z-index: 91;
+	left: 0.5em;
+	top: 0;
+}
+
+.button_extra_networks {
+    height: 2em;
+    margin-bottom: 6px !important;
+}
+
+
+#txt2img_settings, #img2img_settings, #extras_settings {
+    float: left;
+    display: block;
+    max-height: calc(100vh - 5.5em);
+    overflow-y: auto;
+	margin-top: 0.5em;
+	padding-right: 1em !important;
+}
+#txt2img_results, #img2img_results, #extras_results {
+    float: right;
+    display: block;
+    max-height: calc(100vh - 5.5em);
+    overflow-y: auto;
+	margin-top: 0.5em;
+	padding-left: 1em !important;
+	padding-right: 1em !important;
+}
 
 /* settings */
 #quicksettings {
@@ -510,7 +514,7 @@ div.toprow-compact-tools{
 
 #settings_toprow{
 	position: sticky;
-	top: 4.5em;
+	top: 5.0em;
 	left: 2.5em;
 	z-index: 50;
 	max-width: calc(100vw - 6em);
@@ -520,7 +524,7 @@ div.toprow-compact-tools{
 @media (prefers-color-scheme: dark) {
 	#settings_toprow{
 		position: sticky;
-		top: 4.5em;
+		top: 5.0em;
 		left: 2em;
 		z-index: 50;
 		max-width: calc(100vw - 4em);
@@ -540,7 +544,7 @@ div.toprow-compact-tools{
     display: block;
 	left: 3em;
     width: 15em;
-    max-height: calc(100vh - 8em);
+    max-height: calc(100vh - 8.5em);
     overflow-y: auto;
     margin: 0 1em 0 0;
 }
@@ -648,11 +652,11 @@ table.popup-table .link{
 .progressDiv{
     position: absolute;
     height: 20px;
-    background: #b4c0cc;
     border-radius: 3px !important;
     top: 0px;
     left: 0px;
     width: 100%;
+	z-index: 51;
 }
 
 .progress-container{
@@ -684,7 +688,7 @@ table.popup-table .link{
 
 .livePreview{
     position: absolute;
-    z-index: 300;
+    z-index: 40;
     background: var(--background-fill-primary);
     width: 100%;
     height: 100%;
@@ -973,6 +977,9 @@ footer {
 
 #footer div{
     display: inline-block;
+	height: 1.5em;
+	max-height: 1.5em;
+	text-align: right;
 }
 
 #footer .versions{

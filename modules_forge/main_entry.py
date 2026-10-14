@@ -125,19 +125,19 @@ def make_checkpoint_manager_ui():
         if len(sd_models.checkpoints_list) > 0:
             shared.opts.set("sd_model_checkpoint", next(iter(sd_models.checkpoints_list.values())).name)
 
-    ui_forge_preset = gr.Dropdown(label="UI", elem_id="forge_ui_preset", value=None, 
-                                  choices=["all", "anima", "chroma", "ernie", "flux", "klein", "krea2", "qwen_2.1", "sd", "sd3", "xl", "zimage"], scale=0, filterable=False)
+    ui_forge_preset = gr.Dropdown(label="Preset", show_label=False, elem_id="forge_ui_preset", value=None, 
+                                  choices=["all", "anima", "chroma", "ernie", "flux", "klein", "krea2", "qwen2.1", "sd", "sd3", "xl", "zimage"], scale=0, filterable=False)
 
     ui_checkpoint = gr.Dropdown(
         value=lambda: shared.opts.sd_model_checkpoint,
-        label="Checkpoint",
+        label="Checkpoint ↓\u2003\u2003\u2003\u2003\u2003 Additional modules →",
         elem_classes=["model_selection"],
         choices=ckpt_list
     )
-
     ui_vae = gr.Dropdown(
         value=lambda: [os.path.basename(x) for x in shared.opts.forge_additional_modules],
         multiselect=True,
+        show_label=False,
         label="Additional modules",
         elem_classes=["module_selection"],
         choices=module_display
@@ -359,7 +359,7 @@ def forge_main_entry():
 # not setting on startup
 #    Context.root_block.load(on_preset_change, inputs=None, outputs=output_targets, show_progress="hidden")
 
-    refresh_model_loading_parameters()
+    refresh_model_loading_parameters() # necessary?
     return
 
 
@@ -380,22 +380,22 @@ def on_preset_change(preset=None):
                 gr.update(visible=True),
                 gr.skip(),
                 gr.update(value=0),
-                gr.update(value=ui_settings_from_file['txt2img/Width/value'], step=ui_settings_from_file['txt2img/Width/step']),
-                gr.update(value=ui_settings_from_file['img2img/Width/value'], step=ui_settings_from_file['img2img/Width/step']),
-                gr.update(value=ui_settings_from_file['txt2img/Height/value'], step=ui_settings_from_file['txt2img/Height/step']),
-                gr.update(value=ui_settings_from_file['img2img/Height/value'], step=ui_settings_from_file['img2img/Height/step']),
-                gr.update(value=ui_settings_from_file['txt2img/CFG scale/value']),
-                gr.update(value=ui_settings_from_file['img2img/CFG scale/value']),
-                gr.update(visible=True, value=ui_settings_from_file['txt2img/Distilled CFG scale/value']),
-                gr.update(visible=True, value=ui_settings_from_file['img2img/Distilled CFG scale/value']),
-                gr.update(value=ui_settings_from_file['customscript/sampler.py/txt2img/Sampling method/value']),
-                gr.update(value=ui_settings_from_file['customscript/sampler.py/img2img/Sampling method/value']),
-                gr.update(value=ui_settings_from_file['customscript/sampler.py/txt2img/Schedule type/value']),
-                gr.update(value=ui_settings_from_file['customscript/sampler.py/img2img/Schedule type/value']),
-                gr.update(visible=True, value=ui_settings_from_file['txt2img/HiRes CFG scale/value']),
-                gr.update(visible=True, value=ui_settings_from_file['txt2img/HiRes Distilled CFG scale/value']),
-                gr.update(value=ui_settings_from_file['txt2img/Sampling steps/value']),
-                gr.update(value=ui_settings_from_file['img2img/Sampling steps/value']),
+                gr.update(value=ui_settings_from_file["txt2img/Width/value"], step=ui_settings_from_file["txt2img/Width/step"]),
+                gr.update(value=ui_settings_from_file["img2img/Width/value"], step=ui_settings_from_file["img2img/Width/step"]),
+                gr.update(value=ui_settings_from_file["txt2img/Height/value"], step=ui_settings_from_file["txt2img/Height/step"]),
+                gr.update(value=ui_settings_from_file["img2img/Height/value"], step=ui_settings_from_file["img2img/Height/step"]),
+                gr.update(value=ui_settings_from_file["txt2img/CFG scale/value"]),
+                gr.update(value=ui_settings_from_file["img2img/CFG scale/value"]),
+                gr.update(visible=True, value=ui_settings_from_file["txt2img/Distilled CFG scale/value"]),
+                gr.update(visible=True, value=ui_settings_from_file["img2img/Distilled CFG scale/value"]),
+                gr.update(value=ui_settings_from_file["customscript/sampler.py/txt2img/Sampling method/value"]),
+                gr.update(value=ui_settings_from_file["customscript/sampler.py/img2img/Sampling method/value"]),
+                gr.update(value=ui_settings_from_file["customscript/sampler.py/txt2img/Schedule type/value"]),
+                gr.update(value=ui_settings_from_file["customscript/sampler.py/img2img/Schedule type/value"]),
+                gr.update(visible=True, value=ui_settings_from_file["txt2img/HiRes CFG scale/value"]),
+                gr.update(visible=True, value=ui_settings_from_file["txt2img/HiRes Distilled CFG scale/value"]),
+                gr.update(value=ui_settings_from_file["txt2img/Sampling steps/value"]),
+                gr.update(value=ui_settings_from_file["img2img/Sampling steps/value"]),
             ]
         else:
             return [
@@ -458,7 +458,7 @@ def on_preset_change(preset=None):
             p = "flux" if preset == "chroma" else preset
             return [
                 gr.update(value=getattr(shared.opts, f"{p}_vae_te", [""])),
-                gr.update(visible=(p != "flux")),                                                          # ui_clip_skip
+                gr.update(visible=(preset in ["flux", "sd", "sd3", "xl"])),                                     # ui_clip_skip
                 gr.update(value=getattr(shared.opts, f"{p}_unet_dtype", "Automatic")),
                 gr.update(value=model_mem),
                 gr.update(value=getattr(shared.opts, f"{p}_t2i_width", 512), step=step),
@@ -478,8 +478,9 @@ def on_preset_change(preset=None):
                 gr.update(value=getattr(shared.opts, f"{p}_steps", 20)),
                 gr.update(value=getattr(shared.opts, f"{p}_steps", 20)),
             ]
+#move to shared_options?
 
-shared.options_templates.update(shared.options_section(('ui_other', "UI defaults (other)", "ui"), {
+shared.options_templates.update(shared.options_section(("ui_other", "UI defaults (other)", "ui"), {
     "preset_codes_explanation": shared.OptionHTML("""
 <h3>Codes for UI presets.</h3>
 All settings apply to <strong>Txt2img</strong> and <strong>Img2img</strong>.<br/>
@@ -502,12 +503,13 @@ Code order is: (all must be present)<br/>
     "preset_code_ernie": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Beta, 8", "ERNIE preset code", gr.Textbox, {"max_lines": 1}),
     "preset_code_klein": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 4", "Flux2 Klein preset code", gr.Textbox, {"max_lines": 1}),
     "preset_code_krea2": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Krea2 preset code", gr.Textbox, {"max_lines": 1}),
-    "preset_code_qwen_2.1": shared.OptionInfo("None, 0, 1024, 1024, 3.1, None, Euler a, Simple, 24", "QwenImage 2.1 preset code", gr.Textbox, {"max_lines": 1}),
+    "preset_code_qwen2.1": shared.OptionInfo("None, 0, 1024, 1024, 3.1, None, Euler a, Simple, 24", "QwenImage2.1 preset code", gr.Textbox, {"max_lines": 1}),
     "preset_code_zimage": shared.OptionInfo("None, 0, 1024, 1024, 1.0, None, Euler, Simple, 8", "Z-Image preset code", gr.Textbox, {"max_lines": 1}),
 
 }))
 
-shared.options_templates.update(shared.options_section(('ui_sd', "UI defaults 'sd'", "ui"), {
+#remove, replace with codes? (also sampler processing script)
+shared.options_templates.update(shared.options_section(("ui_sd", "UI defaults 'sd'", "ui"), {
     "sd_t2i_width":  shared.OptionInfo(512,  "txt2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd_t2i_height": shared.OptionInfo(640,  "txt2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd_t2i_cfg":    shared.OptionInfo(7,    "txt2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
@@ -520,7 +522,7 @@ shared.options_templates.update(shared.options_section(('ui_sd', "UI defaults 's
     "sd_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
     "sd_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
-shared.options_templates.update(shared.options_section(('ui_xl', "UI defaults 'xl'", "ui"), {
+shared.options_templates.update(shared.options_section(("ui_xl", "UI defaults 'xl'", "ui"), {
     "xl_t2i_width":  shared.OptionInfo(896,  "txt2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "xl_t2i_height": shared.OptionInfo(1152, "txt2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "xl_t2i_cfg":    shared.OptionInfo(5,    "txt2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
@@ -533,7 +535,7 @@ shared.options_templates.update(shared.options_section(('ui_xl', "UI defaults 'x
     "xl_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
     "xl_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
-shared.options_templates.update(shared.options_section(('ui_sd3', "UI defaults 'sd3'", "ui"), {
+shared.options_templates.update(shared.options_section(("ui_sd3", "UI defaults 'sd3'", "ui"), {
     "sd3_t2i_width":  shared.OptionInfo(896,  "txt2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 16}),
     "sd3_t2i_height": shared.OptionInfo(1152, "txt2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 16}),
     "sd3_t2i_cfg":    shared.OptionInfo(5,    "txt2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
@@ -546,7 +548,7 @@ shared.options_templates.update(shared.options_section(('ui_sd3', "UI defaults '
     "sd3_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
     "sd3_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
-shared.options_templates.update(shared.options_section(('ui_flux', "UI defaults 'flux'", "ui"), {
+shared.options_templates.update(shared.options_section(("ui_flux", "UI defaults 'flux'", "ui"), {
     "flux_t2i_width":    shared.OptionInfo(896,  "txt2img width",                gr.Slider, {"minimum": 256, "maximum": 4096, "step": 16}),
     "flux_t2i_height":   shared.OptionInfo(1152, "txt2img height",               gr.Slider, {"minimum": 256, "maximum": 4096, "step": 16}),
     "flux_t2i_cfg":      shared.OptionInfo(1,    "txt2img CFG",                  gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),

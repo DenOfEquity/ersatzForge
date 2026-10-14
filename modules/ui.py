@@ -247,7 +247,7 @@ def create_ui():
                 scripts.scripts_txt2img.prepare_ui()
 
                 toprow.create_inline_toprow_prompts()   # forced prompt first
-                modal_show_btn_txt2img = gr.Button("Show Extra Networks")
+                modal_show_btn_txt2img = gr.Button("Show Extra Networks", elem_classes=["button_extra_networks"])
 
                 for category in ordered_ui_categories():
                     if category == "dimensions":
@@ -505,7 +505,7 @@ def create_ui():
                 scripts.scripts_img2img.prepare_ui()
 
                 toprow.create_inline_toprow_prompts()  # forced prompts first
-                modal_show_btn_img2img = gr.Button("Show Extra Networks")
+                modal_show_btn_img2img = gr.Button("Show Extra Networks", elem_classes=["button_extra_networks"])
 
                 with gr.Tabs(elem_id="mode_img2img"):  # forced image second
                     img2img_selected_tab = gr.State(value=0)
@@ -767,14 +767,14 @@ def create_ui():
 
             with gr.Column(variant="panel"):
                 generation_info = gr.Textbox(visible=False, elem_id="pnginfo_generation_info", interactive=False)
-                html2 = gr.HTML()
                 with gr.Row():
                     buttons = infotext_utils.create_buttons(["txt2img", "img2img", "extras"])
-
                 for tabname, button in buttons.items():
                     infotext_utils.register_paste_params_button(infotext_utils.ParamBinding(
                         paste_button=button, tabname=tabname, source_text_component=generation_info, source_image_component=image,
                     ))
+
+                html2 = gr.HTML()
 
         image.change(
             fn=wrap_gradio_call_no_job(modules.extras.run_pnginfo),
@@ -819,6 +819,8 @@ def create_ui():
             extra_tabs.__exit__()
 
         shared.modal_visible = False
+        show_quicksettings = ToolButton("⇔", elem_id="button_show_quicksettings")
+        quicksettings_row = settings.add_quicksettings(show_quicksettings)
 
         def modal_toggle():
             shared.modal_visible ^= True
@@ -830,8 +832,6 @@ def create_ui():
         modal.blur(fn=modal_hidden, inputs=None, outputs=None, show_progress="hidden")
         modal_show_btn_txt2img.click(fn=modal_toggle, inputs=None, outputs=[modal], show_progress="hidden")
         modal_show_btn_img2img.click(fn=modal_toggle, inputs=None, outputs=[modal], show_progress="hidden")
-
-        quicksettings_row = settings.add_quicksettings()
 
         infotext_utils.connect_paste_params_buttons()
 
@@ -853,23 +853,14 @@ def create_ui():
                 loadsave.add_component(f"webui/Tabs@{tabs.elem_id}", tabs)
                 loadsave.setup_ui()
 
-        # def tab_changed(evt: gr.SelectData):
-            # no_quick_setting = getattr(shared.opts, "tabs_without_quick_settings_bar", [])
-
-            # if evt.value not in ["Txt2img", "Img2img"]:
-                # shared.modal_visible = False
-                # return gr.update(visible=False), gr.update(visible=evt.value not in no_quick_setting)
- 
-            # return gr.skip(), gr.update(visible=evt.value not in no_quick_setting)
         def tab_changed(evt: gr.SelectData):
             if evt.value not in ["Txt2img", "Img2img"]:
                 shared.modal_visible = False
-                return gr.update(visible=False), gr.update(visible=False)
+                return gr.update(visible=False)
  
-            return gr.skip(), gr.update(visible=True)
+            return gr.skip()
 
-
-        tabs.select(tab_changed, inputs=None, outputs=[modal, quicksettings_row], show_progress="hidden")
+        tabs.select(tab_changed, inputs=None, outputs=[modal], show_progress="hidden")
 
         settings.add_functionality(demo)
 
