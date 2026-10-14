@@ -95,14 +95,15 @@ class ersatzOtherControl(scripts.Script):
 
         def get_dims(image, tab):
             if image:
-                if tab == 1: # klein
-                    r = 32
-                else:
-                    r = 16
+                # if tab == 1: # klein
+                    # r = 32
+                # else:
+                    # r = 16
+                r = 16
                 w = image.size[0]
                 h = image.size[1]
-                sw = r * ((w + r - 1) // r)
-                sh = r * ((h + r - 1) // r)
+                sw = r * ((w + r//2) // r)
+                sh = r * ((h + r//2) // r)
                 return f"{image.size[0]} × {image.size[1]} ({sw} × {sh})", gradio.update(interactive=True, variant="secondary"), f"{sw},{sh}"
             else:
                 return  "", gradio.update(interactive=False, variant="tertiary"), "0"
@@ -132,7 +133,7 @@ class ersatzOtherControl(scripts.Script):
                         k_image2_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, k_image2_dims], outputs=None)
 
                     with gradio.Row():
-                        kontext_sizing = gradio.Dropdown(label="Kontext image size/crop", choices=["no change", "to output", "to BFL recommended"], value="to BFL recommended", filterable=False)
+                        kontext_sizing = gradio.Dropdown(label="Kontext image size/crop", choices=["no resize", "to output", "to BFL recommended"], value="to BFL recommended", filterable=False)
                         kontext_reduce = gradio.Checkbox(False, info="This reduction is independent of the size/crop setting.", label="reduce to half width and height")
 
                     def kontext_swap(imageA, imageB):
@@ -149,7 +150,7 @@ class ersatzOtherControl(scripts.Script):
                                 klein_1_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
                                 klein_1_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                             with gradio.Row():
-                                klein_1_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
+                                klein_1_resize = gradio.Dropdown(label="Resize", choices=["no resize", "half", "to output", "half output"], value="no resize", allow_custom_value=True, scale=0)
                                 klein_1_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.01)
                         with gradio.Column():
                             klein_2 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
@@ -158,7 +159,7 @@ class ersatzOtherControl(scripts.Script):
                                 klein_2_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
                                 klein_2_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                             with gradio.Row():
-                                klein_2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
+                                klein_2_resize = gradio.Dropdown(label="Resize", choices=["no resize", "half", "to output", "half output"], value="no resize", allow_custom_value=True, scale=0)
                                 klein_2_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.01)
                     with gradio.Accordion(label="References 3 & 4", open=False):
                         with gradio.Row():
@@ -169,7 +170,7 @@ class ersatzOtherControl(scripts.Script):
                                     klein_3_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
                                     klein_3_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                                 with gradio.Row():
-                                    klein_3_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
+                                    klein_3_resize = gradio.Dropdown(label="Resize", choices=["no resize", "half", "to output", "half output"], value="no resize", allow_custom_value=True, scale=0)
                                     klein_3_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.01)
                             with gradio.Column():
                                 klein_4 = gradio.Image(show_label=False, type="pil", height=300, sources=["upload", "clipboard"])
@@ -178,7 +179,7 @@ class ersatzOtherControl(scripts.Script):
                                     klein_4_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
                                     klein_4_dims = gradio.Textbox(visible=False, value="0", interactive=False)
                                 with gradio.Row():
-                                    klein_4_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True, scale=0)
+                                    klein_4_resize = gradio.Dropdown(label="Resize", choices=["no resize", "half", "to output", "half output"], value="no resize", allow_custom_value=True, scale=0)
                                     klein_4_str = gradio.Slider(label="Strength", value=1.0, minimum=0.0, maximum=5.0, step=0.01)
 
                         klein_1.change(fn=get_dims, inputs=[klein_1, selected_tab], outputs=[klein_1_info, klein_1_send, klein_1_dims], show_progress="hidden")
@@ -220,7 +221,7 @@ class ersatzOtherControl(scripts.Script):
                         with gradio.Column():
                             with gradio.Row():
                                 k2_edit_type = gradio.Dropdown(label="Edit LoRA type", choices=["", "ConradLocke", "Ostris"], value="", filterable=False)
-                                k2_resize = gradio.Dropdown(label="Resize", choices=["none", "half", "to output", "half output"], value="none", allow_custom_value=True)
+                                k2_resize = gradio.Dropdown(label="Resize", choices=["no resize", "half", "to output", "half output"], value="no resize", allow_custom_value=True)
                             k2_mask_mode = gradio.Radio(value="unmasked", choices=["masked", "unmasked"], label="Target area")
                             with gradio.Row():
                                 k2_strength = gradio.Slider(value=1.0, minimum=0.0, maximum=2.0, step=0.01, label="Strength")
@@ -330,6 +331,7 @@ class ersatzOtherControl(scripts.Script):
                         ))
         else:
             IntegratedFluxTransformer2DModel.forward = ersatzOtherControl.original_kontext_forward
+            shared.klein_image_hash = 0
             shared.klein_strength = (0.0, 0.0, 0.0, 0.0)
             shared.ZITstrength = 0.0
             setattr(global_variables, "krea2_control_lora_strength", 0.0)
@@ -349,18 +351,19 @@ class ersatzOtherControl(scripts.Script):
         input_device = x.device
         input_dtype = x.dtype
 
-        def pil_to_latent(image, width, height, pad, mode_text, mask=None):
+        def pil_to_latent(image, width, height, pad, model_text, mask=None, keep_alpha=False):
             if isinstance (image, str):
                 image = decode_base64_to_image(image)
-            image = numpy.array(image.convert("RGB")) / 255.0
+            if not keep_alpha:
+                image = image.convert("RGB")
             image = numpy.transpose(image, (2, 0, 1))
-            image = torch.tensor(image).unsqueeze(0)
+            image = torch.tensor(image).unsqueeze(0) / 255.0
 
             if image.shape[3] != width or image.shape[2] != height:
-                print (f"[{mode_text}] resizing and center-cropping input to: {width}×{height}")
+                print (f"[{model_text}] resizing and center-cropping input to: {width}×{height}")
                 image = adaptive_resize(image, width, height, "lanczos", "center")
             else:
-                print (f"[{mode_text}] no image resize needed")
+                print (f"[{model_text}] no image resize needed")
 
             if mask is not None:
                 image *= mask.to(image)
@@ -405,7 +408,7 @@ class ersatzOtherControl(scripts.Script):
                         # resize and combine here instead of in the forward function
                         # only go through the resize process if image is not already desired size
                         match kontext_sizing:
-                            case "no change":
+                            case "no resize":
                                 k_width = image.size[0]
                                 k_height = image.size[1]
                             case "to output":
@@ -416,10 +419,16 @@ class ersatzOtherControl(scripts.Script):
                                 k_height = image.size[1]
                                 aspect_ratio = k_width / k_height
                                 _, k_width, k_height = min((abs(aspect_ratio - w / h), w, h) for w, h in PREFERRED_KONTEXT_RESOLUTIONS)
+                            case _:
+                                k_width = image.size[0]
+                                k_height = image.size[1]
 
                         if kontext_reduce:
                             k_width //= 2
                             k_height //= 2
+
+                        k_width = 16 * ((k_width + 8) // 16)
+                        k_height = 16 * ((k_height + 8) // 16)
 
                         patch_size = 2
                         k_latent = pil_to_latent(image, k_width, k_height, patch_size, "Kontext")
@@ -471,12 +480,17 @@ class ersatzOtherControl(scripts.Script):
             if imgs_data == "":
                 return
 
+            if params.sd_model.is_qwen21:
+                model_string = "QwenImage 2.1 Edit"
+            else:
+                model_string = "KleinEdit"
+
             klein_image_hash = hash(imgs_data)
             klein_latent_size = (w, h)
             klein_resize = (klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize)
 
             if klein_image_hash == self.klein_image_hash and klein_latent_size == self.klein_latent_size and klein_resize == self.klein_resize:
-                print ("[KleinEdit] used cache")
+                print (f"[{model_string}] used cache")
             else:
                 self.klein_image_hash = klein_image_hash
                 self.klein_latent_size = klein_latent_size
@@ -489,34 +503,40 @@ class ersatzOtherControl(scripts.Script):
                     if image is not None:
                         match resize:
                             case "to output":
-                                k_width = 32 * ((w*latent_size + 31) // 32)
-                                k_height = 32 * ((h*latent_size + 31) // 32)
+                                k_width = w*latent_size
+                                k_height = h*latent_size
                             case "half output":
-                                k_width = (64 * ((w*latent_size + 63) // 64)) // 2
-                                k_height = (64 * ((h*latent_size + 63) // 64)) // 2
+                                k_width = (w*latent_size) // 2
+                                k_height = (h*latent_size) // 2
                             case "half":
-                                k_width = (64 * ((image.size[0] + 63) // 64)) // 2
-                                k_height = (64 * ((image.size[1] + 63) // 64)) // 2
-                            case "none":
-                                k_width = 32 * ((image.size[0] + 31) // 32)
-                                k_height = 32 * ((image.size[1] + 31) // 32)
+                                k_width = image.size[0] // 2
+                                k_height = image.size[1] // 2
+                            case "no resize":
+                                k_width = image.size[0]
+                                k_height = image.size[1]
                             case _:
                                 if resize.isdigit():
                                     maximum = int(resize)
                                     if image.size[0] > image.size[1]:
-                                        k_width = 32 * ((maximum + 16) // 32)
-                                        k_height = int(32 * ((16 + (maximum * image.size[1] / image.size[0])) // 32))
+                                        k_width = maximum
+                                        k_height = int(maximum * image.size[1] / image.size[0])
                                     else:
-                                        k_width = int(32 * ((16 + (maximum * image.size[0] / image.size[1])) // 32))
-                                        k_height = 32 * ((maximum + 16) // 32)
+                                        k_width = int(maximum * image.size[0] / image.size[1])
+                                        k_height = maximum
                                 else:
-                                    k_width = 32 * ((image.size[0] + 31) // 32)
-                                    k_height = 32 * ((image.size[1] + 31) // 32)
+                                    k_width = image.size[0]
+                                    k_height = image.size[1]
 
+                        k_width = latent_size * ((k_width + latent_size//2) // latent_size)
+                        k_height = latent_size * ((k_height + latent_size//2) // latent_size)
                         k_width = min(4096, max(32, k_width))
                         k_height = min(4096, max(32, k_height))
 
-                        k_latent = pil_to_latent(image, k_width, k_height, 0, "KleinEdit")
+                        if params.sd_model.is_qwen21:
+                            k_latent = pil_to_latent(image, k_width, k_height, 0, model_string, keep_alpha=True)
+                        else:
+                            k_latent = pil_to_latent(image, k_width, k_height, 2, model_string)
+                            
                         k_latents.append(k_latent)
                     else:
                         k_latents.append(None)
@@ -525,13 +545,14 @@ class ersatzOtherControl(scripts.Script):
 
                 del k_latent
 
+            shared.klein_image_hash = self.klein_image_hash
             shared.klein_strength = (klein_1_str, klein_2_str, klein_3_str, klein_4_str)
             extra_mem = 0
             for latent in shared.klein_latents:
                 if latent is not None:
                     extra_mem += latent.shape[1] * latent.shape[2] * latent.shape[3]
             extra_mem *= n * x.element_size() * 1024
-            print ("[KleinEdit] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
+            print (f"[{model_string}] reserving extra memory (MB):", round(extra_mem/(1024*1024), 2))
             params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = extra_mem
 
 
@@ -615,7 +636,7 @@ class ersatzOtherControl(scripts.Script):
                         case "half":
                             k_width = k2_image.size[0] // 2
                             k_height = k2_image.size[1] // 2
-                        case "none":
+                        case "no resize":
                             k_width = k2_image.size[0]
                             k_height = k2_image.size[1]
                         case _:
@@ -678,6 +699,7 @@ class ersatzOtherControl(scripts.Script):
                     IntegratedFluxTransformer2DModel.forward = ersatzOtherControl.original_kontext_forward
                     params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
                 case 1:
+                    shared.klein_image_hash = 0
                     shared.klein_strength = (0.0, 0.0, 0.0, 0.0)
                     params.sd_model.forge_objects.unet.extra_preserved_memory_during_sampling = 0
                 case 2:
