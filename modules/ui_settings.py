@@ -300,7 +300,7 @@ class UiSettings:
 
         self.interface = settings_interface
 
-    def add_quicksettings(self, button):
+    def add_quicksettings(self, show_button, smol_button):
         with Modal(visible=True, elem_id="quicksettings_modal", elem_classes=["quicksettings_modal"]) as quicksettings_modal:
             with gr.Row(elem_id="quicksettings", variant="compact") as quicksettings_row:
                 main_entry.make_checkpoint_manager_ui()
@@ -309,6 +309,7 @@ class UiSettings:
                     self.component_dict[k] = component
 
         shared.quicksettings_modal_visible = True
+        shared.quicksettings_modal_small = False
 
         def quicksettings_modal_toggle():
             shared.quicksettings_modal_visible ^= True
@@ -317,8 +318,14 @@ class UiSettings:
         def quicksettings_modal_hidden():
             shared.quicksettings_modal_visible = False
 
+        def quicksettings_small_toggle():
+            v = shared.quicksettings_modal_small
+            shared.quicksettings_modal_small ^= True
+            return gr.update(visible=v), gr.update(visible=v), gr.update(visible=v), gr.update(visible=v), "↦" if shared.quicksettings_modal_small else "↤"
+
         quicksettings_modal.blur(fn=quicksettings_modal_hidden, inputs=None, outputs=None, show_progress="hidden")
-        button.click(fn=quicksettings_modal_toggle, inputs=None, outputs=[quicksettings_modal], show_progress="hidden")
+        show_button.click(fn=quicksettings_modal_toggle, inputs=None, outputs=[quicksettings_modal], show_progress="hidden")
+        smol_button.click(fn=quicksettings_small_toggle, inputs=None, outputs=[main_entry.ui_clip_skip, main_entry.ui_forge_unet_storage_dtype_options, main_entry.ui_forge_inference_memory, main_entry.ui_forge_swap, smol_button], show_progress="hidden")
 
         return quicksettings_modal
 

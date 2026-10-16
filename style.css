@@ -430,8 +430,15 @@ div.toprow-compact-tools{
 	height: 1.5em;
 	position: fixed;
 	z-index: 91;
-	left: 0.5em;
 	top: 0;
+	left: 0.5em;
+}
+#button_smol_quicksettings {
+	height: 1.5em;
+	position: fixed;
+	z-index: 91;
+	top: 0;
+	left: 3.5em;
 }
 
 .button_extra_networks {

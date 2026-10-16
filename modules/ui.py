@@ -819,8 +819,9 @@ def create_ui():
             extra_tabs.__exit__()
 
         shared.modal_visible = False
-        show_quicksettings = ToolButton("⇔", elem_id="button_show_quicksettings")
-        quicksettings_row = settings.add_quicksettings(show_quicksettings)
+        show_quicksettings = ToolButton("⇔", elem_id="button_show_quicksettings", tooltip="Toggle Quicksettings / Tabs")
+        smol_quicksettings = ToolButton("↤", elem_id="button_smol_quicksettings", tooltip="Toggle reduced Quicksettings")
+        quicksettings_row = settings.add_quicksettings(show_quicksettings, smol_quicksettings)
 
         def modal_toggle():
             shared.modal_visible ^= True
