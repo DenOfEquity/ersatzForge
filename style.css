@@ -1610,6 +1610,10 @@ body.resizing .resize-handle {
 .prompt textarea[disabled] {
     opacity: 0.25 !important;
 }
+.prompt-container-compact {
+	gap: 4px !important;
+}
+
 
 .forge_space_label{
     padding: 10px;
