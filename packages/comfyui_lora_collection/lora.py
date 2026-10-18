@@ -391,28 +391,32 @@ def model_lora_keys_unet(model, key_map={}):
     sd = model.state_dict()
     sdk = sd.keys()
 
+    lD = len("diffusion_model.")
+    lW = len(".weight")
+
     for k in sdk:
         if k.startswith("diffusion_model."):
             if k.endswith(".weight"):
-                key_lora = k[len("diffusion_model."):-len(".weight")].replace(".", "_")
-                # key_map["oft_unet_{}".format(key_lora)] = k
-                key_map["lora_unet_{}".format(key_lora)] = k
-                key_map["{}".format(k[:-len(".weight")])] = k #generic lora format without any weird key names
+                key_lora = k[lD:-lW].replace(".", "_")
+                # key_map[f"oft_unet_{key_lora}"] = k
+                key_map[f"lora_unet_{key_lora}"] = k
+                key_map[k[:-lW]] = k #generic lora format without any weird key names
             else:
-                key_map["{}".format(k)] = k #generic lora format for not .weight without any weird key names
+                key_map[k] = k #generic lora format for not .weight without any weird key names
 
 
     diffusers_keys = utils.unet_to_diffusers(model.diffusion_model.config)
     for k in diffusers_keys:
         if k.endswith(".weight"):
-            unet_key = "diffusion_model.{}".format(diffusers_keys[k])
-            key_lora = k[:-len(".weight")].replace(".", "_")
-            key_map["lora_unet_{}".format(key_lora)] = unet_key
-            key_map["lycoris_{}".format(key_lora)] = unet_key #simpletuner lycoris format
+            unet_key = f"diffusion_model.{diffusers_keys[k]}"
+            key_lora = k[:-lW].replace(".", "_")
+
+            key_map[f"lora_unet_{key_lora}"] = unet_key
+            key_map[f"lycoris_{key_lora}"] = unet_key #simpletuner lycoris format
             
             diffusers_lora_prefix = ["", "unet."]
             for p in diffusers_lora_prefix:
-                diffusers_lora_key = "{}{}".format(p, k[:-len(".weight")].replace(".to_", ".processor.to_"))
+                diffusers_lora_key = f"{p}{k[:-lW].replace('.to_', '.processor.to_')}"
                 if diffusers_lora_key.endswith(".to_out.0"):
                     diffusers_lora_key = diffusers_lora_key[:-2]
                 key_map[diffusers_lora_key] = unet_key
@@ -422,57 +426,58 @@ def model_lora_keys_unet(model, key_map={}):
         for k in diffusers_keys:
             if k.endswith(".weight"):
                 to = diffusers_keys[k]
-                key_lora = "transformer.{}".format(k[:-len(".weight")]) #regular diffusers sd3 lora format
-                key_map[key_lora] = to
-    
-                key_lora = "diffusion_model.{}".format(k[:-len(".weight")])
-                key_map[key_lora] = to
-    
-                key_lora = "lora_transformer_{}".format(k[:-len(".weight")].replace(".", "_")) #OneTrainer lora
-                key_map[key_lora] = to
+                key_lora = k[:-lW]
+
+                key_map[f"diffusion_model.{key_lora}"] = to
+                key_map[f"lora_transformer_{key_lora.replace('.', '_')}"] = to #OneTrainer lora
+                key_map[f"transformer.{key_lora}"] = to #regular diffusers sd3 lora format    
 
     if model.config.huggingface_repo in ["Lumina2", "Zimage"]:
         diffusers_keys = utils.z_image_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
         for k in diffusers_keys:
             if k.endswith(".weight"):
                 to = diffusers_keys[k]
-                key_lora = k[:-len(".weight")]
-                key_map["diffusion_model.{}".format(key_lora)] = to
-                key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to
-                key_map["transformer.{}".format(key_lora)] = to
+                key_lora = k[:-lW]
+
+                key_map[f"diffusion_model.{key_lora}"] = to
+                key_map[f"lycoris_{key_lora.replace('.', '_')}"] = to
+                key_map[f"transformer.{key_lora}"] = to
 
     if "flux" in model.config.huggingface_repo.lower() or "Chroma" == model.config.huggingface_repo: #Diffusers lora Flux
         diffusers_keys = utils.flux_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
         for k in diffusers_keys:
             if k.endswith(".weight"):
                 to = diffusers_keys[k]
-                key_map["transformer.{}".format(k[:-len(".weight")])] = to  # simpletrainer and probably regular diffusers flux lora format
-                key_map["lycoris_{}".format(k[:-len(".weight")].replace(".", "_"))] = to  # simpletrainer lycoris
-                key_map["lora_transformer_{}".format(k[:-len(".weight")].replace(".", "_"))] = to  # onetrainer
+                key_lora = k[:-lW]
+
+                key_map[f"lora_transformer_{key_lora.replace('.', '_')}"] = to  # onetrainer
+                key_map[f"lycoris_{key_lora.replace('.', '_')}"] = to  # simpletrainer lycoris
+                key_map[f"transformer.{key_lora}"] = to  # simpletrainer and probably regular diffusers flux lora format
 
     if "ernie" in model.config.huggingface_repo.lower():
         for k in sdk:
             if k.startswith("diffusion_model.") and k.endswith(".weight"):
-                key_lora = k[len("diffusion_model."):-len(".weight")]
-                key_map["transformer.{}".format(key_lora)] = k
+                key_lora = k[lD:-lW]
 
+                key_map[f"transformer.{key_lora}"] = k
 
     if "krea2" in model.config.huggingface_repo.lower():
         diffusers_keys = utils.krea2_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
         for k in diffusers_keys:
             if k.endswith(".weight"):
                 to = diffusers_keys[k]
-                key_lora = k[:-len(".weight")]
-                key_map["diffusion_model.{}".format(key_lora)] = to
-                key_map["transformer.{}".format(key_lora)] = to
-                key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to
+                key_lora = k[:-lW]
+
+                key_map[f"diffusion_model.{key_lora}"] = to
+                key_map[f"lycoris_{key_lora.replace('.', '_')}"] = to
+                key_map[f"transformer.{key_lora}"] = to
                 key_map[key_lora] = to
 
     if "QwenImage21" in model.config.huggingface_repo:
         for k in sdk:
             if k.startswith("diffusion_model.") and k.endswith(".weight"): #QwenImage lora format
-                key_lora = k[len("diffusion_model."):-len(".weight")]
-                if key_lora.endswith(".img_mlp.gate_up"):  # Qwen Image 2.1 model could have fused gate_layer/proj; LoRAs could address the halves
+                key_lora = k[lD:-lW]
+                if key_lora.endswith(".img_mlp.gate_up"):  # this Qwen Image 2.1 model has fused gate_layer/proj; LoRAs could address the halves
                     half = sd[k].shape[0] // 2
                     targets = [(key_lora.replace(".gate_up", ".gate_layer"), (k, (0, 0, half))), (key_lora.replace(".gate_up", ".proj"), (k, (0, half, half)))]
                 else:
@@ -480,9 +485,10 @@ def model_lora_keys_unet(model, key_map={}):
 
                 for key_lora, to in targets:
                     # Direct mapping for transformer_blocks format (QwenImage LoRA format)
-                    key_map["{}".format(key_lora)] = to
-                    # Support transformer prefix format
-                    key_map["transformer.{}".format(key_lora)] = to
-                    key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to #SimpleTuner lycoris format
+                    key_map[key_lora] = to
+                    key_map[f"diffusion_model.{key_lora}"] = to
+                    key_map[f"lora_unet_{key_lora}"] = to
+                    key_map[f"lycoris_{key_lora.replace('.', '_')}"] = to #SimpleTuner lycoris format
+                    key_map[f"transformer.{key_lora}"] = to
 
     return sdk, key_map
