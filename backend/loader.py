@@ -34,11 +34,12 @@ from backend.diffusion_engine.anima import Anima
 from backend.diffusion_engine.ernie import ERNIE
 from backend.diffusion_engine.krea2 import Krea2
 from backend.diffusion_engine.qwen21 import Qwen21
+from backend.diffusion_engine.moss import MOSS
 
 import modules_forge.colour_code as cc
 
 
-possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux2, Flux, Cosmos, Wan, Zimage, Lumina2, Anima, ERNIE, Krea2, Qwen21]
+possible_models = [StableDiffusion, StableDiffusion2, StableDiffusionXLRefiner, StableDiffusionXL, StableDiffusion3, ChromaDCT, Chroma, Flux2, Flux, Cosmos, Wan, Zimage, Lumina2, Anima, ERNIE, Krea2, Qwen21, MOSS]
 
 
 logging.getLogger("diffusers").setLevel(logging.ERROR)
@@ -269,6 +270,30 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             return model
 
+        if cls_name == "Qwen3_5Model":
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing Qwen3.5 text encoder!"
+
+            config = read_arbitrary_config(config_path)
+
+            from backend.nn.llm.qwen3_5 import Qwen35TextModel
+
+            storage_dtype = memory_management.text_encoder_dtype()
+            state_dict_dtype = memory_management.state_dict_dtype(state_dict)
+            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "Qwen3.5")
+
+            if storage_dtype in ["nf4", "fp4", "gguf"]:
+                with modeling_utils.no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                        model = Qwen35TextModel(config)
+            else:
+                with modeling_utils.no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
+                        model = Qwen35TextModel(config)
+
+            load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end="scaled_fp8")
+
+            return model
+
         if cls_name in ["T5EncoderModel", "UMT5EncoderModel"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "Missing T5 text encoder!" if cls_name == "T5EncoderModel" else "Missing UMT5 text encoder!"
 
@@ -333,7 +358,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             return model
 
-        if cls_name in ["UNet2DConditionModel", "FluxTransformer2DModel", "Flux2Transformer2DModel", "SD3Transformer2DModel", "ChromaTransformer2DModel", "ChromaDCT", "CosmosTransformer3DModel", "WanTransformer3DModel", "Lumina2Transformer2DModel", "ERNIEImageModel", "Krea2Transformer2DModel", "QwenImage21Transformer2DModel"]:
+        if cls_name in ["UNet2DConditionModel", "FluxTransformer2DModel", "Flux2Transformer2DModel", "SD3Transformer2DModel", "ChromaTransformer2DModel", "ChromaDCT", "CosmosTransformer3DModel", "WanTransformer3DModel", "Lumina2Transformer2DModel", "ERNIEImageModel", "Krea2Transformer2DModel", "QwenImage21Transformer2DModel", "MOSSImageTransformer"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have model state dict!"
 
             model_loader = None
@@ -370,6 +395,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             elif cls_name == "QwenImage21Transformer2DModel":
                 from backend.nn.qwen21 import QwenImage21Transformer2DModel
                 model_loader = lambda c: QwenImage21Transformer2DModel(**c)
+            elif cls_name == "MOSSImageTransformer":
+                from backend.nn.moss import MossImageDiT
+                model_loader = lambda c: MossImageDiT(**c)
             elif cls_name == "Lumina2Transformer2DModel":
                 from backend.nn.lumina2 import Lumina2DiT
                 
@@ -504,6 +532,7 @@ def replace_state_dict(sd, asd, guess):
             "attn_q_norm.": "self_attn.q_norm.",
             "attn_k_norm.": "self_attn.k_norm.",
             "attn_v_norm.": "self_attn.v_norm.",
+            "attn_qkv": "linear_attn.in_proj_qkv",
             "attn_q": "self_attn.q_proj",
             "attn_k": "self_attn.k_proj",
             "attn_v": "self_attn.v_proj",
@@ -515,14 +544,30 @@ def replace_state_dict(sd, asd, guess):
             "token_embd": "model.embed_tokens",
             "output_norm": "model.norm",
             "output.weight": "lm_head.weight",
+            "post_attention_norm": "post_attention_layernorm",
+
+            "attn_gate": "linear_attn.in_proj_z",
+            "ssm_dt.bias": "linear_attn.dt_bias",
+            "ssm_alpha": "linear_attn.in_proj_a",
+            "ssm_beta": "linear_attn.in_proj_b",
+            "ssm_conv1d": "linear_attn.conv1d",
+            "ssm_norm": "linear_attn.norm",
+            "ssm_out": "linear_attn.out_proj",
+            "ssm_a": "linear_attn.A_log",
         }
         asd_new = {}
         for k, v in asd.items():
+            if "ssm_conv1d" in k and v.ndim == 2:
+                v = v.unsqueeze(1)
+            if k == "output.weight":
+                continue
+
             for s, d in gguf_llm_format.items():
                 k = k.replace(s, d)
             asd_new[k] = v
-        for k in ("model.embed_tokens.weight",):
-            asd_new[k] = asd_new[k].dequantize_as_pytorch_parameter()
+
+        # for k in ("model.embed_tokens.weight",):
+            # asd_new[k] = asd_new[k].dequantize_as_pytorch_parameter()
         asd.clear()
         asd = asd_new
 
@@ -837,7 +882,14 @@ def replace_state_dict(sd, asd, guess):
                 continue
             sd[f"{text_encoder_key_prefix}gemma2_2b.{k}"] = v
 
-    if "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 8B[VL] (Klein9B) [QwenImage2.1], 4B[VL] (Z Image, Klein4B) [Krea2], 06B (Anima), ministral3_3b (ERNIE)
+    if "model.layers.0.linear_attn.in_proj_qkv.weight" in asd: # Qwen3.5 (MOSS)
+        for k, v in asd.items():
+            sd[f"{text_encoder_key_prefix}qwen35_9b.{k}"] = v
+    elif "model.language_model.layers.0.linear_attn.in_proj_qkv.weight" in asd: # Qwen3.5 (MOSS)
+        for k, v in asd.items():
+            sd[f"{text_encoder_key_prefix}qwen35_9b.model.{k[21:]}"] = v
+
+    elif "model.layers.0.input_layernorm.weight" in asd:   #Qwen3 8B[VL] (Klein9B) [QwenImage2.1], 4B[VL] (Z Image, Klein4B) [Krea2], 06B (Anima), ministral3_3b (ERNIE)
         size = asd["model.layers.0.post_attention_layernorm.weight"].shape[0]
         if size == 4096:
             size_str = "qwen3_8b"

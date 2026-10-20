@@ -178,32 +178,50 @@ def rotate_half(x):
     return torch.cat((-x2, x1), dim=-1)
 
 
-def precompute_freqs_cis(head_dim, position_ids, theta, rope_scale=None, rope_dims=None, device=None):
-    theta_numerator = torch.arange(0, head_dim, 2, device=device).to(torch.float32)
-    inv_freq = 1.0 / (theta ** (theta_numerator / head_dim))
+def precompute_freqs_cis(head_dim, position_ids, theta, rope_scale=None, rope_dims=None, interleaved_mrope=False, device=None):
+    if not isinstance(theta, list):
+        theta = [theta]
 
-    if rope_scale is not None:
-        if isinstance(rope_scale, list):
-            inv_freq /= rope_scale[0] # index
+    out = []
+    for index, t in enumerate(theta):
+        theta_numerator = torch.arange(0, head_dim, 2, device=device).to(torch.float32)
+        inv_freq = 1.0 / (t ** (theta_numerator / head_dim))
+
+        if rope_scale is not None:
+            if isinstance(rope_scale, list):
+                inv_freq /= rope_scale[index]
+            else:
+                inv_freq /= rope_scale
+
+        inv_freq_expanded = inv_freq[None, :, None].to(torch.float32).expand(position_ids.shape[0], -1, 1)
+        position_ids_expanded = position_ids[:, None, :].to(torch.float32)
+        freqs = (inv_freq_expanded.to(torch.float32) @ position_ids_expanded.to(torch.float32)).transpose(1, 2)
+        if rope_dims is not None and position_ids.shape[0] > 1 and interleaved_mrope:
+            freqs_inter = freqs[0].clone()
+            for axis_idx, offset in ((1, 1), (2, 2)):
+                length = rope_dims[axis_idx] * 3
+                idx = slice(offset, length, 3)
+                freqs_inter[..., idx] = freqs[axis_idx, ..., idx]
+            emb = torch.cat((freqs_inter, freqs_inter), dim=-1)
+            cos = emb.cos().unsqueeze(0)
+            sin = emb.sin().unsqueeze(0)
         else:
-            inv_freq /= rope_scale
+            emb = torch.cat((freqs, freqs), dim=-1)
+            cos = emb.cos()
+            sin = emb.sin()
+            if rope_dims is not None and position_ids.shape[0] > 1:
+                mrope_section = rope_dims * 2
+                cos = torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1).unsqueeze(0)
+                sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(0)
+            else:
+                cos = cos.unsqueeze(1)
+                sin = sin.unsqueeze(1)
+        out.append((cos, sin))
 
-    inv_freq_expanded = inv_freq[None, :, None].to(torch.float32).expand(position_ids.shape[0], -1, 1)
-    position_ids_expanded = position_ids[:, None, :].to(torch.float32)
-    freqs = (inv_freq_expanded.to(torch.float32) @ position_ids_expanded.to(torch.float32)).transpose(1, 2)
-    emb = torch.cat((freqs, freqs), dim=-1)
-    cos = emb.cos()
-    sin = emb.sin()
-    if rope_dims is not None and position_ids.shape[0] > 1:
-        mrope_section = rope_dims * 2
-        cos = torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1).unsqueeze(0)
-        sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(0)
-    else:
-        cos = cos.unsqueeze(1)
-        sin = sin.unsqueeze(1)
+    if len(out) == 1:
+        return out[0]
 
-    return (cos, sin)
-
+    return out
 
 def apply_rope(xq, xk, freqs_cis):
     org_dtype = xq.dtype
@@ -432,12 +450,14 @@ class Llama2_(nn.Module):
             if all_intermediate is not None:
                 if only_layers is None or (i in only_layers):
                     all_intermediate.append(x.unsqueeze(1).clone())
+
             x = layer(
                 x=x,
                 attention_mask=mask,
                 freqs_cis=freqs_cis,
                 optimized_attention=attention_function,
             )
+
             if i == intermediate_output:
                 intermediate = x.clone()
 
@@ -558,13 +578,18 @@ class Qwen3VL_8B(BaseLlama, torch.nn.Module):
         super().__init__()
         config = Qwen3VL_8BConfig()
 
-        # _config_dict = asdict(config)
-        # for key, value in _config_dict.items():
-            # if key in config_dict:
-                # assert value == config_dict[key]
+        _config_dict = asdict(config)
+        for key, value in _config_dict.items():
+            if key in config_dict:
+                if value != config_dict[key]:
+                    print (key, value, config_dict[key])
+#                assert value == config_dict[key]
 
         self.num_layers = config.num_hidden_layers
         self.model = Llama2_(config)
+
+        # vision_config = {**QWEN3VL_VISION, "out_hidden_size": config.hidden_size}
+        # self.visual = Qwen3VLVisionModel(vision_config)
 
 
 class Gemma2_2B(BaseLlama, torch.nn.Module):

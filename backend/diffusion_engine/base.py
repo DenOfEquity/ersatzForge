@@ -128,6 +128,7 @@ class ForgeDiffusionEngine:
         self.is_ernie = False
         self.is_krea2 = False
         self.is_qwen21 = False
+        self.is_moss = False
 
         return
 

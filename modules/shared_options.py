@@ -402,6 +402,7 @@ Or leave blank, to use webUI default values.
     "shift_schnell": shared.OptionInfo("", "Shift - Flux1.Schnell / Chroma (default: 1.0)", gr.Textbox, {"max_lines": 1}, infotext="Shift Schnell"),
     "shift_klein":   shared.OptionInfo("", "Shift - Flux2 Klein (default: 3.0 or 0.5, 1.15)", gr.Textbox, {"max_lines": 1}, infotext="Shift Klein"),
     "shift_krea2":   shared.OptionInfo("", "Shift - Krea2 (default: 1.15 or 0.5, 1.15)", gr.Textbox, {"max_lines": 1}, infotext="Shift Krea2"),
+    "shift_moss":    shared.OptionInfo("", "Shift - MOSSImage (default: 5.0 or 0.5, 1.15)", gr.Textbox, {"max_lines": 1}, infotext="Shift MOSS"),
     "shift_qwen2.1": shared.OptionInfo("", "Shift - QwenImage2.1 (default: 3.0 or 0.5, 0.9)", gr.Textbox, {"max_lines": 1}, infotext="Shift Qwen2_1"),
     "shift_sd3":     shared.OptionInfo("", "Shift - SD3 (default: 3.0)", gr.Textbox, {"max_lines": 1}, infotext="Shift SD3"),
     "shift_zimage":  shared.OptionInfo("", "Shift - Z-Image (default: 3.0)", gr.Textbox, {"max_lines": 1}, infotext="Shift ZImage"),

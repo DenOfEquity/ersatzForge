@@ -1,0 +1,19 @@
+{
+  "_class_name": "MOSSImagePipeline",
+  "text_encoder": [
+    "transformers",
+    "Qwen3_5Model"
+  ],
+  "tokenizer": [
+    "transformers",
+    "Qwen2TokenizerFast"
+  ],
+  "transformer": [
+    "diffusers",
+    "MOSSImageTransformer"
+  ],
+  "vae": [
+    "diffusers",
+    "AutoencoderKLFlux2"
+  ]
+}

@@ -187,6 +187,7 @@ def attention_xformers(q, k, v, heads, mask=None, attn_precision=None, skip_resh
         mask = mask_out[..., : mask.shape[-1]]
         mask = mask.expand(b, heads, -1, -1)
 
+# sliceable in dim 1
     out = xformers.ops.memory_efficient_attention(q, k, v, attn_bias=mask)
 
     if skip_reshape:
@@ -197,17 +198,32 @@ def attention_xformers(q, k, v, heads, mask=None, attn_precision=None, skip_resh
     return out
 
 
-def attention_pytorch(q, k, v, heads, mask=None, attn_precision=None, skip_reshape=False):
+def attention_pytorch(q, k, v, heads, mask=None, attn_precision=None, skip_reshape=False, **kwargs):
+    sdpa_extra = {}
     if skip_reshape:
         b, _, _, dim_head = q.shape
     else:
         b, _, dim_head = q.shape
         dim_head //= heads
         q = q.view(b, -1, heads, dim_head).transpose(1, 2)
-        k = k.view(b, -1, heads, dim_head).transpose(1, 2)
-        v = v.view(b, -1, heads, dim_head).transpose(1, 2)
+        if kwargs.get("enable_gqa", False):
+            k = k.unsqueeze(3).reshape(b, -1, k.shape[-1] // dim_head, dim_head).transpose(1, 2)
+            v = v.unsqueeze(3).reshape(b, -1, v.shape[-1] // dim_head, dim_head).transpose(1, 2)
+        else:
+            k = k.view(b, -1, heads, dim_head).transpose(1, 2)
+            v = v.view(b, -1, heads, dim_head).transpose(1, 2)
 
-    out = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0, is_causal=False)
+    if kwargs.get("enable_gqa", False):
+        sdpa_extra = { "enable_gqa": True }
+
+
+    if mask is not None:
+        if mask.ndim == 2:
+            mask = mask.unsqueeze(0)
+        if mask.ndim == 3:
+            mask = mask.unsqueeze(1)
+
+    out = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0, is_causal=False, **sdpa_extra)
     out = out.transpose(1, 2).reshape(b, -1, heads * dim_head)
     return out
 

@@ -776,11 +776,13 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, iteration=0, positi
         shift_setting("shift_klein", "Shift Klein")
     elif p.sd_model.is_sd3:
         shift_setting("shift_sd3", "Shift SD3")
+    elif p.sd_model.is_moss:
+        shift_setting("shift_moss", "Shift MOSS")
 
     if opts.sd_vae_decode_method != "Full":
         generation_params.update({ "VAE Decoder": opts.sd_vae_decode_method, })
 
-    if opts.forge_unet_storage_dtype != 'Automatic':
+    if opts.forge_unet_storage_dtype != "Automatic (fp16 LoRA)":
         generation_params['Diffusion in Low Bits'] = opts.forge_unet_storage_dtype
 
     for i, m in enumerate(opts.forge_additional_modules):
@@ -1496,7 +1498,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                         samples = latent_upscale_nn.upscale(samples / latent_scale, version, scale) * latent_scale
                         self.hr_scale /= float(scale)
                     
-                elif (self.sd_model.is_ernie or self.sd_model.is_flux2 or (self.sd_model.is_sdxl and getattr(self.sd_model, "is_mugen", False))) and \
+                elif (self.sd_model.is_ernie or self.sd_model.is_flux2 or self.sd_model.is_moss or (self.sd_model.is_sdxl and getattr(self.sd_model, "is_mugen", False))) and \
                     self.hr_scale in [2.0, 4.0]:
                     # use TensorForger's flux2 latent upscaler: https://github.com/tensorforger/comfyui-flow-upscaler
                     if self.hr_scale == 4.0:

@@ -20,7 +20,7 @@ class PromptChunk:
 
 
 class Qwen3TextProcessingEngine:
-    def __init__(self, text_encoder, tokenizer, is_flux2=False, is_ernie=False, is_krea2=False, is_qwen21=False):
+    def __init__(self, text_encoder, tokenizer, is_flux2=False, is_ernie=False, is_krea2=False, is_qwen21=False, is_moss=False):
         super().__init__()
 
         self.text_encoder = text_encoder
@@ -29,10 +29,14 @@ class Qwen3TextProcessingEngine:
         self.is_ERNIE = is_ernie
         self.is_krea2 = is_krea2
         self.is_qwen21 = is_qwen21
+        self.is_moss = is_moss
 
-        self.id_pad = 0 if is_ernie else 151643
-        # self.min_length = 512 if is_flux2 else 1 #flux min 512? or pow2
-        # self.llama_template = "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
+        if is_ernie:
+            self.id_pad = 0
+        elif is_moss:
+            self.id_pad = 248044
+        else:
+            self.id_pad = 151643
         
         if is_flux2:
             self.intermediate_output = [9, 18, 27]
@@ -41,11 +45,13 @@ class Qwen3TextProcessingEngine:
             self.intermediate_output = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
         elif is_qwen21:
             self.intermediate_output = -1
+        elif is_moss:
+            self.intermediate_output = None
         else:
             self.intermediate_output = -2
         self.layer_norm_hidden_state = False
 
-        self.use_negPiP = not is_ernie
+        self.use_negPiP = not is_ernie and not is_moss
         # seems to work with Krea2
         # works OK with Z-Image-Turbo, lower strengths better?
         # sometimes works with Flux.2 Klein4B
@@ -69,6 +75,8 @@ class Qwen3TextProcessingEngine:
             extra_length = 1
         elif self.is_qwen21:
             extra_length = 3 + 5 # not counting system turn or image placeholders
+        elif self.is_moss:
+            extra_length = 3 + 7
         else:
             extra_length = 3 + 5
         return length + extra_length
@@ -108,6 +116,11 @@ class Qwen3TextProcessingEngine:
                 chunk.tokens = [151644, 8948, 198, 151645, 198, 151644, 872, 198] + self.vision_block + chunk.tokens + [151645, 198, 151644, 77091, 198]
                 chunk.multipliers = [1.0] * 36 + chunk.multipliers + [1.0] * 5
                 chunk.negpip = [1.0] * 36 + chunk.negpip + [1.0] * 5
+            elif self.is_moss:
+                #             "<|im_start|>user\n                   <|im_end|>\n<|im_start|>assistant\n<think>\n"
+                chunk.tokens = [248045, 846, 198] + chunk.tokens + [248046, 198, 248045, 74455, 198, 248068, 198]
+                chunk.multipliers = [1.0] * 3 + chunk.multipliers + [1.0] * 7
+                chunk.negpip = [1.0] * 3 + chunk.negpip + [1.0] * 7
             else:
                 #             <|im_start|>user\n                  <|im_end|>\n<|im_start|>assistant\n
                 chunk.tokens = [151644, 872, 198] + chunk.tokens + [151645, 198, 151644, 77091, 198]
@@ -172,7 +185,7 @@ class Qwen3TextProcessingEngine:
                 if self.is_flux2:
                     s = 3
                     e = -11
-                elif self.is_krea2: # update based on template
+                elif self.is_krea2:
                     s = 3
                     e = -11
                 elif self.is_ERNIE:
@@ -181,6 +194,9 @@ class Qwen3TextProcessingEngine:
                 elif self.is_qwen21:
                     s = 36
                     e = -5
+                elif self.is_moss:
+                    s = 3
+                    e = -7
                 else:
                     s = 3
                     e = -5
@@ -248,7 +264,7 @@ class Qwen3TextProcessingEngine:
             new_mean = embeds.mean()
             embeds *= (original_mean / new_mean)
 
-        _, z = self.text_encoder(
+        z, i = self.text_encoder(
             None,
             attention_mask=mask,
             embeds=embeds,
@@ -256,6 +272,9 @@ class Qwen3TextProcessingEngine:
             intermediate_output=self.intermediate_output,
             final_layer_norm_intermediate=self.layer_norm_hidden_state,
         )
+
+        if self.intermediate_output is not None:
+            z = i
 
         memory_management.soft_empty_cache()
 
