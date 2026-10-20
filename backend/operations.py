@@ -403,14 +403,24 @@ class ForgeOperations:
             kwargs["device"] = current_device
             kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
+            self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype), requires_grad=False)
             self.parameters_manual_cast = current_manual_cast_enabled
+            self.weight = None
             self.bias = None
-            self.add = add  # used by llama.py - Qwen3.5, but broken?
+            self.add = add
 
         def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
-            if prefix + "scale" in state_dict:  # Flux
-                state_dict[prefix + "weight"] = state_dict.pop(prefix + "scale")
-            super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
+            if hasattr(self, "dummy"):
+                if prefix + "weight" in state_dict:
+                    self.weight = torch.nn.Parameter(state_dict[prefix + "weight"].to(device=self.dummy.device), requires_grad=False)
+                elif prefix + "scale" in state_dict:  # Flux
+                    self.weight = torch.nn.Parameter(state_dict[prefix + "scale"].to(device=self.dummy.device), requires_grad=False)
+                del self.dummy
+                self.parameters_manual_cast = True
+            else:
+                if prefix + "scale" in state_dict:  # Flux
+                    state_dict[prefix + "weight"] = state_dict.pop(prefix + "scale")
+                super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
 
         def reset_parameters(self):
             self.bias = None
@@ -597,7 +607,6 @@ class ForgeOperationsGGUF(ForgeOperations):
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
             super().__init__(*args, **kwargs)
-            # self.parameters_manual_cast = current_manual_cast_enabled
             self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype), requires_grad=False)
             self.bias = None
 
