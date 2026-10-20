@@ -2,13 +2,10 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 
-from backend.attention import attention_function
-
-TIME_DIM = 256
-EPS = 1e-6
+# from backend.attention import attention_function
 
 
-def time_embedding(sigma: torch.Tensor, dim: int = TIME_DIM) -> torch.Tensor:
+def time_embedding(sigma: torch.Tensor, dim: int = 256) -> torch.Tensor:
     # upstream's timesteps are the scheduler's float32 sigmas times 1000; the sinusoid is computed in float64 and fed
     # in float32
     times = (sigma.float() * 1000.0).double()
@@ -23,20 +20,13 @@ def rope_table(h: int, w: int, text_len: int, head_dim: int, base: float, device
     num_bands = head_dim // 8
     bands = 1 / (base ** (torch.arange(num_bands, dtype=torch.float32) / num_bands))
     bands = bands.to(device)
-    # h, w = torch.meshgrid(torch.arange(height, device=device), torch.arange(width, device=device), indexing="ij")
-    # image = torch.stack((torch.zeros_like(h), torch.full_like(h, text_length), h, w), -1).flatten(0, 1).float()
-    # image[:, 2] -= (height - 1) / 2
-    # image[:, 3] -= (width - 1) / 2
-    # text = torch.zeros(text_length, 4, device=device, dtype=torch.float32)
-    # text[:, 1] = torch.arange(text_length, device=device)
-    # phase = torch.cat((image, text), 0).unsqueeze(-1) * bands
+
     ids = torch.zeros(h * w + text_len, 4, device=device, dtype=torch.float32)
     ids[: h * w, 1] = text_len
     ids[: h * w, 2] = (torch.arange(h, device=device, dtype=torch.float32) - (h - 1) / 2).repeat_interleave(w)
     ids[: h * w, 3] = (torch.arange(w, device=device, dtype=torch.float32) - (w - 1) / 2).repeat(h)
     ids[h * w :, 1] = torch.arange(text_len, device=device, dtype=torch.float32)
     phase = ids.unsqueeze(-1) * bands
-
 
     return torch.cat((phase.sin(), phase.cos()), -2).flatten(-2)
 
@@ -120,7 +110,7 @@ class Block(nn.Module):
         self.proj["ffn_up_gate"] = nn.Linear(dim, 2 * ffn_dim, bias=False)
         self.proj["ffn_down"] = nn.Linear(ffn_dim, dim, bias=False)
 
-    def forward(self, x, rope, mod):
+    def forward(self, x, rope, mod, negpip=None):
         shift_a, scale_a, gate_a, shift_f, scale_f, gate_f = mod
 
         y = torch.addcmul(shift_a, scale_a, self.norm1(x))
@@ -135,6 +125,10 @@ class Block(nn.Module):
         q = self.q_norm(q.unflatten(-1, (self.heads, -1))).flatten(2)
         k = self.k_norm(k.unflatten(-1, (self.heads, -1))).flatten(2)
 
+        if negpip is not None:
+            txtlen = len(negpip)
+            v[:, -txtlen:, :] *= negpip[:, None]
+
         out = self.proj["o"](attention(q, k, v, rope, self.heads))
         x.addcmul_(out, gate_a)
 
@@ -146,7 +140,7 @@ class Block(nn.Module):
 
 
 class MossImageDiT(nn.Module):
-    def __init__(self, dim=3072, ffn_dim=8192, num_heads=24, num_layers=42, text_dim=4096, freq_dim=TIME_DIM,
+    def __init__(self, dim=3072, ffn_dim=8192, num_heads=24, num_layers=42, text_dim=4096, freq_dim=256,
                  latent_channels=128, rope_base=10000.0, fused_qkv=False, **kwargs):
         super().__init__()
         self.dim = dim
@@ -163,7 +157,7 @@ class MossImageDiT(nn.Module):
         self.final_linear_video = nn.Linear(dim, latent_channels, bias=False)
         self.video_head_modulation = nn.Linear(dim, 2 * dim)
 
-    def forward(self, x, timestep, context, transformer_options=None, **kwargs):
+    def forward(self, x, timestep, context, negpip=None, transformer_options=None, **kwargs):
         """x (B, 128, H, W) latents, timestep (B,) = sigma, context (B, T, 4096) -> velocity (B, 128, H, W)."""
         b, _, h, w = x.shape
         h //= 2
@@ -172,6 +166,8 @@ class MossImageDiT(nn.Module):
 
         device = x.device
         dtype = x.dtype
+
+        # context = context.to(device=device, dtype=dtype)
 
         time = self.time_embedding(time_embedding(timestep, self.freq_dim).to(dtype))
         mod = self.shared_block_modulation(time).view(b, 6, -1).to(dtype)
@@ -185,12 +181,15 @@ class MossImageDiT(nn.Module):
         image_tokens = h * w
         rope = rope_table(h, w, context.shape[1], self.dim // self.num_heads, self.rope_base, device).to(dtype)
         video = self.video_embedder(x)
-        text = self.text_embedder(context, rope[image_tokens:])
+        text = self.text_embedder(context, rope[image_tokens:].to(context))
         tokens = torch.cat((video, text), 1)
         del video, text
-        
+
+        if negpip is not None:
+            negpip = negpip[0]
+
         for layer in self.layers:
-            tokens = layer(tokens, rope, mod)
+            tokens = layer(tokens, rope, mod, negpip)
 
         out = self.final_norm_video(tokens[:, :image_tokens]) * (1 + head[:, 1, None]) + head[:, 0, None]
         out = self.final_linear_video(out)

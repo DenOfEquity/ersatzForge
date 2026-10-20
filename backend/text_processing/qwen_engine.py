@@ -51,7 +51,7 @@ class Qwen3TextProcessingEngine:
             self.intermediate_output = -2
         self.layer_norm_hidden_state = False
 
-        self.use_negPiP = not is_ernie and not is_moss
+        self.use_negPiP = not is_ernie
         # seems to work with Krea2
         # works OK with Z-Image-Turbo, lower strengths better?
         # sometimes works with Flux.2 Klein4B
