@@ -83,6 +83,27 @@ def load_lora(lora, to_load):
                 new_lora[k] = lora[k]
         return new_lora
 
+    def convert_moss(sd): # if lora has fused layer qkv but model does not
+        new_lora = {}
+        for k, v in lora.items():
+            ks = k.split(".proj.qkv.", 1)
+            if len(ks) == 2:
+                name1 = ks[0] + ".proj.q." + ks[1]
+                name2 = ks[0] + ".proj.k." + ks[1]
+                name3 = ks[0] + ".proj.v." + ks[1]
+                if "up" in ks[1] or "B" in ks[1]: # split
+                    new_lora[name1] = lora[k][:3072]
+                    new_lora[name2] = lora[k][3072:6144]
+                    new_lora[name3] = lora[k][6144:]
+                else: #["down", "A"]     # duplicate
+                    new_lora[name1] = lora[k]
+                    new_lora[name2] = lora[k]
+                    new_lora[name3] = lora[k]
+            else:
+                new_lora[k] = lora[k]
+        return new_lora
+
+
     if "img_in.lora_A.weight" in lora and "single_blocks.0.norm.key_norm.scale" in lora:
         lora = convert_lora_bfl_control(lora)
 
@@ -95,6 +116,11 @@ def load_lora(lora, to_load):
     if any(".img_mlp.gate_up." in lk for lk in lora.keys()):
         if not any(mk.endswith(".img_mlp.gate_up") for mk in to_load):
             lora = convert_qwen21(lora)
+
+    if any(".proj.qkv." in lk for lk in lora.keys()):
+        if not any(mk.endswith(".proj.qkv.weight") for mk in to_load):
+            lora = convert_moss(lora)
+
 
     patch_dict = {}
     loaded_keys = set()
@@ -475,7 +501,7 @@ def model_lora_keys_unet(model, key_map={}):
 
     if "QwenImage21" in model.config.huggingface_repo:
         for k in sdk:
-            if k.startswith("diffusion_model.") and k.endswith(".weight"): #QwenImage lora format
+            if k.startswith("diffusion_model.") and k.endswith(".weight"):
                 key_lora = k[lD:-lW]
                 if key_lora.endswith(".img_mlp.gate_up"):  # this Qwen Image 2.1 model has fused gate_layer/proj; LoRAs could address the halves
                     half = sd[k].shape[0] // 2
@@ -487,8 +513,22 @@ def model_lora_keys_unet(model, key_map={}):
                     # Direct mapping for transformer_blocks format (QwenImage LoRA format)
                     key_map[key_lora] = to
                     key_map[f"diffusion_model.{key_lora}"] = to
-                    key_map[f"lora_unet_{key_lora}"] = to
-                    key_map[f"lycoris_{key_lora.replace('.', '_')}"] = to #SimpleTuner lycoris format
+                    key_map[f"lora_unet_{key_lora.replace('.', '_')}"] = to
+                    key_map[f"lycoris_{key_lora.replace('.', '_')}"] = to
                     key_map[f"transformer.{key_lora}"] = to
+
+    if "MOSSImage" in model.config.huggingface_repo:
+        for k in sdk:
+            if k.endswith(".proj.qkv.weight"):  # this MOSSImage model has fused layer q/k/v; LoRAs could address the separate projections
+                third = sd[k].shape[0] // 3
+                for i, proj in enumerate(("q", "k", "v")):
+                    to = (k, (0, i * third, third))
+                    key_lora = k[lD:-len(".qkv.weight")] + f".{proj}"
+                    key_map[key_lora] = to
+                    key_map[f"diffusion_model.{key_lora}"] = to
+                    key_map[f"lora_unet_{key_lora.replace(".", "_")}"] = to
+                    key_map[f"lycoris_{key_lora.replace('.', '_')}"] = to
+                    key_map[f"transformer.{key_lora}"] = to
+
 
     return sdk, key_map
