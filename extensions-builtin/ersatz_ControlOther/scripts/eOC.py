@@ -485,11 +485,11 @@ class ersatzOtherControl(scripts.Script):
             else:
                 model_string = "KleinEdit"
 
-            klein_image_hash = hash(imgs_data)
             klein_latent_size = (w, h)
             klein_resize = (klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize)
+            klein_image_hash = hash(imgs_data + str(klein_latent_size) + str(klein_resize))
 
-            if klein_image_hash == self.klein_image_hash and klein_latent_size == self.klein_latent_size and klein_resize == self.klein_resize:
+            if klein_image_hash == self.klein_image_hash:
                 print (f"[{model_string}] used cache")
             else:
                 self.klein_image_hash = klein_image_hash
