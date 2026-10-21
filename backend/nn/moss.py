@@ -6,13 +6,11 @@ from einops import rearrange
 
 
 def time_embedding(sigma: torch.Tensor, dim: int = 256) -> torch.Tensor:
-    # upstream's timesteps are the scheduler's float32 sigmas times 1000; the sinusoid is computed in float64 and fed
-    # in float32
-    times = (sigma.float() * 1000.0).double()
+    times = (sigma.to(torch.float32) * 1000.0)
     half = dim // 2
-    freq = 10000 ** (-torch.arange(half, device=sigma.device, dtype=torch.float64) / half)
+    freq = 10000 ** (-torch.arange(half, device=sigma.device, dtype=torch.float32) / half)
     phase = times[:, None] * freq
-    return torch.cat((phase.cos(), phase.sin()), dim=-1).float()
+    return torch.cat((phase.cos(), phase.sin()), dim=-1).to(torch.float32)
 
 
 def rope_table(h: int, w: int, text_len: int, head_dim: int, base: float, device) -> torch.Tensor:
