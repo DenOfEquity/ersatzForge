@@ -526,7 +526,7 @@ def model_lora_keys_unet(model, key_map={}):
                     key_lora = k[lD:-len(".qkv.weight")] + f".{proj}"
                     key_map[key_lora] = to
                     key_map[f"diffusion_model.{key_lora}"] = to
-                    key_map[f"lora_unet_{key_lora.replace(".", "_")}"] = to
+                    key_map[f"lora_unet_{key_lora.replace('.', '_')}"] = to
                     key_map[f"lycoris_{key_lora.replace('.', '_')}"] = to
                     key_map[f"transformer.{key_lora}"] = to
 
