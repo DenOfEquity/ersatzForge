@@ -9,6 +9,10 @@ from backend import memory_management, stream
 from backend.args import dynamic_args
 
 
+# these names used for setting checkpoint/lora base model in metadata json files
+model_ids = ["SD1", "SD2", "SDXL", "SD3", "Anima", "ERNIE", "Flux", "Klein", "Krea2", "MOSS", "Qwen2.1", "Zimage", "Unknown"]
+
+
 total_vram = int(memory_management.total_vram)
 
 ui_forge_preset: gr.Dropdown = None

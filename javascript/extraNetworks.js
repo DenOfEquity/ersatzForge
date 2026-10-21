@@ -91,6 +91,12 @@ function setupExtraNetworksForTab(tabname) {
                 else if (UIpreset == "krea2") {
                     if (sdversion != "SdVersion.Krea2") visible = false;
                 }
+                else if (UIpreset == "moss") {
+                    if (sdversion != "SdVersion.MOSS") visible = false;
+                }
+                else if (UIpreset == "qwen2.1") {
+                    if (sdversion != "SdVersion.Qwen2.1") visible = false;
+                }
                 else if (UIpreset == "sd") {
                     if (sdversion != "SdVersion.SD1" && sdversion != "SdVersion.SD2") visible = false;
                 }
@@ -102,9 +108,6 @@ function setupExtraNetworksForTab(tabname) {
                 }
                 else if (UIpreset == "zimage") {
                     if (sdversion != "SdVersion.Zimage") visible = false;
-                }
-                else if (UIpreset == "qwen2.1") {
-                    if (sdversion != "SdVersion.Qwen2.1") visible = false;
                 }
 
                 if (visible) {
@@ -172,30 +175,6 @@ function setupExtraNetworksForTab(tabname) {
             extraNetworksShowControlsForPage(tabname, tabname_full);
         }
     });
-}
-
-
-function extraNetworksMovePromptToTab(tabname, id, showPrompt, showNegativePrompt) {
-    var promptContainer = gradioApp().getElementById(tabname + "_prompt_container");
-    var prompt = gradioApp().getElementById(tabname + "_prompt_row");
-    var negPrompt = gradioApp().getElementById(tabname + "_neg_prompt_row");
-    var elem = id ? gradioApp().getElementById(id) : null;
-
-    if (showNegativePrompt && elem) {
-        elem.insertBefore(negPrompt, elem.firstChild);
-    } else {
-        promptContainer.insertBefore(negPrompt, promptContainer.firstChild);
-    }
-
-    if (showPrompt && elem) {
-        elem.insertBefore(prompt, elem.firstChild);
-    } else {
-        promptContainer.insertBefore(prompt, promptContainer.firstChild);
-    }
-
-    if (elem) {
-        elem.classList.toggle("extra-page-prompts-active", showNegativePrompt || showPrompt);
-    }
 }
 
 
@@ -660,11 +639,6 @@ function requestGet(url, data, handler, errorHandler) {
     };
     var js = JSON.stringify(data);
     xhr.send(js);
-}
-
-function extraNetworksCopyCardPath(event) {
-    navigator.clipboard.writeText(event.target.getAttribute("data-clipboard-text"));
-    event.stopPropagation();
 }
 
 function extraNetworksRequestMetadata(event, extraPage) {

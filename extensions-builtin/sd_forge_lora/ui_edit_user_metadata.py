@@ -4,7 +4,7 @@ import gradio as gr
 import re
 
 from modules import ui_extra_networks_user_metadata
-
+from modules_forge.main_entry import model_ids
 
 def is_non_comma_tagset(tags):
     average_tag_length = sum(len(x) for x in tags.keys()) / len(tags)
@@ -134,7 +134,7 @@ class LoraUserMetadataEditor(ui_extra_networks_user_metadata.UserMetadataEditor)
         ]
 
     def create_extra_default_items_in_left_column(self):
-        self.select_sd_version = gr.Radio(["SD1", "SD2", "SDXL", "SD3", "Anima", "ERNIE", "Flux", "Klein", "Krea2", "Qwen2.1", "Zimage", "Unknown"], value="Unknown", label="Base model", interactive=True)
+        self.select_sd_version = gr.Radio(choices=model_ids, value="Unknown", label="Base model", interactive=True)
 
     def create_editor(self):
         self.create_default_editor_elems()

@@ -89,6 +89,9 @@ class NetworkOnDisk:
         elif "qwen_image21" in str(self.metadata.get("ss_network_module", "")).lower():
             return "SdVersion.Qwen2.1"
 
+        elif str(self.metadata.get("ss_base_model_version", "")).lower() == "moss_image":
+            return "SdVersion.MOSS"
+
         elif str(self.metadata.get("modelspec.architecture", "")).startswith("ernie"):
             return "SdVersion.ERNIE"
         elif str(self.metadata.get("ss_base_model_version", "")).lower() == "ernie_image":
