@@ -9,11 +9,13 @@ import io
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
+import json
 import random
 import numpy
 import torch
 
 from modules import shared, devices
+from modules_forge.shared import diffusers_dir
 
 models_list = ['florence-community/Florence-2-base', 'florence-community/Florence-2-large']#, 'MiaoshouAI/Florence-2-large-PromptGen-v2.0', 'MiaoshouAI/Florence-2-base-PromptGen-v2.0']
 
@@ -37,8 +39,8 @@ def run_example(task_prompt, image, text_input=None, model_id='florence-communit
     global loadedModel, model, processor
 
     if loadedModel != model_id:
-        model = Florence2ForConditionalGeneration.from_pretrained(model_id, dtype=dtype).to(device)
-        processor = AutoProcessor.from_pretrained(model_id)
+        model = Florence2ForConditionalGeneration.from_pretrained(model_id, dtype=dtype, local_files_only=True, cache_dir=diffusers_dir).to(device)
+        processor = AutoProcessor.from_pretrained(model_id, local_files_only=True, cache_dir=diffusers_dir)
         loadedModel = model_id
     else:
         model.to(device)
@@ -78,6 +80,26 @@ def plot_bbox(image, data):
         plt.text(x1, y1, label, color='white', fontsize=8, bbox=dict(facecolor='red', alpha=0.5))
     ax.axis('off')
     return fig
+
+
+def moss_json(width, height, caption, data):
+    output = {}
+    output["summary"] = {}
+    output["summary"]["canvas"] = "single"
+    output["summary"]["caption"] = caption
+#    output["summary"]["palette"] = ["red", "green", "blue"]
+    output["items"] = []
+    output["bbox_coord_space"] = "abs_centralized"
+    output["bbox_format"] = "yxyx"
+
+    for bbox, label in zip(data['bboxes'], data['labels']):
+        element = {}
+        element["label"] = "object"
+        element["caption"] = label
+        element["bbox"] = [int(bbox[1] - height//2), int(bbox[0] - width//2), int(bbox[3] - height//2), int(bbox[2] - width//2)]
+        #element["palette"] = []
+        output["items"].append(element)
+    return json.dumps(output)
 
 def draw_polygons(image, prediction, fill_mask=False):
     draw = ImageDraw.Draw(image)
@@ -126,15 +148,15 @@ def process_image(image, task_prompt, text_input=None, model_id='florence-commun
     if task_prompt == 'Caption':
         task_prompt = '<CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results.get(task_prompt), None
+        return results.get(task_prompt), gr.update(visible=False)
     elif task_prompt == 'Detailed Caption':
         task_prompt = '<DETAILED_CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results.get(task_prompt), None
+        return results.get(task_prompt), gr.update(visible=False)
     elif task_prompt == 'More Detailed Caption':
         task_prompt = '<MORE_DETAILED_CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results.get(task_prompt), None
+        return results.get(task_prompt), gr.update(visible=False)
     elif task_prompt == 'Caption + Grounding':
         task_prompt = '<CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
@@ -143,7 +165,7 @@ def process_image(image, task_prompt, text_input=None, model_id='florence-commun
         results = run_example(task_prompt, image, text_input, model_id)
         results['<CAPTION>'] = text_input
         fig = plot_bbox(image, results['<CAPTION_TO_PHRASE_GROUNDING>'])
-        return results, fig_to_pil(fig)
+        return results, gr.update(fig_to_pil(fig), visible=True)
     elif task_prompt == 'Detailed Caption + Grounding':
         task_prompt = '<DETAILED_CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
@@ -152,7 +174,7 @@ def process_image(image, task_prompt, text_input=None, model_id='florence-commun
         results = run_example(task_prompt, image, text_input, model_id)
         results['<DETAILED_CAPTION>'] = text_input
         fig = plot_bbox(image, results['<CAPTION_TO_PHRASE_GROUNDING>'])
-        return results, fig_to_pil(fig)
+        return results, gr.update(fig_to_pil(fig), visible=True)
     elif task_prompt == 'More Detailed Caption + Grounding':
         task_prompt = '<MORE_DETAILED_CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
@@ -161,83 +183,96 @@ def process_image(image, task_prompt, text_input=None, model_id='florence-commun
         results = run_example(task_prompt, image, text_input, model_id)
         results['<MORE_DETAILED_CAPTION>'] = text_input
         fig = plot_bbox(image, results['<CAPTION_TO_PHRASE_GROUNDING>'])
-        return results, fig_to_pil(fig)
+        return results, gr.update(fig_to_pil(fig), visible=True)
+
+    elif task_prompt == 'MOSS':
+        w, h = image.size
+        task_prompt = '<MORE_DETAILED_CAPTION>'
+        results = run_example(task_prompt, image, model_id=model_id)
+        text_input = results[task_prompt]
+        task_prompt = '<CAPTION_TO_PHRASE_GROUNDING>'
+        results = run_example(task_prompt, image, text_input, model_id)
+        results['<MORE_DETAILED_CAPTION>'] = text_input
+        moss = moss_json(w, h, results['<MORE_DETAILED_CAPTION>'], results['<CAPTION_TO_PHRASE_GROUNDING>'])
+        return moss, gr.update(visible=False)
+
+
     elif task_prompt == 'Object Detection':
         task_prompt = '<OD>'
         results = run_example(task_prompt, image, model_id=model_id)
         fig = plot_bbox(image, results['<OD>'])
-        return results, fig_to_pil(fig)
+        return results, gr.update(fig_to_pil(fig), visible=True)
     elif task_prompt == 'Dense Region Caption':
         task_prompt = '<DENSE_REGION_CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
         fig = plot_bbox(image, results['<DENSE_REGION_CAPTION>'])
-        return results, fig_to_pil(fig)
+        return results, gr.update(fig_to_pil(fig), visible=True)
     elif task_prompt == 'Region Proposal':
         task_prompt = '<REGION_PROPOSAL>'
         results = run_example(task_prompt, image, model_id=model_id)
         fig = plot_bbox(image, results['<REGION_PROPOSAL>'])
-        return results, fig_to_pil(fig)
+        return results, gr.update(fig_to_pil(fig), visible=True)
     elif task_prompt == 'Caption to Phrase Grounding':
         task_prompt = '<CAPTION_TO_PHRASE_GROUNDING>'
         results = run_example(task_prompt, image, text_input, model_id)
         fig = plot_bbox(image, results['<CAPTION_TO_PHRASE_GROUNDING>'])
-        return results, fig_to_pil(fig)
+        return results, gr.update(fig_to_pil(fig), visible=True)
     elif task_prompt == 'Referring Expression Segmentation':
         task_prompt = '<REFERRING_EXPRESSION_SEGMENTATION>'
         results = run_example(task_prompt, image, text_input, model_id)
         output_image = copy.deepcopy(image)
         output_image = draw_polygons(output_image, results['<REFERRING_EXPRESSION_SEGMENTATION>'], fill_mask=True)
-        return results, output_image
+        return results, gr.update(output_image, visible=True)
     elif task_prompt == 'Region to Segmentation':
         task_prompt = '<REGION_TO_SEGMENTATION>'
         results = run_example(task_prompt, image, text_input, model_id)
         output_image = copy.deepcopy(image)
         output_image = draw_polygons(output_image, results['<REGION_TO_SEGMENTATION>'], fill_mask=True)
-        return results, output_image
+        return results, gr.update(output_image, visible=True)
     elif task_prompt == 'Open Vocabulary Detection':
         task_prompt = '<OPEN_VOCABULARY_DETECTION>'
         results = run_example(task_prompt, image, text_input, model_id)
         bbox_results = convert_to_od_format(results['<OPEN_VOCABULARY_DETECTION>'])
         fig = plot_bbox(image, bbox_results)
-        return results, fig_to_pil(fig)
+        return results, gr.update(fig_to_pil(fig), visible=True)
     elif task_prompt == 'Region to Category':
         task_prompt = '<REGION_TO_CATEGORY>'
         results = run_example(task_prompt, image, text_input, model_id)
-        return results, None
+        return results, gr.update(visible=False)
     elif task_prompt == 'Region to Description':
         task_prompt = '<REGION_TO_DESCRIPTION>'
         results = run_example(task_prompt, image, text_input, model_id)
-        return results, None
+        return results, gr.update(visible=False)
     elif task_prompt == 'OCR':
         task_prompt = '<OCR>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results, None
+        return results, gr.update(visible=False)
     elif task_prompt == 'OCR with Region':
         task_prompt = '<OCR_WITH_REGION>'
         results = run_example(task_prompt, image, model_id=model_id)
         output_image = copy.deepcopy(image)
         output_image = draw_ocr_bboxes(output_image, results['<OCR_WITH_REGION>'])
-        return results, output_image
+        return results, gr.update(output_image, visible=True)
 
     elif task_prompt == 'Generate Tags':
         task_prompt = '<GENERATE_TAGS>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results, None
+        return results, gr.update(visible=False)
     elif task_prompt == 'Mixed Caption':
         task_prompt = '<MIXED_CAPTION>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results, None
+        return results, gr.update(visible=False)
     elif task_prompt == 'Mixed Caption Plus':
         task_prompt = '<MIXED_CAPTION_PLUS>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results, None
+        return results, gr.update(visible=False)
     elif task_prompt == 'Analyze':
         task_prompt = '<ANALYZE>'
         results = run_example(task_prompt, image, model_id=model_id)
-        return results, None
+        return results, gr.update(visible=False)
 
     else:
-        return "", None  # Return empty string and None for unknown task prompts
+        return "", gr.update(visible=False)  # Return empty string and None for unknown task prompts
 
 
 
@@ -245,8 +280,8 @@ def run_example_batch(directory, task_prompt, model_id='florence-community/Flore
     global loadedModel, model, processor
 
     if loadedModel != model_id:
-        model = Florence2ForConditionalGeneration.from_pretrained(model_id, dtype=dtype).to(device)
-        processor = AutoProcessor.from_pretrained(model_id)
+        model = Florence2ForConditionalGeneration.from_pretrained(model_id, dtype=dtype, local_files_only=True, cache_dir=diffusers_dir).to(device)
+        processor = AutoProcessor.from_pretrained(model_id, local_files_only=True, cache_dir=diffusers_dir)
         loadedModel = model_id
     else:
         model.to(device)
@@ -328,7 +363,7 @@ single_task_list =[
     'Dense Region Caption', 'Region Proposal', 'Caption to Phrase Grounding',
     'Referring Expression Segmentation', 'Region to Segmentation',
     'Open Vocabulary Detection', 'Region to Category', 'Region to Description',
-    'OCR', 'OCR with Region'
+    'OCR', 'OCR with Region', 'MOSS'
 ]
 
 cascaded_task_list =[
@@ -363,7 +398,7 @@ with gr.Blocks(analytics_enabled=False, css=css, title="Florence-2") as demo:
                 submit_btn = gr.Button(value="Submit")
             with gr.Column():
                 output_text = gr.Textbox(label="Output Text", show_copy_button=True)
-                output_img = gr.Image(label="Output Image")
+                output_img = gr.Image(label="Output Image", visible=False)
 
         model_selector.change(fn=update_task_dropdown, inputs=[model_selector, task_type], outputs=task_prompt)
         task_type.change(fn=update_task_dropdown, inputs=[model_selector, task_type], outputs=task_prompt)
