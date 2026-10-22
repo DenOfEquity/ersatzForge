@@ -477,20 +477,6 @@ def create_ui():
                 toprow.token_button.click(fn=update_token_counter, inputs=[toprow.prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.token_counter], show_progress="hidden")
                 toprow.negative_token_button.click(fn=update_negative_prompt_token_counter, inputs=[toprow.negative_prompt, steps, toprow.ui_styles.dropdown], outputs=[toprow.negative_token_counter], show_progress="hidden")
 
-        # with gr.Tab("Misc.", id="txt2img_misc"):
-            # with gr.Accordion(open=False, label="Markdown"):
-                # with gr.Row():
-                    # with gr.Column():
-                        # markdown_input = gr.Textbox(label="Markdown input", value="", lines=11, elem_classes=["prompt"])
-
-                    # with gr.Column():
-                        # go_button = gr.Button("Check markdown")
-                        # markdown_output = gr.Markdown("", height="60vh")
-
-                        # go_button.click(fn=lambda x:x, inputs=markdown_input, outputs=markdown_output, show_progress="hidden")
-
-        # prompt history
-
 
     scripts.scripts_current = scripts.scripts_img2img
     scripts.scripts_img2img.initialize_scripts(is_img2img=True)
@@ -816,6 +802,24 @@ def create_ui():
             extra_tabs.__enter__()
             extra_networks_ui = ui_extra_networks.create_ui(txt2img_interface, "txt2img")
             ui_extra_networks.setup_ui(extra_networks_ui, output_panel_t.gallery, output_panel_i.gallery)
+
+            # with gr.Tab("Misc.", id="txt2img_misc") as en_tab_misc:
+                # with gr.Row():
+                    # with gr.Column():
+                        # markdown_input = gr.Textbox(label="Markdown input", value="", lines=11, elem_classes=["prompt"])
+
+                    # with gr.Column():
+                        # go_button = gr.Button("Check markdown")
+                        # markdown_output = gr.Markdown("", height="60vh")
+
+                        # go_button.click(fn=lambda x:x, inputs=markdown_input, outputs=markdown_output, show_progress="hidden")
+
+            with gr.Tab("JSON builder") as en_tab_json_builder:
+                gr.HTML(show_label=False, elem_id="sd-forge-json-builder")
+
+            en_tab_json_builder.select(fn=None, js="function(){ extraNetworksShowControlsForPage('txt2img', 'no_match'); }", inputs=None, outputs=None, show_progress="hidden")
+
+        # prompt history
             extra_tabs.__exit__()
 
         shared.modal_visible = False

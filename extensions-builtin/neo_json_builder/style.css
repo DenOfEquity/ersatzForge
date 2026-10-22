@@ -1,0 +1,559 @@
+.jb-root {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    height: 65vh;
+    /* min-height: 560px; */
+    box-sizing: border-box;
+    color: var(--body-text-color);
+    font-size: var(--body-text-size);
+    line-height: 1.4;
+    --color-accent: var(--button-primary-border-color);
+}
+
+/* ----- canvas ----- */
+
+.jb-canvas {
+    flex: 2 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    background: var(--block-background-fill);
+    box-shadow: var(--shadow-drop);
+    overflow: hidden;
+}
+
+.jb-stage {
+    --jb-text-scale: 1;
+    position: relative;
+    background-color: var(--background-fill-secondary);
+    background-image:
+        linear-gradient(to right, color-mix(in srgb, var(--border-color-primary) 60%, transparent) 1px, transparent 1px),
+        linear-gradient(to bottom, color-mix(in srgb, var(--border-color-primary) 60%, transparent) 1px, transparent 1px);
+    background-size: 16px 16px;
+    background-position: 0 0;
+    transform-origin: center center;
+    border: 1px solid var(--border-color-primary);
+    box-shadow: var(--shadow-inset);
+    overflow: hidden;
+    cursor: grab;
+}
+
+.jb-stage.jb-panning {
+    cursor: grabbing;
+}
+
+.jb-box {
+    position: absolute;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-width: 20px;
+    min-height: 20px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+    border: 1.5px solid var(--border-color-accent);
+    border-radius: 4px;
+    cursor: move;
+    user-select: none;
+    touch-action: none;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.jb-box:hover {
+    border-color: var(--color-accent);
+}
+
+.jb-box.jb-active {
+    border-color: var(--color-accent);
+    box-shadow:
+        0 0 0 3px var(--color-accent-soft),
+        var(--shadow-drop-lg);
+    z-index: 10;
+}
+
+.jb-box-tag {
+    flex: 0 0 auto;
+    padding: 1px 7px;
+    font-size: calc(12px * var(--jb-text-scale));
+    line-height: 1.5;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: var(--color-accent);
+    color: var(--button-primary-text-color);
+}
+
+.jb-field {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    width: auto;
+    box-sizing: border-box;
+    resize: none !important;
+    border: none;
+    outline: none;
+    margin: 3px !important;
+    padding: 3px 3px !important;
+    border-radius: 4px !important;
+    background: color-mix(in srgb, var(--input-background-fill) 50%, transparent) !important;
+    color: var(--body-text-color);
+    font-family: inherit;
+    font-size: calc(16px * var(--jb-text-scale)) !important;
+    line-height: 1.5 !important;
+    overflow: hidden;
+}
+
+.jb-field::placeholder {
+    color: var(--input-placeholder-color);
+}
+
+.jb-field[readonly] {
+    cursor: move;
+    user-select: none;
+}
+
+.jb-field:not([readonly]) {
+    user-select: text;
+}
+
+.jb-box-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 14px;
+    height: 14px;
+    cursor: nwse-resize;
+    touch-action: none;
+}
+
+.jb-box-handle::after {
+    content: "";
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--color-accent);
+    border-bottom: 2px solid var(--color-accent);
+    border-radius: 0 0 3px 0;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+}
+
+.jb-box:hover .jb-box-handle::after {
+    opacity: 1;
+}
+
+/* ----- side panel ----- */
+
+.jb-side {
+    flex: 1 1 0;
+    min-width: 50%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: calc(100% - var(--size-28));
+	padding-top: 2px;
+}
+
+.jb-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 2px 4px;
+    background: var(--block-background-fill);
+    border: 1px solid var(--border-color-primary);
+    border-radius: 12px;
+    box-shadow: var(--shadow-drop);
+}
+
+.jb-list-section {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.jb-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-right: 3px;
+
+    /* max-height: 34vh; */
+}
+
+.jb-list-toolbar {
+    display: flex;
+    gap: 4px;
+}
+
+.jb-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.jb-row-send, .jb-row-save-load {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+
+
+.jb-half {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.jb-row label,
+.jb-fld-label {
+    font-size: var(--block-info-text-size);
+    color: var(--block-info-text-color);
+}
+
+/* ----- save / load ----- */
+
+.jb-top {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+}
+
+.jb-top>.jb-section {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.jb-top .jb-row label {
+    width: 32px;
+}
+
+.jb-save .jb-row>button {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* ----- inputs ----- */
+
+.jb-root input[type="text"],
+.jb-root input[type="number"],
+.jb-root select,
+.jb-root textarea.jb-sum-caption,
+.jb-root textarea.jb-item-caption {
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 4px 7px;
+    background: var(--input-background-fill);
+    color: var(--body-text-color);
+    border: 0px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: var(--input-text-size);
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+    overflow: hidden auto;
+	max-height: 96px !important;
+}
+
+
+.jb-root input[type="text"]:hover,
+.jb-root input[type="number"]:hover,
+.jb-root select:hover,
+.jb-root textarea.jb-sum-caption:hover,
+.jb-root textarea.jb-item-caption:hover {
+    outline: none;
+    box-shadow: 0 0 0 1px var(--color-accent-soft);
+}
+
+.jb-root input[type="text"]:focus,
+.jb-root input[type="number"]:focus,
+.jb-root select:focus,
+.jb-root textarea.jb-sum-caption:focus,
+.jb-root textarea.jb-item-caption:focus {
+    outline: none;
+    box-shadow: 0 0 0 1px var(--color-accent-soft);
+}
+
+.jb-root input::placeholder,
+.jb-root textarea.jb-sum-caption::placeholder,
+.jb-root textarea.jb-item-caption::placeholder {
+    color: var(--input-placeholder-color);
+}
+
+.jb-width,
+.jb-height {
+    flex: 0 0 auto;
+    width: 64px;
+}
+
+.jb-tool {
+    max-width: 2.2em;
+    min-width: 2.2em !important;
+    height: 2.4em;
+    align-self: end;
+    padding: 4px !important;
+}
+
+/* ----- radios ----- */
+
+.jb-root input[type="radio"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    padding: 0;
+    border: 2px solid var(--border-color-primary);
+    border-radius: 50%;
+    background: var(--checkbox-background-color);
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        background 0.15s ease;
+}
+
+.jb-root input[type="radio"]:hover {
+    border-color: var(--color-accent);
+}
+
+.jb-root input[type="radio"]:checked {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    box-shadow: inset 0 0 0 2px var(--checkbox-background-color);
+}
+
+.jb-root input[type="radio"]:focus-visible {
+    outline: 2px solid var(--color-accent-soft);
+    outline-offset: 1px;
+}
+
+/* ----- buttons ----- */
+
+.jb-root button {
+    cursor: pointer;
+    padding: 7px 12px;
+    background: var(--button-secondary-background-fill);
+    color: var(--button-secondary-text-color);
+    border: 1px solid var(--button-secondary-border-color);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: var(--button-small-text-size);
+    font-weight: 600;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.jb-root button:hover {
+    background: var(--button-secondary-background-fill-hover);
+    border-color: var(--button-secondary-border-color-hover);
+}
+
+/* ----- list items ----- */
+
+.jb-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px 6px;
+    background: var(--background-fill-secondary);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.jb-item:hover {
+    border-color: var(--border-color-primary);
+}
+
+.jb-item-top {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.jb-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: var(--checkbox-label-text-size);
+    color: var(--checkbox-label-text-color);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+.jb-radio:hover {
+    background: var(--checkbox-label-background-fill-hover);
+}
+
+.jb-item-nums {
+    margin-left: auto;
+}
+
+.jb-item-nums .jb-num {
+    width: 6em;
+}
+
+button.jb-remove {
+    margin-left: auto;
+    padding: 1px 9px;
+    font-size: 16px;
+    line-height: 1.3;
+    background: transparent;
+    border-color: transparent;
+    color: var(--body-text-color-subdued);
+}
+
+button.jb-remove:hover {
+    border-color: var(--button-cancel-background-fill-hover);
+    color: var(--error-text-color);
+}
+
+.jb-item-caption,
+.jb-item-text {
+    width: 100%;
+}
+
+
+/* ----- submit ----- */
+
+.jb-submit {
+    flex-direction: row;
+    gap: 10px;
+    padding: 0px;
+    border: none;
+}
+
+.jb-submit .jb-send-t2i:hover {
+    border-color: var(--button-primary-border-color-hover);
+}
+
+/* ----- validation ----- */
+
+.jb-root .jb-invalid {
+    border: 1px solid var(--error-text-color) !important;
+}
+
+/* ----- load prompt modal ----- */
+
+.jb-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    backdrop-filter: blur(4px) brightness(0.5);
+}
+
+.jb-modal.jb-hidden {
+    display: none !important;
+}
+
+.jb-dialog {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-sizing: border-box;
+    width: min(720px, 100%);
+    height: min(80%, 600px);
+    padding: 32px;
+    background: var(--background-fill-primary);
+    border: 1px solid var(--border-color-primary);
+    border-radius: 14px;
+    box-shadow: var(--shadow-drop-lg);
+}
+
+.jb-dialog button.jb-dialog-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    padding: 0px !important;
+    line-height: 1;
+    font-size: 20px;
+    color: var(--error-text-color);
+    border-color: var(--border-color-primary);
+    border-radius: 8px;
+}
+
+.jb-dialog-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    gap: 12px;
+}
+
+.jb-dialog textarea.jb-dialog-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+    resize: none;
+    padding: 10px;
+    background: var(--input-background-fill);
+    color: var(--body-text-color);
+    border: 1px solid var(--input-border-color);
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: var(--input-text-size);
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.jb-dialog textarea.jb-dialog-input:focus {
+    outline: none;
+    border-color: var(--input-border-color-focus);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.jb-dialog-dims {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 128px;
+}
+
+.jb-dialog-dims label {
+    font-size: var(--block-info-text-size);
+    color: var(--block-info-text-color);
+}
+
+.jb-dialog-dims input {
+    width: 100%;
+}
+
+.jb-dialog-load {
+    flex: 0 0 auto;
+    width: 100%;
+}
