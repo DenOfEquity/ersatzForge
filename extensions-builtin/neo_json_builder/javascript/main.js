@@ -516,6 +516,12 @@ onUiLoaded(() => {
         const placeholders = ["x1", "y1", "x2", "y2"];
         const nums = h("div", { class: "jb-item-nums" });
         const numInputs = item.bbox.map((value, i) => {
+            if (i === 0) {
+                nums.appendChild(h("label", {}, ["↖"]));
+            }
+            if (i === 2) {
+                nums.appendChild(h("label", {}, ["↘"]));
+            }
             const inp = h("input", { type: "number", class: "jb-num", placeholder: placeholders[i], value });
             inp.addEventListener("input", () => {
                 const v = parseFloat(inp.value);
@@ -715,15 +721,29 @@ onUiLoaded(() => {
     }
 
     function getHW() {
-        which = get_uiCurrentTab().innerText;
-        if (which != "Txt2img" && which != "Img2img") return;
+        image = selected_gallery_button()?.querySelector("img");
+        if (image && stage.style.backgroundImage != `url("${image.src}")`) {
+            widthInput.value = image.naturalWidth;
+            heightInput.value = image.naturalHeight;
+            applyResolution(image.naturalWidth, image.naturalHeight);
 
-        const widthEl = which === "Img2img" ? i2i_width : t2i_width;
-        const heightEl = which === "Img2img" ? i2i_height : t2i_height;
+            stage.style.backgroundImage = `url("${image.src}")`;
+            stage.style.backgroundSize = "contain";
+        }
+        else {
+            which = get_uiCurrentTab().innerText;
+            if (which != "Txt2img" && which != "Img2img") return;
 
-        widthInput.value = widthEl.value;
-        heightInput.value = heightEl.value;
-        applyResolution(widthEl.value, heightEl.value);
+            const widthEl = which === "Img2img" ? i2i_width : t2i_width;
+            const heightEl = which === "Img2img" ? i2i_height : t2i_height;
+            widthInput.value = widthEl.value;
+            heightInput.value = heightEl.value;
+            applyResolution(widthEl.value, heightEl.value);
+
+            stage.style.backgroundImage = "linear-gradient(to right, color-mix(in srgb, var(--border-color-primary) 60%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--border-color-primary) 60%, transparent) 1px, transparent 1px)";
+            stage.style.backgroundSize = "16px 16px";
+        }
+
         clampItemsToCanvas();
     }
 
