@@ -145,7 +145,7 @@ class State:
 
     @torch.inference_mode()
     def do_set_current_image(self):
-        if self.current_latent is None:
+        if self.current_latent is None or shared.sd_model is None:
             return
 
         import modules.sd_samplers_common

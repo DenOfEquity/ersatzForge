@@ -32,8 +32,9 @@ def setup_img2img_steps(p, steps=None):
 approximation_indexes = {"Full": 0, "Approx NN": 1, "Approx cheap": 2, "TAESD": 3}
 
 
-def samples_to_images_tensor(sample, approximation=None, model=None):
+def samples_to_images_tensor(sample, approximation=None):
     """Transforms latent space images into 3-channel RGB image tensors, with values in range [-1, 1]."""
+    model = shared.sd_model
 
     if approximation is None:
         approximation = approximation_indexes.get(opts.show_progress_type, 0)
@@ -42,9 +43,6 @@ def samples_to_images_tensor(sample, approximation=None, model=None):
 
     if shared.state.interrupted:
         approximation = 2
-
-    if model is None:
-        model = shared.sd_model
 
     if model.is_chromaDCT:
         x_sample = model.decode_first_stage(sample)
@@ -56,6 +54,15 @@ def samples_to_images_tensor(sample, approximation=None, model=None):
             m = None
         elif approximation == 3:
             m = sd_vae_taesd.decoder_model()
+
+        # if sample.shape[1] == 128:
+            # B, C, H, W = sample.shape
+            # sample = (
+                # sample
+                # .reshape(B, 32, 2, 2, H, W)
+                # .permute(0, 1, 4, 2, 5, 3)
+                # .reshape(B, 32, H * 2, W * 2)
+            # )
 
         if m is None:
             x_sample = sd_vae_approx.cheap_approximation(sample)
@@ -83,9 +90,9 @@ def single_sample_to_image(sample, approximation=None):
     return Image.fromarray(x_sample)
 
 
-def decode_first_stage(model, x):
+def decode_first_stage(x):
     approx_index = approximation_indexes.get(opts.sd_vae_decode_method, 0)
-    return samples_to_images_tensor(x, approx_index, model)
+    return samples_to_images_tensor(x, approx_index)
 
 
 def sample_to_image(samples, index=0, approximation=None):
