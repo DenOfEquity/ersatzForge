@@ -28,4 +28,10 @@ a backup of my local (experimental, opinionated) changes to Forge2 webUI
 * Mugen
 * Flux.2 Klein 4B and 9B
 * ERNIE
-* Krea2 (and [depth controlnet](https://huggingface.co/Patil/Krea-2-depth-controlnet) (use through '(Other) Control Integrated' extension; load as an Additional Module))
+* Krea2 (and [depth controlnet](https://huggingface.co/Patil/Krea-2-depth-controlnet) (and other control LoRAs) (use through '(Other) Control Integrated' extension; load as an Additional Module))
+* QwenImage 2.1, with editing
+* MOSS Image, with JSON layout builder
+
+
+<img width="1307" height="912" alt="ui" src="https://github.com/user-attachments/assets/263399e7-df95-4333-8aaa-486978c24037" />
+
