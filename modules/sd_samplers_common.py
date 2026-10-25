@@ -180,14 +180,14 @@ def apply_refiner(cfg_denoiser, x):
     if getattr(cfg_denoiser.p, "enable_hr", False):
         is_second_pass = cfg_denoiser.p.is_hr_pass
 
-        if opts.hires_fix_refiner_pass == "first pass" and is_second_pass:
+        if cfg_denoiser.p.process_opts["hires_fix_refiner_pass"] == "first pass" and is_second_pass:
             return False
 
-        if opts.hires_fix_refiner_pass == "second pass" and not is_second_pass:
+        if cfg_denoiser.p.process_opts["hires_fix_refiner_pass"] == "second pass" and not is_second_pass:
             return False
 
-        if opts.hires_fix_refiner_pass != "second pass":
-            cfg_denoiser.p.extra_generation_params["Hires refiner"] = opts.hires_fix_refiner_pass
+        if cfg_denoiser.p.process_opts["hires_fix_refiner_pass"] != "second pass":
+            cfg_denoiser.p.extra_generation_params["Hires refiner"] = cfg_denoiser.p.process_opts["hires_fix_refiner_pass"]
 
     cfg_denoiser.p.extra_generation_params["Refiner"] = refiner_checkpoint_info.name
     cfg_denoiser.p.extra_generation_params["Refiner switch at"] = refiner_switch_at
@@ -197,7 +197,7 @@ def apply_refiner(cfg_denoiser, x):
     sampling_cleanup(sd_models.model_data.get_sd_model().forge_objects.unet)
 
     # load refiner model
-    fp_checkpoint = shared.opts.sd_model_checkpoint
+    fp_checkpoint = cfg_denoiser.p.process_opts["sd_model_checkpoint"]
     checkpoint_changed = main_entry.checkpoint_change(refiner_checkpoint_info.name, save=False, refresh=False)
     if checkpoint_changed:
         try:

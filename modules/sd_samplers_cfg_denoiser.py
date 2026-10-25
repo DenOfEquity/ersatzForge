@@ -66,9 +66,13 @@ class CFGDenoiser(torch.nn.Module):
     def update_inner_model(self):
         self.model_wrap = None
 
-        c, uc = self.p.get_conds()
-        self.sampler.sampler_extra_args['cond'] = c
-        self.sampler.sampler_extra_args['uncond'] = uc
+        if self.p.is_hr_pass:
+            c, uc = self.p.hr_c, self.p.hr_uc
+        else:
+            c, uc = self.p.c, self.p.uc
+
+        self.sampler.sampler_extra_args["cond"] = c
+        self.sampler.sampler_extra_args["uncond"] = uc
 
     def forward(self, x, sigma, uncond, cond, cond_scale, s_min_uncond, image_cond):
         if shared.state.interrupted or shared.state.skipped:
@@ -89,15 +93,15 @@ class CFGDenoiser(torch.nn.Module):
 
         this_inpaint = self.p.sd_model.is_inpaint
         if sd_samplers_common.apply_refiner(self, x):
-            cond = self.sampler.sampler_extra_args['cond']
-            uncond = self.sampler.sampler_extra_args['uncond']
+            cond = self.sampler.sampler_extra_args["cond"]
+            uncond = self.sampler.sampler_extra_args["uncond"]
             if 'image_cond' in self.sampler.sampler_extra_args:
-                image_cond = self.sampler.sampler_extra_args['image_cond']
+                image_cond = self.sampler.sampler_extra_args["image_cond"]
 
             next_inpaint = self.p.sd_model.is_inpaint
             if this_inpaint and not next_inpaint:
                 image_cond = torch.zeros((x.shape[0], 5, 1, 1), device=x.device, dtype=x.dtype)
-                self.sampler.sampler_extra_args['image_cond'] = image_cond
+                self.sampler.sampler_extra_args["image_cond"] = image_cond
             elif not this_inpaint and next_inpaint:
                 # avoid using VAE: use approximation from precalc'd average latent value of mid-grey
                 if self.p.sd_model.is_sdxl:
@@ -106,7 +110,7 @@ class CFGDenoiser(torch.nn.Module):
                     image_cond = torch.tensor([0.9053, -0.7370, 0.6429, 0.1352], dtype=x.dtype)
                 image_cond = image_cond.view(1, 4, 1, 1).repeat(x.shape[0], 1, x.shape[2], x.shape[3]).to(x.device)
                 image_cond = torch.nn.functional.pad(image_cond, (0, 0, 0, 0, 1, 0), value=1.0)
-                self.sampler.sampler_extra_args['image_cond'] = image_cond
+                self.sampler.sampler_extra_args["image_cond"] = image_cond
 
 
         cond_composition, cond = prompt_parser.reconstruct_multicond_batch(cond, self.step)
