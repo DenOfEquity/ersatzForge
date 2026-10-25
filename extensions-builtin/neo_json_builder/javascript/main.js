@@ -77,16 +77,17 @@ onUiLoaded(() => {
 
     // ----- side panel -----
 
-    const getHWBtn = h("button", { type: "button", class: "jb-tool" }, ["📐"]);
+    const getHWBtn = h("button", { type: "button", class: "jb-tool", title: "Fetch image from gallery, or width/height from UI" }, ["📐"]);
     const widthInput = h("input", { type: "number", class: "jb-width", min: "16", step: "16", value: state.width });
     const heightInput = h("input", { type: "number", class: "jb-height", min: "16", step: "16", value: state.height });
     const sendPrompt = h("div", { class: "jb-row-send" }, [h("button", { type: "button", class: "jb-send-t2i" }, ["Send to prompt"])]);
     // ----- save / load -----
 
-    const loadPromptBtn = h("button", { type: "button", class: "jb-load-prompt" }, ["Load Prompt"]);
+    const loadImageBtn = h("button", { type: "button", class: "jb-tool", title: "Load image" }, ["🖼️"]);
+    const loadPromptBtn = h("button", { type: "button", class: "jb-tool", title: "Load prompt" }, ["📋"]);
     const loadJsonBtn = h("button", { type: "button", class: "jb-load-json" }, ["Load JSON"]);
     const saveJsonBtn = h("button", { type: "button", class: "jb-save-json" }, ["Save JSON"]);
-    const saveLoadSection = h("div", { class: "jb-row-save-load" }, [loadPromptBtn, loadJsonBtn, saveJsonBtn]);
+    const saveLoadSection = h("div", { class: "jb-row-save-load" }, [loadImageBtn, loadPromptBtn, loadJsonBtn, saveJsonBtn]);
 
     const resolutionSection = h("div", { class: "jb-row" }, [getHWBtn, h("label", {}, ["Width"]), widthInput, h("label", {}, ["Height"]), heightInput]);
 
@@ -129,10 +130,12 @@ onUiLoaded(() => {
 
     const fileInput = h("input", { type: "file", accept: ".json,application/json", class: "jb-file" });
     fileInput.style.display = "none";
+    const imageInput = h("input", { type: "file", accept: "image/*", class: "jb-file" });
+    imageInput.style.display = "none";
 
     const topRow = h("div", { class: "jb-top" }, [resolutionSection, sendPrompt, saveLoadSection]);
     const side = h("div", { class: "jb-side" }, [topRow, summarySection, listSection]);
-    const root = h("div", { class: "jb-root" }, [canvasSection, side, modal, fileInput]);
+    const root = h("div", { class: "jb-root" }, [canvasSection, side, modal, imageInput, fileInput]);
 
     tab.textContent = "";
     tab.appendChild(root);
@@ -245,6 +248,33 @@ onUiLoaded(() => {
         });
         reader.readAsText(file);
     });
+
+    loadImageBtn.addEventListener("click", () => {
+        imageInput.value = "";
+        imageInput.click();
+    });
+
+    imageInput.addEventListener("change", function(event) {
+        const image = event.target.files[0];
+        if (!image) return;
+
+        if (image.type.startsWith("image/")) {
+            const imageURL = URL.createObjectURL(image);
+            const img = new Image();
+
+            img.onload = function() {
+                widthInput.value = img.naturalWidth;
+                heightInput.value = img.naturalHeight;
+                applyResolution(img.naturalWidth, img.naturalHeight);
+
+                stage.style.backgroundImage = `linear-gradient(to right, color-mix(in srgb, var(--border-color-primary) 60%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--border-color-primary) 60%, transparent) 1px, transparent 1px), url("${imageURL}")`;
+                stage.style.backgroundSize = "16px 16px, 16px 16px, cover";
+            };
+
+            img.src = imageURL;
+        }
+    });
+
 
     // ----- canvas sizing -----
 
@@ -727,8 +757,8 @@ onUiLoaded(() => {
             heightInput.value = image.naturalHeight;
             applyResolution(image.naturalWidth, image.naturalHeight);
 
-            stage.style.backgroundImage = `url("${image.src}")`;
-            stage.style.backgroundSize = "contain";
+            stage.style.backgroundImage = `linear-gradient(to right, color-mix(in srgb, var(--border-color-primary) 60%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--border-color-primary) 60%, transparent) 1px, transparent 1px), url("${image.src}")`;
+            stage.style.backgroundSize = "16px 16px, 16px 16px, cover";
         }
         else {
             which = get_uiCurrentTab().innerText;
