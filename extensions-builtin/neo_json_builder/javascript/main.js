@@ -86,9 +86,9 @@ onUiLoaded(() => {
 
     const loadImageBtn = h("button", { type: "button", class: "jb-tool", title: "Load image" }, ["🖼️"]);
     const loadPromptBtn = h("button", { type: "button", class: "jb-tool", title: "Load prompt" }, ["📄"]);
-    const loadJsonBtn = h("button", { type: "button" }, ["Load JSON"]);
-    const saveJsonBtn = h("button", { type: "button" }, ["Save JSON"]);
-    const saveLoadSection = h("div", { class: "jb-row-save-load" }, [loadImageBtn, loadPromptBtn, loadJsonBtn, saveJsonBtn]);
+    const loadJsonBtn = h("button", { type: "button" }, ["Load"]);
+    const saveJsonBtn = h("button", { type: "button" }, ["Save"]);
+    const saveLoadSection = h("div", { class: "jb-row-save-load" }, [loadImageBtn, loadPromptBtn, loadJsonBtn, h("label", {}, ["JSON"]), saveJsonBtn]);
 
     const resolutionSection = h("div", { class: "jb-row" }, [getHWBtn, h("label", {}, ["Width"]), widthInput, switchHWBtn, h("label", {}, ["Height"]), heightInput]);
 
@@ -265,9 +265,11 @@ onUiLoaded(() => {
             const img = new Image();
 
             img.onload = function() {
-                widthInput.value = img.naturalWidth;
-                heightInput.value = img.naturalHeight;
-                applyResolution(img.naturalWidth, img.naturalHeight);
+                const width = round16(img.naturalWidth);
+                const height = round16(img.naturalHeight);
+                widthInput.value = width;
+                heightInput.value = height;
+                applyResolution(width, height);
 
                 stage.style.backgroundImage = `linear-gradient(to right, color-mix(in srgb, var(--border-color-primary) 60%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--border-color-primary) 60%, transparent) 1px, transparent 1px), url("${imageURL}")`;
                 stage.style.backgroundSize = "16px 16px, 16px 16px, cover";
@@ -780,10 +782,9 @@ onUiLoaded(() => {
     }
 
     function switchHW() {
-        t = widthInput.value;
-        widthInput.value = heightInput.value;
-        heightInput.value = t;
-        applyResolution(widthInput.value, heightInput.value);
+        widthInput.value = state.height;
+        heightInput.value = state.width;
+        applyResolution(state.height, state.width);
         clampItemsToCanvas();
     }
 
