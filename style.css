@@ -440,6 +440,12 @@ div.toprow-compact-tools{
 	top: 0;
 	left: 3.5em;
 }
+#button_full_extranetworks {
+    height: 1.5em;
+    position: absolute;
+    top: 0.5em;
+    left: calc(100% - 2.5em);
+}
 
 .button_extra_networks {
     height: 2em;
@@ -1302,7 +1308,6 @@ body.resizing .resize-handle {
     flex: 1;
     overflow: auto  !important;
 	max-height: 50vh;
-	/* need a max-height here, but variable size */
 }
 
 .extra-network-pane .extra-network-tree .tree-list {
@@ -1340,6 +1345,7 @@ body.resizing .resize-handle {
     position: relative;
     display: flex;
     width: 100%;
+	right: 3.5em;
     padding: 0 !important;
     margin-top: 0 !important;
     margin-bottom: 0 !important;

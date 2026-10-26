@@ -706,6 +706,43 @@ function extraNetworksRefreshSingleCard(page, tabname, name) {
     });
 }
 
+let display_extra_networks_full = false;
+function toggle_extra_networks_full() {
+    display_extra_networks_full = !display_extra_networks_full;
+
+    enm = gradioApp().getElementById("extra_networks_modal");
+    jbr = gradioApp().getElementById("json_builder_root");
+    cc = gradioApp().getElementById("txt2img_checkpoints_cards");
+    hc = gradioApp().getElementById("txt2img_hypernetworks_cards");
+    lc = gradioApp().getElementById("txt2img_loras_cards");
+    tc = gradioApp().getElementById("txt2img_textual_inversions_cards");
+
+    if (display_extra_networks_full) {
+        enm.style.top = "0%";
+        enm.style.height = "100%";
+		enm.style.zIndex = "101";
+
+        jbr.style.height = "100vh";
+
+        cc.style.maxHeight = "87vh";
+        hc.style.maxHeight = "87vh";
+        lc.style.maxHeight = "87vh";
+        tc.style.maxHeight = "87vh";
+    }
+    else {
+        enm.style.top = "35%";
+        enm.style.height = "65%";
+		enm.style.zIndex = "90";
+
+        jbr.style.height = "65vh";
+
+        cc.style.maxHeight = "50vh";
+        hc.style.maxHeight = "50vh";
+        lc.style.maxHeight = "50vh";
+        tc.style.maxHeight = "50vh";
+    }
+}
+
 
 /**
  * Setup custom loading for this script.

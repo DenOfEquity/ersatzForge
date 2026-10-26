@@ -817,6 +817,14 @@ def create_ui():
             with gr.Tab("JSON builder") as en_tab_json_builder:
                 gr.HTML(show_label=False, elem_id="sd-forge-json-builder")
 
+            shared.extranetworks_full = False
+            def extranetworks_full_toggle():
+                shared.extranetworks_full ^= True
+                return "↧" if shared.extranetworks_full else "↥"
+
+            full_extranetworks = ToolButton("↥", elem_id="button_full_extranetworks", tooltip="Toggle show Extra Networks modal fullsize")
+            full_extranetworks.click(fn=extranetworks_full_toggle, js="toggle_extra_networks_full", inputs=None, outputs=[full_extranetworks], show_progress="hidden")
+
             en_tab_json_builder.select(fn=None, js="function(){ extraNetworksShowControlsForPage('txt2img', 'no_match'); }", inputs=None, outputs=None, show_progress="hidden")
 
         # prompt history
@@ -825,6 +833,7 @@ def create_ui():
         shared.modal_visible = False
         show_quicksettings = ToolButton("⇔", elem_id="button_show_quicksettings", tooltip="Toggle Quicksettings / Tabs")
         smol_quicksettings = ToolButton("↤", elem_id="button_smol_quicksettings", tooltip="Toggle reduced Quicksettings")
+
         quicksettings_row = settings.add_quicksettings(show_quicksettings, smol_quicksettings)
 
         def modal_toggle():
