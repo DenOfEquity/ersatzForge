@@ -78,18 +78,19 @@ onUiLoaded(() => {
     // ----- side panel -----
 
     const getHWBtn = h("button", { type: "button", class: "jb-tool", title: "Fetch image from gallery, or width/height from UI" }, ["📐"]);
+    const switchHWBtn = h("button", { type: "button", class: "jb-tool", title: "Swap Width and Height" }, ["⇄"]);
     const widthInput = h("input", { type: "number", class: "jb-width", min: "16", step: "16", value: state.width });
     const heightInput = h("input", { type: "number", class: "jb-height", min: "16", step: "16", value: state.height });
-    const sendPrompt = h("div", { class: "jb-row-send" }, [h("button", { type: "button", class: "jb-send-t2i" }, ["Send to prompt"])]);
+    const sendPrompt = h("div", { class: "jb-row-send" }, [h("button", { type: "button" }, ["Send to prompt"])]);
     // ----- save / load -----
 
     const loadImageBtn = h("button", { type: "button", class: "jb-tool", title: "Load image" }, ["🖼️"]);
-    const loadPromptBtn = h("button", { type: "button", class: "jb-tool", title: "Load prompt" }, ["📋"]);
-    const loadJsonBtn = h("button", { type: "button", class: "jb-load-json" }, ["Load JSON"]);
-    const saveJsonBtn = h("button", { type: "button", class: "jb-save-json" }, ["Save JSON"]);
+    const loadPromptBtn = h("button", { type: "button", class: "jb-tool", title: "Load prompt" }, ["📄"]);
+    const loadJsonBtn = h("button", { type: "button" }, ["Load JSON"]);
+    const saveJsonBtn = h("button", { type: "button" }, ["Save JSON"]);
     const saveLoadSection = h("div", { class: "jb-row-save-load" }, [loadImageBtn, loadPromptBtn, loadJsonBtn, saveJsonBtn]);
 
-    const resolutionSection = h("div", { class: "jb-row" }, [getHWBtn, h("label", {}, ["Width"]), widthInput, h("label", {}, ["Height"]), heightInput]);
+    const resolutionSection = h("div", { class: "jb-row" }, [getHWBtn, h("label", {}, ["Width"]), widthInput, switchHWBtn, h("label", {}, ["Height"]), heightInput]);
 
     const sumCaption = h("textarea", { class: "jb-sum-caption scroll-hide", placeholder: "global caption", rows: "1" });
     const canvasRadioInputs = [];
@@ -135,7 +136,7 @@ onUiLoaded(() => {
 
     const topRow = h("div", { class: "jb-top" }, [resolutionSection, sendPrompt, saveLoadSection]);
     const side = h("div", { class: "jb-side" }, [topRow, summarySection, listSection]);
-    const root = h("div", { class: "jb-root" }, [canvasSection, side, modal, imageInput, fileInput]);
+    const root = h("div", { id: "json_builder_root", class: "jb-root" }, [canvasSection, side, modal, imageInput, fileInput]);
 
     tab.textContent = "";
     tab.appendChild(root);
@@ -212,6 +213,7 @@ onUiLoaded(() => {
     }
 
     getHWBtn.addEventListener("click", getHW);
+    switchHWBtn.addEventListener("click", switchHW);
     loadPromptBtn.addEventListener("click", openDialog);
     dialogClose.addEventListener("click", closeDialog);
     dialogLoad.addEventListener("click", handleDialogLoad);
@@ -752,7 +754,7 @@ onUiLoaded(() => {
 
     function getHW() {
         image = selected_gallery_button()?.querySelector("img");
-        if (image && stage.style.backgroundImage != `url("${image.src}")`) {
+        if ( image && !stage.style.backgroundImage.includes(`url("${image.src}")`) ) {
             widthInput.value = image.naturalWidth;
             heightInput.value = image.naturalHeight;
             applyResolution(image.naturalWidth, image.naturalHeight);
@@ -774,6 +776,14 @@ onUiLoaded(() => {
             stage.style.backgroundSize = "16px 16px";
         }
 
+        clampItemsToCanvas();
+    }
+
+    function switchHW() {
+        t = widthInput.value;
+        widthInput.value = heightInput.value;
+        heightInput.value = t;
+        applyResolution(widthInput.value, heightInput.value);
         clampItemsToCanvas();
     }
 
