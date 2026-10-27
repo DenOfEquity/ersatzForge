@@ -134,9 +134,9 @@ class LearnablePosEmbAxis(nn.Module): # unused by Anima
         
         assert interpolation in ["crop"], f"Unknown interpolation method {interpolation}"
 
-        self.pos_emb_h = nn.Parameter(torch.empty(len_h, model_channels), dtype=torch.float32)
-        self.pos_emb_w = nn.Parameter(torch.empty(len_w, model_channels), dtype=torch.float32)
-        self.pos_emb_t = nn.Parameter(torch.empty(len_t, model_channels), dtype=torch.float32)
+        self.pos_emb_h = nn.Parameter(torch.empty(len_h, model_channels), dtype=torch.float32, requires_grad=False)
+        self.pos_emb_w = nn.Parameter(torch.empty(len_w, model_channels), dtype=torch.float32, requires_grad=False)
+        self.pos_emb_t = nn.Parameter(torch.empty(len_t, model_channels), dtype=torch.float32, requires_grad=False)
 
     def forward(self, x_B_T_H_W_C: torch.Tensor, fps=Optional[torch.Tensor], device=None) -> torch.Tensor:
         B, T, H, W, _ = x_B_T_H_W_C.shape
@@ -864,17 +864,17 @@ class MiniTrainDIT(nn.Module):
 
 ## this following stuff for Anima's LLM adapter
 
-def rotate_half(x):
-    x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
-    return torch.cat((-x2, x1), dim=-1)
+def LLM_apply_rotary_pos_emb(x, cos, sin):
+    cos = cos.unsqueeze(1)
+    sin = sin.unsqueeze(1)
+    half = x.shape[-1] // 2
+    _a = x[..., :half].clone()
+    x[..., :half].mul_(cos)
+    x[..., :half].addcmul_(x[..., half:], -sin)
+    x[..., half:].mul_(cos)
+    x[..., half:].addcmul_(_a, sin)
 
-
-def LLM_apply_rotary_pos_emb(x, cos, sin, unsqueeze_dim=1):
-    cos = cos.unsqueeze(unsqueeze_dim)
-    sin = sin.unsqueeze(unsqueeze_dim)
-    x_embed = (x * cos) + (rotate_half(x) * sin)
-    return x_embed
+    return x
 
 
 class LLM_RotaryEmbedding(nn.Module):
@@ -892,9 +892,8 @@ class LLM_RotaryEmbedding(nn.Module):
         device_type = x.device.type if isinstance(x.device.type, str) and x.device.type != "mps" else "cpu"
         with torch.autocast(device_type=device_type, enabled=False):  # Force float32
             freqs = (inv_freq_expanded.to(torch.float32) @ position_ids_expanded.to(torch.float32)).transpose(1, 2)
-            emb = torch.cat((freqs, freqs), dim=-1)
-            cos = emb.cos()
-            sin = emb.sin()
+            cos = freqs.cos()
+            sin = freqs.sin()
 
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
 
@@ -936,7 +935,7 @@ class LLM_Attention(nn.Module):
             cos, sin = position_embeddings_context
             key_states = LLM_apply_rotary_pos_emb(key_states, cos, sin)
 
-        attn_output = torch.nn.functional.scaled_dot_product_attention(query_states, key_states, value_states, attn_mask=mask)
+        attn_output = torch.nn.functional.scaled_dot_product_attention(query_states.to(torch.float32), key_states.to(torch.float32), value_states.to(torch.float32), attn_mask=mask).to(x.dtype)
 
         attn_output = attn_output.transpose(1, 2).reshape(*input_shape, -1).contiguous()
         attn_output = self.o_proj(attn_output)
@@ -979,9 +978,9 @@ class LLM_TransformerBlock(nn.Module):
 
         normed = self.norm_cross_attn(x)
         attn_out = self.cross_attn(normed, mask=source_attention_mask, context=context, position_embeddings=position_embeddings, position_embeddings_context=position_embeddings_context)
-        x = x + attn_out
+        x.add_(attn_out)
 
-        x = x + self.mlp(self.norm_mlp(x))
+        x.add_(self.mlp(self.norm_mlp(x)))
         return x
 
     def init_weights(self):
