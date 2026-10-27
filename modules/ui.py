@@ -820,14 +820,14 @@ def create_ui():
             shared.extranetworks_full = False
             def extranetworks_full_toggle():
                 shared.extranetworks_full ^= True
-                return "↧" if shared.extranetworks_full else "↥"
+                return "⮟" if shared.extranetworks_full else "⮝"
 
-            full_extranetworks = ToolButton("↥", elem_id="button_full_extranetworks", tooltip="Toggle show Extra Networks modal fullsize")
+            full_extranetworks = ToolButton("⮝", elem_id="button_full_extranetworks", tooltip="Toggle show Extra Networks modal fullsize")
             full_extranetworks.click(fn=extranetworks_full_toggle, js="toggle_extra_networks_full", inputs=None, outputs=[full_extranetworks], show_progress="hidden")
 
             en_tab_json_builder.select(fn=None, js="function(){ extraNetworksShowControlsForPage('txt2img', 'no_match'); }", inputs=None, outputs=None, show_progress="hidden")
 
-        # prompt history
+            # prompt history ?
             extra_tabs.__exit__()
 
         shared.modal_visible = False

@@ -81,7 +81,7 @@ onUiLoaded(() => {
     const switchHWBtn = h("button", { type: "button", class: "jb-tool", title: "Swap Width and Height" }, ["⇄"]);
     const widthInput = h("input", { type: "number", class: "jb-width", min: "16", step: "16", value: state.width });
     const heightInput = h("input", { type: "number", class: "jb-height", min: "16", step: "16", value: state.height });
-    const sendPrompt = h("div", { class: "jb-row-send" }, [h("button", { type: "button" }, ["Send to prompt"])]);
+    const sendPrompt = h("div", { class: "jb-row-send" }, [h("button", { type: "button" }, ["⮢ to prompt"])]);
     // ----- save / load -----
 
     const loadImageBtn = h("button", { type: "button", class: "jb-tool", title: "Load image" }, ["🖼️"]);

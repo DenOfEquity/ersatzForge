@@ -3,7 +3,6 @@
     gap: 4px;
     width: 100%;
     height: 65vh;
-    /* min-height: 560px; */
     box-sizing: border-box;
     color: var(--body-text-color);
     font-size: var(--body-text-size);
@@ -188,8 +187,6 @@
     flex-direction: column;
     gap: 4px;
     padding-right: 3px;
-
-    /* max-height: 34vh; */
 }
 
 .jb-list-toolbar {
@@ -449,9 +446,6 @@ button.jb-remove:hover {
     border: none;
 }
 
-.jb-submit .jb-send-t2i:hover {
-    border-color: var(--button-primary-border-color-hover);
-}
 
 /* ----- validation ----- */
 
@@ -556,4 +550,8 @@ button.jb-remove:hover {
 .jb-dialog-load {
     flex: 0 0 auto;
     width: 100%;
+}
+
+.jb-clear {
+    margin-left: 2em !important;
 }
