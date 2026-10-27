@@ -641,6 +641,10 @@ class LoraLoader:
 
             utils.set_attr_raw(self.model, k, w)
 
+            parent_layer, _, _= utils.get_attr_with_parent(self.model, k)
+            if hasattr(parent_layer, "scale_weight_original"):
+                parent_layer.scale_weight = parent_layer.scale_weight_original
+
         self.backup = {}
 
         set_parameter_devices(self.model, parameter_devices=parameter_devices)
@@ -665,8 +669,15 @@ class LoraLoader:
             if key not in self.backup:
                 self.backup[key] = weight.to(device=offload_device)
 
-            bnb_layer = None
+            if hasattr(parent_layer, "scale_weight"):
+                weight_dtype = weight.dtype
+                scale_weight = parent_layer.scale_weight
+                weight = weight.to(torch.float32) * scale_weight.to(torch.float32)
+                if not hasattr(parent_layer, "scale_weight_original"):
+                    setattr(parent_layer, "scale_weight_original", scale_weight)
+                setattr(parent_layer, "scale_weight", torch.nn.Parameter(scale_weight.new_ones([1]), requires_grad=False))
 
+            bnb_layer = None
             if hasattr(weight, "bnb_quantized") and operations.bnb_available:
                 bnb_layer = parent_layer
                 from backend.operations_bnb import functional_dequantize_4bit
@@ -687,6 +698,9 @@ class LoraLoader:
                 set_parameter_devices(self.model, parameter_devices={k: offload_device for k in parameter_devices.keys()})
                 memory_management.soft_empty_cache()
                 weight = merge_lora_to_weight(current_patches, weight, key, computation_dtype=torch.float32)
+
+            if hasattr(parent_layer, "scale_weight"):
+                weight = weight.to(dtype=torch.float16) # to avoid 4x memory increase; could requant
 
             if bnb_layer is not None:
                 bnb_layer.reload_weight(weight)
