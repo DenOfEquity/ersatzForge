@@ -108,7 +108,6 @@ def anima_expanded(model, lora):
                     new_lora[f"{prefix}{m}{k[bne:]}"] = lora[k].clone()
             else:
                 new_lora[k] = lora[k]
-                print (k)
         lora = new_lora
 
     return lora
