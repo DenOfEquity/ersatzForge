@@ -516,6 +516,12 @@ div.toprow-compact-tools{
 #quicksettings div.module_selection:placeholder-shown .secondary-wrap {
     width: auto !important;
 }
+#quicksettings > div.module_selection div.wrap-inner {
+  max-width: 22em;
+  white-space: nowrap;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
 
 #quicksettings .gradio-slider span {
     padding-right: 4px;
@@ -1634,3 +1640,25 @@ body.resizing .resize-handle {
 .forge_space_btn{
     min-width: 0 !important;
 }
+
+* {
+  text-shadow: none !important;
+}
+
+.gradio-button, .gradio-textbox, .gradio-dropdown, .gradio-number {
+  border-radius: 4px !important;
+}
+
+.input-accordion:has(.input-accordion-checkbox:checked) {
+  border: 1px solid #554499 !important;
+}
+
+.tabitem {
+  border: 0px !important;
+  padding: 0px !important;
+}
+
+#quicksettings .gradio-number {
+  min-width: 80px !important;
+}
+
