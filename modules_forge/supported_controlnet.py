@@ -123,8 +123,8 @@ class ControlNetPatcher(ControlModelPatcher):
         controlnet_config["hint_width"] = controlnet_data["{}input_hint_block.0.weight".format(prefix)].shape[0]
         controlnet_config["hint_channels"] = controlnet_data["{}input_hint_block.0.weight".format(prefix)].shape[1]
 
-        with using_forge_operations(dtype=unet_dtype, manual_cast_enabled=computation_dtype != unet_dtype):
-            control_model = cldm.ControlNet(**controlnet_config).to(dtype=unet_dtype)
+        with using_forge_operations(computation_dtype=computation_dtype, dtype=None):
+            control_model = cldm.ControlNet(**controlnet_config)
 
         if pth:
             if 'difference' in controlnet_data:
@@ -194,6 +194,10 @@ class ReferenceControlLoraPatcher(ControlModelPatcher):
             # Anima
         if "lora_unet_blocks_0_cross_attn_k_proj.alpha" in controlnet_data or \
            "diffusion_model.blocks.0.adaln_modulation_cross_attn.1.lora_A.weight" in controlnet_data:
+
+            # networks = importlib.import_module("networks")
+            # controlnet_data = networks.anima_expanded(unet, controlnet_data) # need unet (layer count) for expansion
+
             if "lora_unet_blocks_0_cross_attn_k_proj.alpha" in controlnet_data:
                 # convert key names to match model
                 converted = {}
@@ -212,32 +216,33 @@ class ReferenceControlLoraPatcher(ControlModelPatcher):
                     if k.endswith(suffix):
                         prefixes.add(k[:-len(suffix)])
                         break
+
         else:
             return None
 
         to_load = {p: f"{p}.weight" for p in prefixes}
-       
+
         from packages.comfyui_lora_collection.lora import load_lora
         model_lora, lora_unmatch = load_lora(controlnet_data, to_load)
 
         if len(lora_unmatch) > 0:
             print(f"{cc.WARNING}[ReferenceControlLoraPatcher]{cc.RESET} ({cc.MINOR}{len(lora_unmatch)} unmatched keys{cc.RESET}) {ckpt_path}")
         del lora_unmatch
-        
+
         patcher = ReferenceControlLoraPatcher()
         patcher.model_lora = model_lora
         patcher.lora_filename = ckpt_path
 
         return patcher
-    
+
     def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
         from backend.sampling.condition import Condition
         from modules import devices
         from modules.sd_samplers_common import images_tensor_to_samples
         unet = process.sd_model.forge_objects.unet.clone()
 
-        unet.add_patches(filename=self.lora_filename, patches=self.model_lora, strength_patch=self.strength, strength_model=1.0)
-        
+        unet.add_patches(filename=self.lora_filename, patches=self.model_lora, strength_patch=self.strength, strength_model=1.0, online_mode=True)
+
         # Parse timestep range using unet predictor
         percent_to_timestep_function = unet.model.predictor.percent_to_sigma
         start_sigma = percent_to_timestep_function(self.start_percent)
@@ -255,14 +260,14 @@ class ReferenceControlLoraPatcher(ControlModelPatcher):
             t = timestep[0].item()
             if t > start_sigma or t < end_sigma:
                 return model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed
-    
+
             if un_cond is not None:
                 for c in un_cond:
                     c["model_conds"]["ref_latents"] = ref_latent
             for c in m_cond:
                 c["model_conds"]["ref_latents"] = ref_latent
             return model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed
-    
+
         unet.add_conditioning_modifier(ref_latents_modifier)
         process.sd_model.forge_objects.unet = unet
 

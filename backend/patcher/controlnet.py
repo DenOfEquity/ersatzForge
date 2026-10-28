@@ -448,10 +448,10 @@ class ControlLora(ControlNet):
 
         self.manual_cast_dtype = model.computation_dtype
 
-        with using_forge_operations(operations=ControlLoraOps, dtype=dtype, manual_cast_enabled=self.manual_cast_dtype != dtype):
+        with using_forge_operations(operations=ControlLoraOps, computation_dtype=model.computation_dtype, dtype=None):#, manual_cast_enabled=self.manual_cast_dtype != dtype):
             self.control_model = cldm.ControlNet(**controlnet_config)
 
-        self.control_model.to(device=memory_management.get_torch_device(), dtype=dtype)
+        self.control_model.to(device=memory_management.get_torch_device())
         diffusion_model = model.diffusion_model
         sd = diffusion_model.state_dict()
 
@@ -464,7 +464,7 @@ class ControlLora(ControlNet):
 
         for k in self.control_weights:
             if k not in {"lora_controlnet"}:
-                utils.set_attr(self.control_model, k, self.control_weights[k].to(dtype).to(memory_management.get_torch_device()))
+                utils.set_attr(self.control_model, k, self.control_weights[k].to(memory_management.get_torch_device()))
 
     def copy(self):
         c = ControlLora(self.control_weights, global_average_pooling=self.global_average_pooling)

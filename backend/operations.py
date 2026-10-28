@@ -124,8 +124,8 @@ def cleanup_cache():
 
 
 current_device = None
-current_dtype = None
-current_manual_cast_enabled = False
+storage_dtype = None
+current_computation_dtype = torch.float32
 current_bnb_dtype = None
 
 
@@ -133,10 +133,24 @@ class ForgeOperations:
     def common_load(cls, state_dict, prefix):
         # can use this in all classes, enables fp8_scaled CLIP-L (but this is low value)
         # but models using other layer types (e.g. FeedForward) still cannot be converted to fp8_scaled without bypassing conversion on many keys
+
+        if prefix + "weight" in state_dict:
+            cls.weight = torch.nn.Parameter(state_dict[prefix + "weight"].to(device=cls.current_device, dtype=storage_dtype), requires_grad=False)
+            cls.parameters_manual_cast = cls.parameters_manual_cast or (cls.weight.dtype != current_computation_dtype)
+        elif cls.__class__.__name__ == "RMSNorm" and prefix + "scale" in state_dict:  # Flux
+            cls.weight = torch.nn.Parameter(state_dict[prefix + "scale"].to(device=cls.current_device, dtype=storage_dtype), requires_grad=False)
+            cls.parameters_manual_cast = cls.parameters_manual_cast or (cls.weight.dtype != current_computation_dtype)
+
+        if prefix + "bias" in state_dict:
+            cls.bias = torch.nn.Parameter(state_dict[prefix + "bias"].to(device=cls.current_device, dtype=storage_dtype), requires_grad=False)
+            cls.parameters_manual_cast = cls.parameters_manual_cast or (cls.bias.dtype != current_computation_dtype)
+
         if prefix + "scale_weight" in state_dict:
             cls.scale_weight = torch.nn.Parameter(state_dict[prefix + "scale_weight"], requires_grad=False)
+            cls.parameters_manual_cast = True
         elif prefix + "weight_scale" in state_dict:
             cls.scale_weight = torch.nn.Parameter(state_dict[prefix + "weight_scale"], requires_grad=False)
+            cls.parameters_manual_cast = True
 
         if cls.__class__.__name__ == "Linear":
             if prefix + "A" in state_dict:
@@ -149,24 +163,15 @@ class ForgeOperations:
             super().__init__()
             self.in_features = in_features
             self.out_features = out_features
-            self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype), requires_grad=False)
+            self.current_device = current_device
             self.weight = None
             self.scale_weight = None
             self.A = None
             self.bias = None
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.parameters_manual_cast = False
 
         def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
             ForgeOperations.common_load(self, state_dict, prefix)
-            if hasattr(self, "dummy"):
-                if prefix + "weight" in state_dict:
-                    self.weight = torch.nn.Parameter(state_dict[prefix + "weight"].to(self.dummy), requires_grad=False)
-
-                if prefix + "bias" in state_dict:
-                    self.bias = torch.nn.Parameter(state_dict[prefix + "bias"].to(self.dummy), requires_grad=False)
-                del self.dummy
-            else:
-                super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
 
         def forward(self, x):
             strength = getattr(global_variables, "krea2_control_lora_apply", 0.0) or 0.0
@@ -186,9 +191,8 @@ class ForgeOperations:
     class Conv2d(torch.nn.Conv2d):
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
-            kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.parameters_manual_cast = True
 
             self._3x1x1: bool = self.kernel_size == (3, 3) and self.stride == (1, 1) and self.padding == (1, 1)
 
@@ -242,9 +246,8 @@ class ForgeOperations:
         def __init__(self, *args, **kwargs):
             self.temporal_pad = kwargs.pop("temporal_pad", False)
             kwargs["device"] = current_device
-            kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.parameters_manual_cast = True
             if self.temporal_pad:
                 self._padding = [self.padding[2], self.padding[2], self.padding[1], self.padding[1], 2 * self.padding[0], 0]
                 self.padding = (0, 0, 0)
@@ -274,9 +277,8 @@ class ForgeOperations:
     class Conv1d(torch.nn.Conv1d):
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
-            kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.parameters_manual_cast = True
 
         def reset_parameters(self):
             return None
@@ -293,9 +295,8 @@ class ForgeOperations:
     class ConvTranspose2d(torch.nn.ConvTranspose2d):
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
-            kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.parameters_manual_cast = True
 
         def reset_parameters(self):
             return None
@@ -317,9 +318,8 @@ class ForgeOperations:
     class ConvTranspose1d(torch.nn.ConvTranspose1d):
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
-            kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.parameters_manual_cast = True
 
         def reset_parameters(self):
             return None
@@ -341,9 +341,8 @@ class ForgeOperations:
     class ConvTranspose3d(torch.nn.ConvTranspose3d):
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
-            kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.parameters_manual_cast = True
 
         def reset_parameters(self):
             return None
@@ -365,9 +364,8 @@ class ForgeOperations:
     class GroupNorm(torch.nn.GroupNorm):
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
-            kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.parameters_manual_cast = True
 
         def reset_parameters(self):
             return None
@@ -383,9 +381,8 @@ class ForgeOperations:
     class LayerNorm(torch.nn.LayerNorm):
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
-            kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.parameters_manual_cast = True
 
         def reset_parameters(self):
             return None
@@ -401,26 +398,16 @@ class ForgeOperations:
     class RMSNorm(torch.nn.RMSNorm):
         def __init__(self, *args, add=False, **kwargs):
             kwargs["device"] = current_device
-            kwargs["dtype"] = current_dtype
             super().__init__(*args, **kwargs)
-            self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype), requires_grad=False)
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.current_device = current_device
+            self.parameters_manual_cast = False
             self.weight = None
+            self.scale_weight = None
             self.bias = None
             self.add = add
 
         def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
-            if hasattr(self, "dummy"):
-                if prefix + "weight" in state_dict:
-                    self.weight = torch.nn.Parameter(state_dict[prefix + "weight"].to(device=self.dummy.device), requires_grad=False)
-                elif prefix + "scale" in state_dict:  # Flux
-                    self.weight = torch.nn.Parameter(state_dict[prefix + "scale"].to(device=self.dummy.device), requires_grad=False)
-                del self.dummy
-                self.parameters_manual_cast = True
-            else:
-                if prefix + "scale" in state_dict:  # Flux
-                    state_dict[prefix + "weight"] = state_dict.pop(prefix + "scale")
-                super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
+            ForgeOperations.common_load(self, state_dict, prefix)
 
         def reset_parameters(self):
             self.bias = None
@@ -440,23 +427,14 @@ class ForgeOperations:
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
             super().__init__(*args, **kwargs)
-            self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype), requires_grad=False)
+            self.current_device = current_device
             self.weight = None
             self.scale_weight = None
             self.bias = None
-            self.parameters_manual_cast = current_manual_cast_enabled
+            self.parameters_manual_cast = False
 
         def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
             ForgeOperations.common_load(self, state_dict, prefix)
-            if hasattr(self, "dummy"):
-                if prefix + "weight" in state_dict:
-                    self.weight = torch.nn.Parameter(state_dict[prefix + "weight"].to(device=self.dummy.device), requires_grad=False)
-
-                if prefix + "bias" in state_dict:
-                    self.bias = torch.nn.Parameter(state_dict[prefix + "bias"].to(device=self.dummy.device), requires_grad=False)
-                del self.dummy
-            else:
-                super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
 
         def reset_parameters(self):
             self.bias = None
@@ -477,8 +455,9 @@ try:
     class ForgeOperationsBNB4bits(ForgeOperations):
         class Linear(ForgeLoader4Bit):
             def __init__(self, *args, **kwargs):
-                super().__init__(device=current_device, dtype=current_dtype, quant_type=current_bnb_dtype)
-                self.parameters_manual_cast = current_manual_cast_enabled
+                # super().__init__(device=current_device, dtype=storage_dtype, quant_type=current_bnb_dtype)
+                super().__init__(device=current_device, dtype=current_computation_dtype, quant_type=current_bnb_dtype)
+                self.parameters_manual_cast = False
 
             def forward(self, x):
                 if self.bias is not None and self.bias.dtype != x.dtype:
@@ -518,10 +497,9 @@ class ForgeOperationsGGUF(ForgeOperations):
     class Linear(torch.nn.Module):
         def __init__(self, *args, **kwargs):
             super().__init__()
-            self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype), requires_grad=False)
+            self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=storage_dtype), requires_grad=False)
             self.weight = None
             self.bias = None
-            # self.parameters_manual_cast = current_manual_cast_enabled
 
         def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
             if hasattr(self, "dummy"):
@@ -562,9 +540,9 @@ class ForgeOperationsGGUF(ForgeOperations):
     class Conv2d(torch.nn.Conv2d):
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
-            kwargs["dtype"] = current_dtype
+            kwargs["dtype"] = storage_dtype
             super().__init__(*args, **kwargs)
-            self.dummy = {"device": current_device, "dtype": current_dtype}
+            self.dummy = {"device": current_device, "dtype": storage_dtype}
             self.weight = None
             self.bias = None
 
@@ -607,7 +585,7 @@ class ForgeOperationsGGUF(ForgeOperations):
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
             super().__init__(*args, **kwargs)
-            self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=current_dtype), requires_grad=False)
+            self.dummy = torch.nn.Parameter(torch.empty(1, device=current_device, dtype=storage_dtype), requires_grad=False)
             self.bias = None
 
         def reset_parameters(self):
@@ -641,10 +619,12 @@ class ForgeOperationsGGUF(ForgeOperations):
 
 
 @contextlib.contextmanager
-def using_forge_operations(operations=None, device=None, dtype=None, manual_cast_enabled=False, bnb_dtype=None):
-    global current_device, current_dtype, current_manual_cast_enabled, current_bnb_dtype
+def using_forge_operations(operations=None, device=None, computation_dtype=None, dtype=None, bnb_dtype=None):
+    global current_device, current_computation_dtype, storage_dtype, current_bnb_dtype
 
-    current_device, current_dtype, current_manual_cast_enabled, current_bnb_dtype = device, dtype, manual_cast_enabled, bnb_dtype
+    current_device, current_computation_dtype, storage_dtype, current_bnb_dtype = device, computation_dtype, dtype, bnb_dtype
+    if computation_dtype is None: # should never happen, check loader
+        current_computation_dtype = torch.float32
 
     if operations is None:
         if bnb_dtype in ["gguf"]:

@@ -68,7 +68,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             config = IntegratedAutoencoderKL.load_config(config_path)
 
             with modeling_utils.no_init_weights():
-                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                with using_forge_operations(device=memory_management.cpu, computation_dtype=memory_management.vae_dtype(), dtype=memory_management.vae_dtype()):
                     model = IntegratedAutoencoderKL.from_config(config)
 
             load_state_dict(model, state_dict, ignore_start="loss.")
@@ -83,7 +83,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             config["block_out_channels_decoder"] = [96, 192, 384, 384] if state_dict["decoder.conv_in.bias"].shape[0] == 384 else config["block_out_channels"]
 
             with modeling_utils.no_init_weights():
-                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                with using_forge_operations(device=memory_management.cpu, computation_dtype=memory_management.vae_dtype(), dtype=memory_management.vae_dtype()):
                     model = AutoencoderKLFlux2.from_config(config)
 
             load_state_dict(model, state_dict, ignore_start="loss.")
@@ -105,7 +105,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             config["out_channels"] = out_channels
 
             with modeling_utils.no_init_weights():
-                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                with using_forge_operations(device=memory_management.cpu, computation_dtype=memory_management.vae_dtype(), dtype=memory_management.vae_dtype()):
                     model = Wan21VAE.from_config(config)
 
             load_state_dict(model, state_dict)
@@ -117,7 +117,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             config = AutoencoderKLWan22.load_config(config_path)
 
             with modeling_utils.no_init_weights():
-                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                with using_forge_operations(device=memory_management.cpu, computation_dtype=memory_management.vae_dtype(), dtype=memory_management.vae_dtype()):
                     model = AutoencoderKLWan22.from_config(config)
 
             load_state_dict(model, state_dict)
@@ -129,14 +129,14 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             config = AutoencoderQwen21.load_config(config_path)
 
             with modeling_utils.no_init_weights():
-                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype()):
+                with using_forge_operations(device=memory_management.cpu, computation_dtype=memory_management.vae_dtype(), dtype=memory_management.vae_dtype()):
                     model = AutoencoderQwen21.from_config(config)
 
             load_state_dict(model, state_dict)
             return model
 
         def state_dict_info(state_dict_dtype, storage_dtype, model_text=""):
-            if state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
+            if state_dict_dtype in ["nf4", "fp4", "gguf"]:
                 print(f"{cc.SETTING2}Using detected {model_text} data type: {state_dict_dtype}{cc.RESET}")
                 storage_dtype = state_dict_dtype
                 if state_dict_dtype == "gguf":
@@ -144,7 +144,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 elif state_dict_dtype in ["nf4", "fp4"]:
                     print("Using pre-quant state dict!")
             else:
-                print(f"{cc.SETTING2}Using default {model_text} data type: {storage_dtype}{cc.RESET}")
+                print(f"{cc.SETTING2}Using stored {model_text} data type{cc.RESET}")
 
             return storage_dtype
 
@@ -157,23 +157,18 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             config.max_position_embeddings = state_dict["transformer.text_model.embeddings.position_embedding.weight"].shape[0]
 
-            storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
-            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "CLIP")
+            storage_dtype = state_dict_info(state_dict_dtype, None, "CLIP")
+            computation_dtype=memory_management.text_encoder_dtype()
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=None, bnb_dtype=storage_dtype):
                         model = IntegratedCLIP(CLIPTextModel, config, add_text_projection=True)
             else:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=storage_dtype):
                         model = IntegratedCLIP(CLIPTextModel, config, add_text_projection=True)
-
-            # to_args = dict(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype())
-            # with modeling_utils.no_init_weights():
-                # with using_forge_operations(**to_args, manual_cast_enabled=True):
-                    # model = IntegratedCLIP(CLIPTextModel, config, add_text_projection=True).to(**to_args)
 
             load_state_dict(model, state_dict, ignore_errors=[
                 "transformer.text_projection.weight",
@@ -190,17 +185,17 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             config = read_arbitrary_config(config_path)
 
-            storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
-            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "Gemma2")
+            storage_dtype = state_dict_info(state_dict_dtype, None, "Gemma2")
+            computation_dtype=memory_management.text_encoder_dtype()
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=None, bnb_dtype=storage_dtype):
                         model = Gemma2_2B(config)
             else:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=storage_dtype):
                         model = Gemma2_2B(config)
 
             load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end="scaled_fp8")
@@ -214,17 +209,17 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             config = read_arbitrary_config(config_path)
 
-            storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
-            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "Ministral")
+            storage_dtype = state_dict_info(state_dict_dtype, None, "Ministral")
+            computation_dtype=memory_management.text_encoder_dtype()
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=None, bnb_dtype=storage_dtype):
                         model = Ministral3_3B(config)
             else:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=storage_dtype):
                         model = Ministral3_3B(config)
 
             load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end="scaled_fp8")
@@ -253,17 +248,17 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             else:
                 from backend.nn.llm.llama import Qwen3_06B as Qwen3
 
-            storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
-            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "Qwen3")
+            storage_dtype = state_dict_info(state_dict_dtype, None, "Qwen3")
+            computation_dtype=memory_management.text_encoder_dtype()
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=None, bnb_dtype=storage_dtype):
                         model = Qwen3(config)
             else:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=storage_dtype):
                         model = Qwen3(config)
 
             load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end="scaled_fp8")
@@ -277,17 +272,17 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             from backend.nn.llm.qwen3_5 import Qwen35TextModel
 
-            storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
-            storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "Qwen3.5")
+            storage_dtype = state_dict_info(state_dict_dtype, None, "Qwen3.5")
+            computation_dtype=memory_management.text_encoder_dtype()
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=None, bnb_dtype=storage_dtype):
                         model = Qwen35TextModel(config)
             else:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=storage_dtype):
                         model = Qwen35TextModel(config)
 
             load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=[], ignore_end="scaled_fp8")
@@ -344,14 +339,15 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             storage_dtype = memory_management.text_encoder_dtype()
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
             storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "T5")
+            computation_dtype=memory_management.text_encoder_dtype()
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=None, bnb_dtype=storage_dtype):
                         model = IntegratedT5(config)
             else:
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True):
+                    with using_forge_operations(device=memory_management.cpu, computation_dtype=computation_dtype, dtype=storage_dtype):
                         model = IntegratedT5(config)
 
             load_state_dict(model, state_dict, log_name=cls_name, ignore_errors=["transformer.encoder.embed_tokens.weight", "logit_scale"], ignore_end="scaled_fp8")
@@ -446,33 +442,29 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             unet_config = guess.unet_config.copy()
             state_dict_parameters = memory_management.state_dict_parameters(state_dict)
-
+            state_dict_size = memory_management.state_dict_size(state_dict)
             state_dict_dtype = memory_management.state_dict_dtype(state_dict)
 
             unet_storage_dtype_overwrite = backend.args.dynamic_args.get("forge_unet_storage_dtype")
             if unet_storage_dtype_overwrite is not None:
                 storage_dtype = unet_storage_dtype_overwrite
             else:
-                storage_dtype = memory_management.unet_dtype(model_params=state_dict_parameters, supported_dtypes=guess.supported_inference_dtypes)
+                storage_dtype = memory_management.unet_dtype(supported_dtypes=guess.supported_inference_dtypes)
                 storage_dtype = state_dict_info(state_dict_dtype, storage_dtype, "UNet" if cls_name == "UNet2DConditionModel" else "Transformer")
 
             load_device = memory_management.get_torch_device()
             computation_dtype = memory_management.get_computation_dtype(load_device, parameters=state_dict_parameters, supported_dtypes=guess.supported_inference_dtypes)
             offload_device = memory_management.unet_offload_device()
 
+            initial_device = memory_management.unet_initial_load_device(model_size=state_dict_size)
             if storage_dtype in ["nf4", "fp4", "gguf"]:
-                initial_device = memory_management.unet_initial_load_device(parameters=state_dict_parameters, dtype=computation_dtype)
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(device=initial_device, dtype=computation_dtype, manual_cast_enabled=False, bnb_dtype=storage_dtype):
+                    with using_forge_operations(device=initial_device, computation_dtype=computation_dtype, dtype=None, bnb_dtype=storage_dtype):
                         model = model_loader(unet_config)
             else:
-                initial_device = memory_management.unet_initial_load_device(parameters=state_dict_parameters, dtype=storage_dtype)
-                need_manual_cast = storage_dtype != computation_dtype
-                to_args = dict(device=initial_device, dtype=storage_dtype)
-
                 with modeling_utils.no_init_weights():
-                    with using_forge_operations(**to_args, manual_cast_enabled=need_manual_cast):
-                        model = model_loader(unet_config).to(**to_args)
+                    with using_forge_operations(device=initial_device, computation_dtype=computation_dtype, dtype=storage_dtype):
+                        model = model_loader(unet_config)
 
             load_state_dict(model, state_dict, ignore_errors=["scaled_fp8"], ignore_end="_extra_state")
 
@@ -527,33 +519,33 @@ def replace_state_dict(sd, asd, guess):
 
     if "blk.0.attn_norm.weight" in asd:
         gguf_llm_format = {  # city96
-            "blk.": "model.layers.",
-            "attn_norm": "input_layernorm",
-            "attn_q_norm.": "self_attn.q_norm.",
-            "attn_k_norm.": "self_attn.k_norm.",
-            "attn_v_norm.": "self_attn.v_norm.",
-            "attn_qkv": "linear_attn.in_proj_qkv",
-            "attn_q": "self_attn.q_proj",
-            "attn_k": "self_attn.k_proj",
-            "attn_v": "self_attn.v_proj",
-            "attn_output": "self_attn.o_proj",
-            "ffn_up": "mlp.up_proj",
-            "ffn_down": "mlp.down_proj",
-            "ffn_gate": "mlp.gate_proj",
-            "ffn_norm": "post_attention_layernorm",
-            "token_embd": "model.embed_tokens",
-            "output_norm": "model.norm",
-            "output.weight": "lm_head.weight",
+            "blk.":                "model.layers.",
+            "attn_norm":           "input_layernorm",
+            "attn_q_norm.":        "self_attn.q_norm.",
+            "attn_k_norm.":        "self_attn.k_norm.",
+            "attn_v_norm.":        "self_attn.v_norm.",
+            "attn_qkv":            "linear_attn.in_proj_qkv",
+            "attn_q.":             "self_attn.q_proj.",
+            "attn_k.":             "self_attn.k_proj.",
+            "attn_v.":             "self_attn.v_proj.",
+            "attn_output":         "self_attn.o_proj",
+            "ffn_up":              "mlp.up_proj",
+            "ffn_down":            "mlp.down_proj",
+            "ffn_gate":            "mlp.gate_proj",
+            "ffn_norm":            "post_attention_layernorm",
+            "token_embd":          "model.embed_tokens",
+            "output_norm":         "model.norm",
+            # "output.weight":       "lm_head.weight",
             "post_attention_norm": "post_attention_layernorm",
 
-            "attn_gate": "linear_attn.in_proj_z",
-            "ssm_dt.bias": "linear_attn.dt_bias",
-            "ssm_alpha": "linear_attn.in_proj_a",
-            "ssm_beta": "linear_attn.in_proj_b",
-            "ssm_conv1d": "linear_attn.conv1d",
-            "ssm_norm": "linear_attn.norm",
-            "ssm_out": "linear_attn.out_proj",
-            "ssm_a": "linear_attn.A_log",
+            "attn_gate":           "linear_attn.in_proj_z",
+            "ssm_dt.bias":         "linear_attn.dt_bias",
+            "ssm_alpha":           "linear_attn.in_proj_a",
+            "ssm_beta":            "linear_attn.in_proj_b",
+            "ssm_conv1d":          "linear_attn.conv1d",
+            "ssm_norm":            "linear_attn.norm",
+            "ssm_out":             "linear_attn.out_proj",
+            "ssm_a":               "linear_attn.A_log",
         }
         asd_new = {}
         for k, v in asd.items():

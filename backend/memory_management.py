@@ -314,35 +314,15 @@ def state_dict_parameters(sd):
 
 
 def state_dict_dtype(state_dict):
-    if 'scaled_fp8' in state_dict:
-        return state_dict['scaled_fp8'].dtype
-
     for k, v in state_dict.items():
-        if hasattr(v, 'gguf_cls'):
-            return 'gguf'
-        if 'bitsandbytes__nf4' in k:
-            return 'nf4'
-        if 'bitsandbytes__fp4' in k:
-            return 'fp4'
+        if hasattr(v, "gguf_cls"):
+            return "gguf"
+        if "bitsandbytes__nf4" in k:
+            return "nf4"
+        if "bitsandbytes__fp4" in k:
+            return "fp4"
 
-    dtype_counts = {}
-
-    for tensor in state_dict.values():
-        dtype = tensor.dtype
-        if dtype in dtype_counts:
-            dtype_counts[dtype] += tensor.numel()
-        else:
-            dtype_counts[dtype] = tensor.numel()
-
-    major_dtype = None
-    max_count = 0
-
-    for dtype, count in dtype_counts.items():
-        if count > max_count:
-            max_count = count
-            major_dtype = dtype
-
-    return major_dtype
+    return None
 
 
 def bake_gguf_model(model):
@@ -740,6 +720,7 @@ def load_models_gpu(models, memory_required=0, hard_memory_preservation=0):
                             extra_memory += (1024 * 1024 * 1024 * 1.125)
                         case _:
                             pass
+
                 if getattr(current_loaded_models[i].real_model, 'gguf_baked', False):
                     extra_memory += (1024 * 1024 * 1024 * 0.5)
 
@@ -823,7 +804,7 @@ def unet_offload_device():
         return torch.device("cpu")
 
 
-def unet_initial_load_device(parameters, dtype):
+def unet_initial_load_device(model_size):
     torch_dev = get_torch_device()
     if vram_state == VRAMState.HIGH_VRAM:
         return torch_dev
@@ -832,17 +813,14 @@ def unet_initial_load_device(parameters, dtype):
     if ALWAYS_VRAM_OFFLOAD:
         return cpu_dev
 
-    model_size = dtype_size(dtype) * parameters
-
     mem_dev = get_free_memory(torch_dev)
-    mem_cpu = get_free_memory(cpu_dev)
-    if mem_dev > mem_cpu and model_size < mem_dev:
+    if  model_size < mem_dev:
         return torch_dev
     else:
         return cpu_dev
 
-
-def unet_dtype(device=None, model_params=0, supported_dtypes=[torch.float16, torch.bfloat16, torch.float32]):
+# this is storage
+def unet_dtype(device=None, supported_dtypes=[torch.float16, torch.bfloat16, torch.float32]):
     if args.unet_in_bf16:
         return torch.bfloat16
 
@@ -855,16 +833,7 @@ def unet_dtype(device=None, model_params=0, supported_dtypes=[torch.float16, tor
     if args.unet_in_fp8_e5m2:
         return torch.float8_e5m2
 
-    for candidate in supported_dtypes:
-        if candidate == torch.float16:
-            if should_use_fp16(device, model_params=model_params, prioritize_performance=True, manual_cast=True):
-                return candidate
-        if candidate == torch.bfloat16:
-            if should_use_bf16(device, model_params=model_params, prioritize_performance=True, manual_cast=True):
-                return candidate
-
-    return torch.float32
-
+    return None
 
 def get_computation_dtype(inference_device, parameters=0, supported_dtypes=[torch.float16, torch.bfloat16, torch.float32]):
     for candidate in supported_dtypes:
@@ -891,6 +860,7 @@ def text_encoder_device():
         return torch.device("cpu")
 
 
+# this is forced computation_dtype
 def text_encoder_dtype(device=None):
     if args.clip_in_fp8_e4m3fn:
         return torch.float8_e4m3fn
@@ -916,19 +886,13 @@ def intermediate_device():
 
 # VAE patcher uses these functions for setup, then sets self.device=get_torch_device()
 # so VAE *runs on* torch device, but is *loaded on* CPU = more VRAM for decode; no performance cost if VAE is one-pass
-# may break with future VAEs if they use custom layers (already fixed wan2.1/2.2)
+# may break with future VAEs if they use custom layers (already fixed wan2.1/2.2, qwen2.1)
 
 def vae_device():
     if args.always_gpu:
         return get_torch_device()
     else:
         return torch.device("cpu")
-
-# def vae_device():
-    # if args.vae_in_cpu:
-        # return torch.device("cpu")
-    # return get_torch_device()
-
 
 def vae_offload_device():
     if args.always_gpu:
@@ -937,6 +901,7 @@ def vae_offload_device():
         return torch.device("cpu")
 
 
+# this is forced computation dtype
 def vae_dtype(device=None, allowed_dtypes=[]):
     global VAE_DTYPES
     if args.vae_in_fp16:
