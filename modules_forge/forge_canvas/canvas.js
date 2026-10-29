@@ -17,7 +17,6 @@ class GradioTextAreaBind {
         const event = new Event("input", { bubbles: true });
         Object.defineProperty(event, "target", { value: this.target });
         this.target.dispatchEvent(event);
-        this.previousValue = value;
         this.sync_lock = false;
     }
 
@@ -144,6 +143,8 @@ class ForgeCanvas {
         const drawContext = drawingCanvas.getContext("2d", { willReadFrequently: true });
         drawingCanvas.style.cursor = "crosshair";
 
+        this.has_focus = false;
+
         if (this.no_scribbles) {
             toolbar.querySelector(".forge-toolbar-box-b").style.display = "none";
             resetButton.style.display = "none";
@@ -176,12 +177,6 @@ class ForgeCanvas {
             this.contrast_pattern = drawContext.createPattern(tempCanvas, "repeat");
             drawingCanvas.style.opacity = "0.5";
         }
-
-        const resizeObserver = new ResizeObserver(() => {
-            this.adjustInitialPositionAndScale();
-            this.drawImage();
-        });
-        resizeObserver.observe(this.container);
 
         this.maxButton.addEventListener("click", () => {
             this.toggleMaximize();
@@ -246,6 +241,8 @@ class ForgeCanvas {
         }
 
         this.container.addEventListener("pointerdown", (e) => {
+            this.has_focus = true;
+
             const rect = this.container.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
@@ -330,11 +327,14 @@ class ForgeCanvas {
         });
 
         toolbar.addEventListener("pointerdown", (e) => {
+            this.has_focus = true;
             e.stopPropagation();
         });
 
         this.container.addEventListener("wheel", (e) => {
             if (!this.img) return;
+            if (!this.has_focus) return;
+
             e.preventDefault();
             const delta = e.deltaY * -0.001;
             let scale = true;
@@ -363,9 +363,10 @@ class ForgeCanvas {
             const oldScale = this.imgScale;
             this.imgScale += delta;
             this.imgScale = Math.max(0.1, this.imgScale);
-            const newScale = this.imgScale / oldScale;
-            this.imgX = x - (x - this.imgX) * newScale;
-            this.imgY = y - (y - this.imgY) * newScale;
+            
+            this.imgX -= (this.orgWidth * (this.imgScale - oldScale)) / 2;
+            this.imgY -= (this.orgHeight * (this.imgScale - oldScale)) / 2;
+
             this.drawImage();
         });
 
@@ -400,6 +401,7 @@ class ForgeCanvas {
         });
 
         this.container.addEventListener("pointerleave", () => {
+            this.has_focus = false;
             this.pointerInsideContainer = false;
             toolbar.style.opacity = "0";
             this.scribbleIndicator.style.display = "none";
@@ -700,8 +702,8 @@ class ForgeCanvas {
                 this.history.splice(Math.floor(Math.random()*1.75), 1);
                 this.historyIndex -= 4;
             }
-            this.updateUndoRedoButtons();
             this.updateDrawingData();
+            this.updateUndoRedoButtons();
         }
     }
 
