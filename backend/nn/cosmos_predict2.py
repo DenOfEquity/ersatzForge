@@ -64,7 +64,7 @@ class VideoRopePosition3DEmb(nn.Module):
         # self.w_spatial_freqs = 1.0 / ((10000.0 * w_extrapolation_ratio ** (dim_w / (dim_w - 2))) ** dim_spatial_range)
         self.temporal_freqs  = 1.0 / ((10000.0 * t_extrapolation_ratio ** (dim_t / (dim_t - 2))) ** dim_temporal_range)
 
-    def forward(self, x_B_T_H_W_C: torch.Tensor, fps=Optional[torch.Tensor], device=None) -> torch.Tensor:
+    def forward(self, x_B_T_H_W_C: torch.Tensor, fps=Optional[torch.Tensor], device=None, transformer_options={}) -> torch.Tensor:
         """
         Generate embeddings for the given input size.
 
@@ -92,6 +92,17 @@ class VideoRopePosition3DEmb(nn.Module):
         else:
             half_emb_t = torch.outer(seq[:T] / fps * self.base_fps, self.temporal_freqs.to(device=device))
 
+        half_emb_t = repeat(half_emb_t, "t x -> t h w x", h=H, w=W)
+        half_emb_h = repeat(half_emb_h, "h x -> t h w x", t=T, w=W)
+        half_emb_w = repeat(half_emb_w, "w x -> t h w x", t=T, h=H)
+
+        if T > 1: # includes ref image
+            ref_count = T
+            if transformer_options["need_rope_shift"]: # for reference adapter control lora only
+                half_emb_h = half_emb_h.clone()
+                for t in range(1, T):
+                    half_emb_h[t:t+1] += H*t
+
         _cos = torch.cos(half_emb_h)
         _sin = torch.sin(half_emb_h)
         half_emb_h = torch.stack([_cos, -_sin, _sin, _cos], dim=-1)
@@ -102,14 +113,7 @@ class VideoRopePosition3DEmb(nn.Module):
         _sin = torch.sin(half_emb_t)
         half_emb_t = torch.stack([_cos, -_sin, _sin, _cos], dim=-1)
 
-        em_T_H_W_D = torch.cat(
-            [
-                repeat(half_emb_t, "t d x -> t h w d x", h=H, w=W),
-                repeat(half_emb_h, "h d x -> t h w d x", t=T, w=W),
-                repeat(half_emb_w, "w d x -> t h w d x", t=T, h=H),
-            ]
-            , dim=-2,
-        )
+        em_T_H_W_D = torch.cat((half_emb_t, half_emb_h, half_emb_w),dim=-2)
 
         return rearrange(em_T_H_W_D, "t h w d (i j) -> (t h w) d i j", i=2, j=2).to(torch.float32)
 
@@ -741,6 +745,7 @@ class MiniTrainDIT(nn.Module):
         x_B_C_T_H_W: torch.Tensor,
         fps: Optional[torch.Tensor] = None,
         padding_mask: Optional[torch.Tensor] = None,
+        transformer_options = {}
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
         """
         Prepares an embedded sequence tensor by applying positional embeddings and handling padding masks.
@@ -780,8 +785,8 @@ class MiniTrainDIT(nn.Module):
             extra_pos_emb = None
 
         if "rope" in self.pos_emb_cls.lower():
-            return x_B_T_H_W_D, self.pos_embedder(x_B_T_H_W_D, fps=fps, device=x_B_C_T_H_W.device), extra_pos_emb
-        x_B_T_H_W_D = x_B_T_H_W_D + self.pos_embedder(x_B_T_H_W_D, device=x_B_C_T_H_W.device)  # [B, T, H, W, D]
+            return x_B_T_H_W_D, self.pos_embedder(x_B_T_H_W_D, fps=fps, device=x_B_C_T_H_W.device, transformer_options=transformer_options), extra_pos_emb
+        x_B_T_H_W_D = x_B_T_H_W_D + self.pos_embedder(x_B_T_H_W_D, device=x_B_C_T_H_W.device, transformer_options=transformer_options)  # [B, T, H, W, D]
 
         return x_B_T_H_W_D, None, extra_pos_emb
 
@@ -810,15 +815,25 @@ class MiniTrainDIT(nn.Module):
 
         transformer_options = kwargs.get("transformer_options", {})
 
-        # Reference latents: concat along temporal dim (Flux2-style) by 'inpaint' on civitai
-        ref_latents = kwargs.get('ref_latents', None)
+        # Reference latents: concat along temporal dim; multiple refs already stacked in temporal dim (2)
+        ref_latents = kwargs.get("ref_latents", None)
         if ref_latents is not None:
-            if not isinstance(ref_latents, list):
-                ref_latents = [ref_latents]
-            for ref in ref_latents:
-                if ref.ndim == 4:
-                    ref = ref.unsqueeze(2)
-                x_B_C_T_H_W = torch.cat([x_B_C_T_H_W, ref.to(dtype=x.dtype, device=x.device)], dim=2)
+            control_info = kwargs.get("control_info", None)
+            if control_info is not None:
+                reference_follows = bool(control_info[0][0].item())
+                reference_need_t0 = bool(control_info[0][1].item())
+                transformer_options["need_rope_shift"] = bool(control_info[0][2].item())
+            else:
+                reference_follows = True
+                reference_need_t0 = False
+                transformer_options["need_rope_shift"] = False
+
+            ref_count = ref_latents.shape[2]
+
+            if reference_follows:
+                x_B_C_T_H_W = torch.cat((x_B_C_T_H_W, ref_latents.to(dtype=x.dtype, device=x.device)), dim=2)
+            else:
+                x_B_C_T_H_W = torch.cat((ref_latents.to(dtype=x.dtype, device=x.device), x_B_C_T_H_W), dim=2)
 
         timesteps_B_T = timesteps
         crossattn_emb = context
@@ -832,12 +847,25 @@ class MiniTrainDIT(nn.Module):
             x_B_C_T_H_W,
             fps=fps,
             padding_mask=padding_mask,
+            transformer_options=transformer_options,
         )
 
         if timesteps_B_T.ndim == 1:
             timesteps_B_T = timesteps_B_T.unsqueeze(1)
         t_embedding_B_T_D, adaln_lora_B_T_3D = self.t_embedder[1](self.t_embedder[0](timesteps_B_T).to(x_B_T_H_W_D.dtype))
         t_embedding_B_T_D = self.t_embedding_norm(t_embedding_B_T_D)
+
+        if ref_latents is not None:
+            if reference_need_t0: # ref_adapter needs timestep 0 for reference, other control loras do not
+                t_embedding_0, adaln_lora_0 = self.t_embedder[1](self.t_embedder[0](torch.zeros_like(timesteps_B_T)).to(x_B_T_H_W_D.dtype))
+                t_embedding_0 = self.t_embedding_norm(t_embedding_0)
+
+                if reference_follows:
+                    t_embedding_B_T_D = torch.cat((t_embedding_B_T_D, t_embedding_0.repeat(1, ref_count, 1)), dim=1)
+                    adaln_lora_B_T_3D = torch.cat((adaln_lora_B_T_3D, adaln_lora_0.repeat(1, ref_count, 1)), dim=1)
+                else:
+                    t_embedding_B_T_D = torch.cat((t_embedding_0.repeat(1, ref_count, 1), t_embedding_B_T_D), dim=1)
+                    adaln_lora_B_T_3D = torch.cat((adaln_lora_0.repeat(1, ref_count, 1), adaln_lora_B_T_3D), dim=1)
 
         if extra_pos_emb_B_T_H_W_D is not None:
             assert (x_B_T_H_W_D.shape == extra_pos_emb_B_T_H_W_D.shape), f"{x_B_T_H_W_D.shape} != {extra_pos_emb_B_T_H_W_D.shape}"
@@ -858,8 +886,12 @@ class MiniTrainDIT(nn.Module):
             )
 
         x_B_T_H_W_O = self.final_layer(x_B_T_H_W_D, t_embedding_B_T_D, adaln_lora_B_T_3D=adaln_lora_B_T_3D)
-        x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)[:, :, : orig_shape[-3], : orig_shape[-2], : orig_shape[-1]]
-        return x_B_C_Tt_Hp_Wp.squeeze(2)
+        x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)
+        
+        if ref_latents is None or reference_follows:
+            return x_B_C_Tt_Hp_Wp[:, :, :1, : orig_shape[-2], : orig_shape[-1]].squeeze(2)
+        else:    
+            return x_B_C_Tt_Hp_Wp[:, :, -1:, : orig_shape[-2], : orig_shape[-1]].squeeze(2)
 
 
 ## this following stuff for Anima's LLM adapter

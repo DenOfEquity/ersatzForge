@@ -191,14 +191,15 @@ class ReferenceControlLoraPatcher(ControlModelPatcher):
             return None
 
         prefixes = set()
-            # Anima
-        if "lora_unet_blocks_0_cross_attn_k_proj.alpha" in controlnet_data or \
+
+        if "lora_unet_blocks_0_mlp_layer2.alpha" in controlnet_data or \
+           "diffusion_model.blocks.0.mlp.layer2.alpha" in controlnet_data or \
            "diffusion_model.blocks.0.adaln_modulation_cross_attn.1.lora_A.weight" in controlnet_data:
 
             # networks = importlib.import_module("networks")
             # controlnet_data = networks.anima_expanded(unet, controlnet_data) # need unet (layer count) for expansion
 
-            if "lora_unet_blocks_0_cross_attn_k_proj.alpha" in controlnet_data:
+            if "lora_unet_blocks_0_mlp_layer2.alpha" in controlnet_data:
                 # convert key names to match model
                 converted = {}
                 for k, v in controlnet_data.items():
@@ -239,6 +240,7 @@ class ReferenceControlLoraPatcher(ControlModelPatcher):
         from backend.sampling.condition import Condition
         from modules import devices
         from modules.sd_samplers_common import images_tensor_to_samples
+
         unet = process.sd_model.forge_objects.unet.clone()
 
         unet.add_patches(filename=self.lora_filename, patches=self.model_lora, strength_patch=self.strength, strength_model=1.0, online_mode=True)
@@ -254,7 +256,20 @@ class ReferenceControlLoraPatcher(ControlModelPatcher):
             cond *= mask
 
         ref_latent = images_tensor_to_samples(cond.to(devices.device, dtype=devices.dtype_vae), model=process.sd_model)
-        ref_latent = Condition(ref_latent)
+
+        if process.sd_model.is_cosmos_predict2:
+            ref_latent = Condition(ref_latent.unsqueeze(2))
+
+            if "anima_ref_adapter" in self.lora_filename:
+                control_info = [[1, 1, 1]] # reference follows noise, needs timestep0; needs rope h adjustment
+            else:
+                control_info = [[1, 0, 0]]
+            control_info = Condition(torch.tensor(control_info, dtype=torch.int8))
+
+        else: # this path never taken at present
+            control_info = None
+            ref_latent = Condition(ref_latent)
+
 
         def ref_latents_modifier(model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed):
             t = timestep[0].item()
@@ -263,9 +278,14 @@ class ReferenceControlLoraPatcher(ControlModelPatcher):
 
             if un_cond is not None:
                 for c in un_cond:
-                    c["model_conds"]["ref_latents"] = ref_latent
+                    if "anima_ref_adapter" not in self.lora_filename: # seems to work more consistently without reference in uncond
+                        c["model_conds"]["ref_latents"] = ref_latent
+                    if control_info is not None:
+                        c["model_conds"]["control_info"] = control_info
             for c in m_cond:
                 c["model_conds"]["ref_latents"] = ref_latent
+                if control_info is not None:
+                    c["model_conds"]["control_info"] = control_info
             return model, x, timestep, un_cond, m_cond, cond_scale, model_options, seed
 
         unet.add_conditioning_modifier(ref_latents_modifier)
