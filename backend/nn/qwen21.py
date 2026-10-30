@@ -78,9 +78,9 @@ def _apply_rope1(x, freqs_cis):
     return x_out.reshape(*x.shape).type_as(x)
 
 
-_cache_hash = 0
 _cache_type = "No cache"
-_cache_method = "attn"
+_cache_method = "attn" #"attn", "kv", "attn+kv"
+_cache_reset = False # flag set if context and/or references changed
 class Attention(nn.Module):
     def __init__(self, dim, heads, dim_head, eps=1e-6):
         super().__init__()
@@ -93,8 +93,6 @@ class Attention(nn.Module):
         self.norm_q = nn.RMSNorm(dim_head, eps=eps)
         self.norm_k = nn.RMSNorm(dim_head, eps=eps)
 
-        self.cached_hash = 0
-        self.cached_attn_hash = 0
         self.cached_k = None
         self.cached_v = None
         self.cached_attn = None
@@ -102,19 +100,17 @@ class Attention(nn.Module):
     def forward(self, x, pe, prefix_len, negpip, segments):
         # combined method gives most speedgain but uses most memory for cache
         # attn method uses less memory than kv method, closer to uncached output, maybe more gain
-        global _cache_hash, _cache_type, _cache_method
+        global _cache_type, _cache_method, _cache_reset
         B, N, _ = x.shape
 
         q = self.to_q(x).view(B, N, self.heads, -1)
         q = self.norm_q(q)
         q = _apply_rope1(q, pe).flatten(2)
-
-        txtlen = segments[0]
         
-        no_kv_cache   = "kv"   not in _cache_method or _cache_hash == 0 or _cache_type == "No cache"
-        no_attn_cache = "attn" not in _cache_method or _cache_hash == 0 or _cache_type == "No cache"
+        no_kv_cache   = "kv"   not in _cache_method or _cache_type == "No cache"
+        no_attn_cache = "attn" not in _cache_method or _cache_type == "No cache"
 
-        if no_kv_cache or self.cached_hash != _cache_hash:
+        if no_kv_cache or _cache_reset:
             k = self.to_k(x).view(B, N, self.heads, -1)
             k = self.norm_k(k)
             k = _apply_rope1(k, pe).flatten(2)
@@ -122,61 +118,54 @@ class Attention(nn.Module):
             v = self.to_v(x)
 
             if no_kv_cache:
-                self.cached_hash = 0
                 self.cached_k = None
                 self.cached_v = None
             else:
                 match _cache_type:
                     case "computation dtype":
-                        self.cached_k = k[:, txtlen:prefix_len].clone()
-                        self.cached_v = v[:, txtlen:prefix_len].clone()
+                        self.cached_k = k[:, :prefix_len].clone()
+                        self.cached_v = v[:, :prefix_len].clone()
                     case "fp16":
-                        self.cached_k = k[:, txtlen:prefix_len].to(torch.float16)
-                        self.cached_v = v[:, txtlen:prefix_len].to(torch.float16)
+                        self.cached_k = k[:, :prefix_len].to(torch.float16)
+                        self.cached_v = v[:, :prefix_len].to(torch.float16)
                     case "fp8":
-                        self.cached_k = k[:, txtlen:prefix_len].to(torch.float8_e4m3fn)
-                        self.cached_v = v[:, txtlen:prefix_len].to(torch.float8_e4m3fn)
+                        self.cached_k = k[:, :prefix_len].to(torch.float8_e4m3fn)
+                        self.cached_v = v[:, :prefix_len].to(torch.float8_e4m3fn)
                     case "computation dtype (CPU)":
-                        self.cached_k = k[:, txtlen:prefix_len].clone().cpu()
-                        self.cached_v = v[:, txtlen:prefix_len].clone().cpu()
+                        self.cached_k = k[:, :prefix_len].clone().cpu()
+                        self.cached_v = v[:, :prefix_len].clone().cpu()
                     case "fp16 (CPU)":
-                        self.cached_k = k[:, txtlen:prefix_len].to(torch.float16).cpu()
-                        self.cached_v = v[:, txtlen:prefix_len].to(torch.float16).cpu()
+                        self.cached_k = k[:, :prefix_len].to(torch.float16).cpu()
+                        self.cached_v = v[:, :prefix_len].to(torch.float16).cpu()
                     case "fp8 (CPU)":
-                        self.cached_k = k[:, txtlen:prefix_len].to(torch.float8_e4m3fn).cpu()
-                        self.cached_v = v[:, txtlen:prefix_len].to(torch.float8_e4m3fn).cpu()
+                        self.cached_k = k[:, :prefix_len].to(torch.float8_e4m3fn).cpu()
+                        self.cached_v = v[:, :prefix_len].to(torch.float8_e4m3fn).cpu()
                     case _:
-                        _cache_hash = 0
                         self.cached_k = None
                         self.cached_v = None
 
-                self.cached_hash = _cache_hash
-
         else:
-            kt = self.to_k(x[:, :txtlen]).view(B, txtlen, self.heads, -1)
-            kt = self.norm_k(kt)
-            kt = _apply_rope1(kt, pe[:, :txtlen]).flatten(2)
             k = self.to_k(x[:, prefix_len:]).view(B, N-prefix_len, self.heads, -1)
             k = self.norm_k(k)
             k = _apply_rope1(k, pe[:, prefix_len:]).flatten(2)
 
-            vt = self.to_v(x[:, :txtlen])
             v = self.to_v(x[:, prefix_len:])
 
-            k = torch.cat((kt, self.cached_k.to(device=k.device).to(dtype=k.dtype), k), dim=1)
-            v = torch.cat((vt, self.cached_v.to(device=v.device).to(dtype=v.dtype), v), dim=1)
+            k = torch.cat((self.cached_k.to(device=k.device).to(dtype=k.dtype), k), dim=1)
+            v = torch.cat((self.cached_v.to(device=v.device).to(dtype=v.dtype), v), dim=1)
 
+        if negpip is not None:
+            v[:, :segments[0], :] *= negpip[:, None]
 
         attn = torch.empty_like(x)
         img_start = segments[-1] + 5
-        if no_attn_cache or self.cached_attn_hash != _cache_hash:
+        if no_attn_cache or _cache_reset:
             start = 0
             for s in segments:
-                attn[:, start:start+s] = attention_function(q[:, start:start+s], k[:, :start+s], v[:, :start+s], self.heads)#, mask=mask)
+                attn[:, start:start+s] = attention_function(q[:, start:start+s], k[:, :start+s], v[:, :start+s], self.heads)
                 start += s
 
             if no_attn_cache:
-                self.cached_attn_hash = 0
                 self.cached_attn = None
             else:
                 match _cache_type:
@@ -193,9 +182,7 @@ class Attention(nn.Module):
                     case "fp8 (CPU)":
                         self.cached_attn = attn[:, :-img_start].to(torch.float8_e4m3fn).cpu()
                     case _:
-                        _cache_hash = 0
                         self.cached_attn = None
-                self.cached_attn_hash = _cache_hash
 
         else:
             attn[:, :-img_start] = self.cached_attn.to(device=x.device).to(dtype=x.dtype)
@@ -291,6 +278,9 @@ class QwenImage21Transformer2DModel(nn.Module):
         self.norm_out = LastLayer(inner_dim, eps=eps)
         self.proj_out = nn.Linear(inner_dim, out_channels, bias=False)
 
+        self.last_context_hash = 0
+        self.last_reference_hash = 0
+
         # text + reference K/V are step-independent (t = 0 modulation, causal prefix), cached for one sampling run
 
 
@@ -342,15 +332,26 @@ class QwenImage21Transformer2DModel(nn.Module):
 
 
     def forward(self, x, timesteps, context, negpip=None, **kwargs):
-        global _cache_hash, _cache_type
+        global _cache_type, _cache_reset
         B, C, H, W = x.shape
         dtype = x.dtype
 
-        timestep = 1.0#timesteps[0].item() # seems better fidelity without this scaling, maybe use ** 0.5
-        ref_strengths = [s*timestep for s in getattr(shared, "klein_strength", (0.0, 0.0, 0.0, 0.0))]
-        ref_latents = getattr(shared, "klein_latents", [None, None, None, None]) # lengths must match, currently 4 hardcoded
+        context_hash = hash(context.cpu().numpy().tobytes())
+        if context_hash != self.last_context_hash:
+            _cache_reset = True
+            self.last_context_hash = context_hash
+
         _cache_hash = getattr(shared, "klein_image_hash", 0)
+        if _cache_hash != self.last_reference_hash:
+            _cache_reset = True
+            self.last_reference_hash = _cache_hash
+
+        ref_strengths = [s for s in getattr(shared, "klein_strength", (0.0, 0.0, 0.0, 0.0))]
+        ref_latents = getattr(shared, "klein_latents", [None, None, None, None]) # lengths must match, currently 4 hardcoded
         _cache_type = getattr(shared.opts, "qwen2.1_kv_cache", "No cache")
+
+        if _cache_type == "No cache":
+            self.last_reference_hash = 0
 
         hidden_states, pe, segments = self.build_sequence(x, context, ref_latents, ref_strengths)
         prefix_len = hidden_states.shape[1] - H * W
@@ -365,6 +366,8 @@ class QwenImage21Transformer2DModel(nn.Module):
 
         for block in self.transformer_blocks:
             hidden_states = block(hidden_states, mod, pe, prefix_len, negpip, segments)
+
+        _cache_reset = False
 
         hidden_states = self.norm_out(hidden_states[:, prefix_len:], temb[1:])
         hidden_states = self.proj_out(hidden_states)
