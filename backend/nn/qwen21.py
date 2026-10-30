@@ -280,6 +280,7 @@ class QwenImage21Transformer2DModel(nn.Module):
 
         self.last_context_hash = 0
         self.last_reference_hash = 0
+        self.last_reference_strengths = (0.0, 0.0, 0.0, 0.0)
 
         # text + reference K/V are step-independent (t = 0 modulation, causal prefix), cached for one sampling run
 
@@ -306,7 +307,7 @@ class QwenImage21Transformer2DModel(nn.Module):
 
         ids.append(torch.arange(0, pos, device=x.device, dtype=torch.float32).unsqueeze(1).expand(pos, 3))
 
-        for (img, str, cond) in zip(ref_latents + [x], ref_strengths + [1.0], conds):
+        for (img, str, cond) in zip(ref_latents + [x], ref_strengths + (1.0,), conds):
             if img is not None and str > 0.0:
                 parts.append(cond)
                 cond_len = cond.shape[1]
@@ -346,7 +347,11 @@ class QwenImage21Transformer2DModel(nn.Module):
             _cache_reset = True
             self.last_reference_hash = _cache_hash
 
-        ref_strengths = [s for s in getattr(shared, "klein_strength", (0.0, 0.0, 0.0, 0.0))]
+        ref_strengths = getattr(shared, "klein_strength", (0.0, 0.0, 0.0, 0.0))
+        if ref_strengths != self.last_reference_strengths:
+            _cache_reset = True
+            self.last_reference_strengths = ref_strengths
+
         ref_latents = getattr(shared, "klein_latents", [None, None, None, None]) # lengths must match, currently 4 hardcoded
         _cache_type = getattr(shared.opts, "qwen2.1_kv_cache", "No cache")
 
