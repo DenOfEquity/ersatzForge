@@ -813,11 +813,15 @@ def unet_initial_load_device(model_size):
     if ALWAYS_VRAM_OFFLOAD:
         return cpu_dev
 
+    if vram_state in (VRAMState.DISABLED, VRAMState.SHARED, VRAMState.NO_VRAM, VRAMState.VERY_LOW_VRAM):
+        return cpu_dev
+
     mem_dev = get_free_memory(torch_dev)
     if  model_size < mem_dev:
         return torch_dev
     else:
         return cpu_dev
+
 
 # this is storage
 def unet_dtype(device=None, supported_dtypes=[torch.float16, torch.bfloat16, torch.float32]):
