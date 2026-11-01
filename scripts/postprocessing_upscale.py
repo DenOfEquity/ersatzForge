@@ -48,7 +48,7 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
                             with gr.Column(scale=4):
                                 upscaling_resize = gr.Slider(minimum=1.0, maximum=8.0, step=0.05, label="Resize", value=4, elem_id="extras_upscaling_resize")
                             with gr.Column(scale=1, min_width=160):
-                                max_side_length = gr.Number(label="Max side length", value=0, elem_id="extras_upscale_max_side_length", tooltip="If any of two sides of the image ends up larger than specified, will downscale it to fit. 0 = no limit.", min_width=160, step=8, minimum=0)
+                                max_side_length = gr.Number(label="Maximum side length", value=0, elem_id="extras_upscale_max_side_length", tooltip="If an image dimension ends up larger than specified, will downscale it to fit. 0 = no limit.", min_width=160, step=8, minimum=0)
 
                     with gr.TabItem("Scale to", id="extras_scale_to_tab", elem_id="extras_scale_to_tab") as tab_scale_to:
                         with FormRow():
@@ -57,7 +57,7 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
                                 upscaling_resize_h = gr.Slider(minimum=64, maximum=8192, step=8, label="Height", value=512, elem_id="extras_upscaling_resize_h")
                             with gr.Column(elem_id="upscaling_dimensions_row", scale=1, elem_classes="dimensions-tools"):
                                 upscaling_res_switch_btn = ToolButton(value=switch_values_symbol, elem_id="upscaling_res_switch_btn", tooltip="Switch width/height")
-                                upscaling_crop = gr.Checkbox(label="Crop to fit", value=True, elem_id="extras_upscaling_crop")
+                                upscaling_fit = gr.Dropdown(label="Fit method", value="centre", choices=["left / top", "centre", "right / bottom", "crop"], elem_id="extras_upscaling_crop")
 
         upscaling_res_switch_btn.click(lambda w, h: (h, w), inputs=[upscaling_resize_w, upscaling_resize_h], outputs=[upscaling_resize_w, upscaling_resize_h], show_progress="hidden")
         tab_scale_by.select(fn=lambda: 0, inputs=None, outputs=[selected_tab])
@@ -70,24 +70,25 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
             "max_side_length": max_side_length,
             "upscale_to_width": upscaling_resize_w,
             "upscale_to_height": upscaling_resize_h,
-            "upscale_crop": upscaling_crop,
+            "upscaling_fit": upscaling_fit,
             "upscaler_1_name": extras_upscaler_1,
             "upscaler_2_name": extras_upscaler_2,
             "upscaler_2_visibility": extras_upscaler_2_visibility,
             "upscale_cc": extras_color_correction,
         }
 
-    def upscale(self, image, upscaler, upscale_mode, upscale_by, max_side_length, upscale_to_width, upscale_to_height, upscale_crop):
+    def upscale(self, image, upscaler, upscale_mode, upscale_by, max_side_length, upscale_to_width, upscale_to_height, upscaling_fit):
         if upscale_mode == 1:
-            upscale_by = max(upscale_to_width/image.width, upscale_to_height/image.height)
+            if upscaling_fit == "crop":
+                upscale_by = max(upscale_to_width/image.width, upscale_to_height/image.height)
+            else:
+                upscale_by = min(upscale_to_width/image.width, upscale_to_height/image.height)
         else:
             if max_side_length != 0 and max(*image.size)*upscale_by > max_side_length:
-                upscale_mode = 1
-                upscale_crop = False
-                upscale_to_width, upscale_to_height = limit_size_by_one_dimension(image.width*upscale_by, image.height*upscale_by, max_side_length)
+                upscale_to_width, upscale_to_height = limit_size_by_one_dimension(image.width, image.height, upscale_by, max_side_length)
                 upscale_by = max(upscale_to_width/image.width, upscale_to_height/image.height)
 
-        cache_key = (hash(numpy.array(image.getdata()).tobytes()), upscaler.name, upscale_mode, upscale_by, upscale_to_width, upscale_to_height, upscale_crop)
+        cache_key = (hash(numpy.array(image.getdata()).tobytes()), upscaler.name, upscale_mode, upscale_by, upscale_to_width, upscale_to_height, upscaling_fit)
         cached_image = upscale_cache.pop(cache_key, None)
 
         if cached_image is not None:
@@ -100,14 +101,25 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
             if len(upscale_cache) > shared.opts.upscaling_max_images_in_cache:
                 upscale_cache.pop(next(iter(upscale_cache), None), None)
 
-        if upscale_mode == 1 and upscale_crop:
-            cropped = Image.new("RGB", (upscale_to_width, upscale_to_height))
-            cropped.paste(image, box=(upscale_to_width // 2 - image.width // 2, upscale_to_height // 2 - image.height // 2))
-            image = cropped
+        if upscale_mode == 1:
+            if upscaling_fit:
+                cropped = Image.new("RGB", (upscale_to_width, upscale_to_height), "#000")
+                match upscaling_fit:
+                    case "crop":
+                        cropped.paste(image, box=(upscale_to_width // 2 - image.width // 2, upscale_to_height // 2 - image.height // 2))
+                    case "left / top":
+                        cropped.paste(image, (0, 0))
+                    case "centre":
+                        cropped.paste(image, (max(0, (upscale_to_width - image.width)//2), max(0, (upscale_to_height - image.height)//2)))
+                    case "right / bottom":
+                        cropped.paste(image, (upscale_to_width - image.width, upscale_to_height - image.height))
+                    case _:
+                        return image
+                image = cropped
 
         return image
 
-    def process_firstpass(self, pp: scripts_postprocessing.PostprocessedImage, upscale_enabled=True, upscale_mode=1, upscale_by=2.0, max_side_length=0, upscale_to_width=None, upscale_to_height=None, upscale_crop=False, upscaler_1_name=None, upscaler_2_name=None, upscaler_2_visibility=0.0, upscale_cc=False,):
+    def process_firstpass(self, pp: scripts_postprocessing.PostprocessedImage, upscale_enabled=True, upscale_mode=1, upscale_by=2.0, max_side_length=0, upscale_to_width=None, upscale_to_height=None, upscaling_fit="", upscaler_1_name=None, upscaler_2_name=None, upscaler_2_visibility=0.0, upscale_cc=False,):
         if upscale_mode == 1:
             pp.shared.target_width = upscale_to_width
             pp.shared.target_height = upscale_to_height
@@ -117,7 +129,7 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
         if upscale_cc:
             upscale_cache["cc"] = setup_color_correction(pp.image)
 
-    def process(self, pp: scripts_postprocessing.PostprocessedImage, upscale_enabled=True, upscale_mode=1, upscale_by=2.0, max_side_length=0, upscale_to_width=None, upscale_to_height=None, upscale_crop=False, upscaler_1_name=None, upscaler_2_name=None, upscaler_2_visibility=0.0, upscale_cc=False):
+    def process(self, pp: scripts_postprocessing.PostprocessedImage, upscale_enabled=True, upscale_mode=1, upscale_by=2.0, max_side_length=0, upscale_to_width=None, upscale_to_height=None, upscaling_fit="", upscaler_1_name=None, upscaler_2_name=None, upscaler_2_visibility=0.0, upscale_cc=False):
 
         if not upscale_enabled or upscaler_1_name == "None":
             return
@@ -127,7 +139,7 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
                 upscaler_1 = x
                 break
 
-        upscaled_image = self.upscale(pp.image, upscaler_1, upscale_mode, upscale_by, max_side_length, upscale_to_width, upscale_to_height, upscale_crop)
+        upscaled_image = self.upscale(pp.image, upscaler_1, upscale_mode, upscale_by, max_side_length, upscale_to_width, upscale_to_height, upscaling_fit)
         info = upscaler_1.name
 
         if upscaler_2_name != "None" and upscaler_2_visibility > 0:
@@ -136,7 +148,7 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
                     upscaler_2 = x
                     break
 
-            second_upscale = self.upscale(pp.image, upscaler_2, upscale_mode, upscale_by, max_side_length, upscale_to_width, upscale_to_height, upscale_crop)
+            second_upscale = self.upscale(pp.image, upscaler_2, upscale_mode, upscale_by, max_side_length, upscale_to_width, upscale_to_height, upscaling_fit)
 
             upscaled_image = Image.blend(upscaled_image, second_upscale, upscaler_2_visibility)
 
