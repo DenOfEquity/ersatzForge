@@ -553,10 +553,23 @@ def save_image_with_geninfo(image, geninfo, filename, extension=None, existing_p
     For JPG images, there's no dictionary and geninfo just replaces the EXIF description.
     """
 
+    # strip unnecessary alpha
+    if image.mode == "RGBA":
+        if image.getchannel("A").getextrema() == (255, 255): # maybe want thresholds here
+            image = image.convert("RGB")
+
     if extension is None:
         extension = os.path.splitext(filename)[1]
 
     image_format = Image.registered_extensions()[extension]
+
+    exif_bytes = None
+    if opts.enable_pnginfo and geninfo is not None and extension.lower() in (".jpg", ".jpeg", ".webp", ".avif"):
+        exif_bytes = piexif.dump({
+            "Exif": {
+                piexif.ExifIFD.UserComment: piexif.helper.UserComment.dump(geninfo, encoding="unicode")
+            },
+        })
 
     if extension.lower() == ".png":
         existing_pnginfo = existing_pnginfo or {}
@@ -572,35 +585,32 @@ def save_image_with_geninfo(image, geninfo, filename, extension=None, existing_p
 
         image.save(filename, format=image_format, quality=opts.jpeg_quality, pnginfo=pnginfo_data)
 
-    elif extension.lower() in (".jpg", ".jpeg", ".webp"):
+    elif extension.lower() in (".jpg", ".jpeg"):
         if image.mode == "RGBA":
             image = image.convert("RGB")
         elif image.mode == "I;16":
-            image = image.point(lambda p: p * 0.0038910505836576).convert("RGB" if extension.lower() == ".webp" else "L")
+            image = image.point(lambda p: p * 0.0038910505836576).convert("L")
 
         image.save(filename, format=image_format, quality=opts.jpeg_quality, lossless=opts.webp_lossless)
 
-        if opts.enable_pnginfo and geninfo is not None:
-            exif_bytes = piexif.dump({
-                "Exif": {
-                    piexif.ExifIFD.UserComment: piexif.helper.UserComment.dump(geninfo or "", encoding="unicode")
-                },
-            })
-
+        if exif_bytes:
             piexif.insert(exif_bytes, filename)
-    elif extension.lower() == '.avif':
-        if opts.enable_pnginfo and geninfo is not None:
-            exif_bytes = piexif.dump({
-                "Exif": {
-                    piexif.ExifIFD.UserComment: piexif.helper.UserComment.dump(geninfo or "", encoding="unicode")
-                },
-            })
-        else:
-            exif_bytes = None
 
-        image.save(filename,format=image_format, quality=opts.jpeg_quality, exif=exif_bytes)
+    elif extension.lower() == ".webp":
+        if image.mode == "I;16":
+            image = image.point(lambda p: p * 0.0038910505836576)
+
+        image.save(filename, format=image_format, quality=opts.jpeg_quality, lossless=opts.webp_lossless)
+
+        if exif_bytes:
+            piexif.insert(exif_bytes, filename)
+
+    elif extension.lower() == ".avif":
+        image.save(filename, format=image_format, quality=opts.jpeg_quality, exif=exif_bytes)
+
     elif extension.lower() == ".gif":
         image.save(filename, format=image_format, comment=geninfo)
+
     else:
         image.save(filename, format=image_format, quality=opts.jpeg_quality)
 
