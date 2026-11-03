@@ -192,10 +192,14 @@ class Extension:
             return []
 
         res = []
-        for filename in sorted(os.listdir(dirpath)):
-            res.append(scripts.ScriptFile(self.path, filename, os.path.join(dirpath, filename)))
+        for entry in os.scandir(dirpath): # needs sort?
+            if entry.is_file() and os.path.splitext(entry.name)[1].lower() == extension:
+                res.append(scripts.ScriptFile(self.path, entry.name, entry.path))
 
-        res = [x for x in res if os.path.splitext(x.path)[1].lower() == extension and os.path.isfile(x.path)]
+        # res = []
+        # for filename in sorted(os.listdir(dirpath)):
+            # res.append(scripts.ScriptFile(self.path, filename, os.path.join(dirpath, filename)))
+        # res = [x for x in res if os.path.splitext(x.path)[1].lower() == extension and os.path.isfile(x.path)]
 
         return res
 
@@ -255,18 +259,16 @@ def list_extensions():
         if not os.path.isdir(dirname):
             continue
 
-        for extension_dirname in sorted(os.listdir(dirname)):
-            path = os.path.join(dirname, extension_dirname)
-            if not os.path.isdir(path):
+        for entry in os.scandir(dirname):
+            if not entry.is_dir():
                 continue
 
-            canonical_name = extension_dirname
-            metadata = ExtensionMetadata(path, canonical_name)
+            canonical_name = entry.name
+            metadata = ExtensionMetadata(entry.path, entry.name)
 
             # check for duplicated canonical names
-            already_loaded_extension = loaded_extensions.get(metadata.canonical_name)
-            if already_loaded_extension is not None:
-                errors.report(f'Duplicate canonical name "{canonical_name}" found in extensions "{extension_dirname}" and "{already_loaded_extension.name}". Former will be discarded.', exc_info=False)
+            if entry.name in loaded_extensions:
+                errors.report(f'Duplicate canonical name "{entry.name}" found in extensions "{dirname}" and "{loaded_extensions[entry.name].path}"', exc_info=False)
                 continue
 
             is_builtin = dirname == extensions_builtin_dir
@@ -274,16 +276,16 @@ def list_extensions():
             disabled_extensions = shared.opts.disabled_extensions + always_disabled_extensions
 
             extension = Extension(
-                name=extension_dirname,
-                path=path,
-                enabled=extension_dirname not in disabled_extensions,
+                name=entry.name,
+                path=entry.path,
+                enabled=entry.name not in disabled_extensions,
                 is_builtin=is_builtin,
                 metadata=metadata
             )
 
             extensions.append(extension)
-            extension_paths[extension.path] = extension
-            loaded_extensions[canonical_name] = extension
+            extension_paths[entry.path] = extension
+            loaded_extensions[entry.name] = extension
 
     for extension in extensions:
         extension.metadata.requires = extension.metadata.get_script_requirements("Requires", "Extension")

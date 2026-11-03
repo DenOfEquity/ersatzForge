@@ -403,15 +403,13 @@ def list_scripts(scriptdirname, extension, *, include_extensions=True):
     # build script dependency map
     root_script_basedir = os.path.join(paths.script_path, scriptdirname)
     if os.path.exists(root_script_basedir):
-        for filename in sorted(os.listdir(root_script_basedir)):
-            if not os.path.isfile(os.path.join(root_script_basedir, filename)):
+        for entry in os.scandir(root_script_basedir):
+            if not entry.is_file():
                 continue
-
-            if os.path.splitext(filename)[1].lower() != extension:
+            if os.path.splitext(entry.name)[1].lower() != extension:
                 continue
-
-            script_file = ScriptFile(paths.script_path, filename, os.path.join(root_script_basedir, filename))
-            scripts[filename] = ScriptWithDependencies(filename, script_file, [], [], [])
+            script_file = ScriptFile(paths.script_path, entry.name, entry.path)
+            scripts[entry.name] = ScriptWithDependencies(entry.name, script_file, [], [], [])
 
     if include_extensions:
         for ext in extensions.active():

@@ -36,53 +36,41 @@ class ExtraNetworksItem:
 
 def get_tree(paths: Union[str, list[str]], items: dict[str, ExtraNetworksItem]) -> dict:
     """Recursively builds a directory tree.
-
     Args:
-        paths: Path or list of paths to directories. These paths are treated as roots from which
-            the tree will be built.
+        paths: Path(s) to directories. These paths are treated as roots from which the tree will be built.
         items: A dictionary associating filepaths to an ExtraNetworksItem instance.
-
     Returns:
         The result directory tree.
     """
-    if isinstance(paths, (str,)):
-        paths = [paths]
 
-    def _get_tree(_paths: list[str], _root: str):
+    def _get_tree(_path: str, _root: str):
         _res = {}
-        for path in _paths:
-            relpath = os.path.relpath(path, _root)
-            if os.path.isdir(path):
-                dir_items = os.listdir(path)
-                # Ignore empty directories.
-                if not dir_items:
-                    continue
-                dir_tree = _get_tree([os.path.join(path, x) for x in dir_items], _root)
-                # We only want to store non-empty folders in the tree.
+
+        for entry in os.scandir(_path):
+            if entry.is_file():
+                if entry.path in items:
+                    _res[os.path.relpath(entry.path, _root)] = items[entry.path]
+            elif entry.is_dir():
+                dir_tree = _get_tree(entry.path, _root)
                 if dir_tree:
-                    _res[relpath] = dir_tree
-            else:
-                if path not in items:
-                    continue
-                # Add the ExtraNetworksItem to the result.
-                _res[relpath] = items[path]
+                    _res[os.path.relpath(entry.path, _root)] = dir_tree
+
         return _res
 
     res = {}
-    # Handle each root directory separately.
-    # Each root WILL have a key/value at the root of the result dict though
-    # the value can be an empty dict if the directory is empty. We want these
-    # placeholders for empty dirs so we can inform the user later.
+
+    if isinstance(paths, (str,)):
+        paths = [paths]
+
     for path in paths:
-        root = os.path.dirname(path)
-        relpath = os.path.relpath(path, root)
-        # Wrap the path in a list since that is what the `_get_tree` expects.
-        res[relpath] = _get_tree([path], root)
-        if res[relpath]:
-            # We need to pull the inner path out one for these root dirs.
-            res[relpath] = res[relpath][relpath]
+        if os.path.isdir(path):
+            root = os.path.dirname(path)
+            relpath = os.path.relpath(path, root)
+
+            res[relpath] = _get_tree(path, root)
 
     return res
+
 
 def register_page(page):
     """registers extra networks page for the UI; recommend doing it in on_before_ui() callback for extensions"""
