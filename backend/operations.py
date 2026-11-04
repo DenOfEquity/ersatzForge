@@ -131,9 +131,6 @@ current_bnb_dtype = None
 
 class ForgeOperations:
     def common_load(cls, state_dict, prefix):
-        # can use this in all classes, enables fp8_scaled CLIP-L (but this is low value)
-        # but models using other layer types (e.g. FeedForward) still cannot be converted to fp8_scaled without bypassing conversion on many keys
-
         if prefix + "weight" in state_dict:
             cls.weight = torch.nn.Parameter(state_dict[prefix + "weight"].to(device=cls.current_device, dtype=storage_dtype), requires_grad=False)
             cls.parameters_manual_cast = cls.parameters_manual_cast or (cls.weight.dtype != current_computation_dtype)
@@ -192,9 +189,15 @@ class ForgeOperations:
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = True
-
             self._3x1x1: bool = self.kernel_size == (3, 3) and self.stride == (1, 1) and self.padding == (1, 1)
+            self.current_device = current_device
+            self.weight = None
+            self.scale_weight = None
+            self.bias = None
+            self.parameters_manual_cast = False
+
+        def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+            ForgeOperations.common_load(self, state_dict, prefix)
 
         def reset_parameters(self):
             return None
@@ -365,7 +368,15 @@ class ForgeOperations:
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = True
+
+            self.current_device = current_device
+            self.weight = None
+            self.scale_weight = None
+            self.bias = None
+            self.parameters_manual_cast = False
+
+        def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+            ForgeOperations.common_load(self, state_dict, prefix)
 
         def reset_parameters(self):
             return None
@@ -382,7 +393,15 @@ class ForgeOperations:
         def __init__(self, *args, **kwargs):
             kwargs["device"] = current_device
             super().__init__(*args, **kwargs)
-            self.parameters_manual_cast = True
+
+            self.current_device = current_device
+            self.weight = None
+            self.scale_weight = None
+            self.bias = None
+            self.parameters_manual_cast = False
+
+        def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+            ForgeOperations.common_load(self, state_dict, prefix)
 
         def reset_parameters(self):
             return None

@@ -75,8 +75,8 @@ def convert_embeds(one, many, output_dir):
         loaded = False
         if embed.endswith(".pt"):
             try:
-                e = torch.load(embed, map_location=torch.device('cpu'))
-                emb = e['string_to_param']['*']
+                e = torch.load(embed, map_location=torch.device("cpu"))
+                emb = e["string_to_param"]["*"]
                 loaded = True
             except:
                 print(f"Embedding converter: {embed} ERROR: could not load")
@@ -101,10 +101,10 @@ def convert_embeds(one, many, output_dir):
                 clip_g.append(converter_model(emb[i]))
 
             output = {}
-            output['clip_l'] = torch.stack(clip_l, dim=0)
-            output['clip_g'] = torch.stack(clip_g, dim=0)
+            output["clip_l"] = torch.stack(clip_l, dim=0)
+            output["clip_g"] = torch.stack(clip_g, dim=0)
 
-            input_filename, _ = os.path.splitext(embed.split('\\')[-1])
+            input_filename, _ = os.path.splitext(embed.split("\\")[-1])
 
             output_filename = os.path.join(output_dir, input_filename + "_SDXL.safetensors")
 
@@ -139,60 +139,60 @@ class UiCheckpointMerger:
 
     def __init__(self):
         with gr.Blocks(analytics_enabled=False) as modelmerger_interface:
-            with gr.Accordion(open=False, label='Save current checkpoint (including all quantization)'):
+            with gr.Accordion(open=False, label="Save current checkpoint (including all quantization)"):
                 with gr.Row():
-                    textbox_file_name_forge = gr.Textbox(label="Filename (will save in /models/Stable-diffusion)", value='my_model.safetensors')
-                    btn_save_unet_forge = gr.Button('Save UNet')
-                    btn_save_ckpt_forge = gr.Button('Save checkpoint')
+                    textbox_file_name_forge = gr.Textbox(label="Filename (will save in /models/Stable-diffusion)", value="my_model.safetensors")
+                    btn_save_unet_forge = gr.Button("Save UNet")
+                    btn_save_ckpt_forge = gr.Button("Save checkpoint")
 
                 with gr.Row():
-                    result_html = gr.Markdown('Ready to save ...')
+                    result_html = gr.Markdown("Ready to save ...")
 
                     def save_unet(filename):
                         from modules.paths import models_path
-                        long_filename = os.path.join(models_path, 'Stable-diffusion', filename)
+                        long_filename = os.path.join(models_path, "Stable-diffusion", filename)
                         os.makedirs(os.path.dirname(long_filename), exist_ok=True)
                         sd_models.forge_model_reload()
                         p = shared.sd_model.save_unet(long_filename)
-                        print(f'Saved UNet at: {p}')
-                        return f'Saved UNet at: {p}'
+                        print(f"Saved UNet at: {p}")
+                        return f"Saved UNet at: {p}"
 
                     def save_checkpoint(filename):
                         from modules.paths import models_path
-                        long_filename = os.path.join(models_path, 'Stable-diffusion', filename)
+                        long_filename = os.path.join(models_path, "Stable-diffusion", filename)
                         os.makedirs(os.path.dirname(long_filename), exist_ok=True)
                         sd_models.forge_model_reload()
                         p = shared.sd_model.save_checkpoint(long_filename)
-                        print(f'Saved checkpoint at: {p}')
-                        return f'Saved checkpoint at: {p}'
+                        print(f"Saved checkpoint at: {p}")
+                        return f"Saved checkpoint at: {p}"
 
                     btn_save_unet_forge.click(save_unet, inputs=textbox_file_name_forge, outputs=result_html)
                     btn_save_ckpt_forge.click(save_checkpoint, inputs=textbox_file_name_forge, outputs=result_html)
 
             with gr.Accordion(open=False, label="nArn0's embedding converter: SD1 to SDXL"):
                 with gr.Row():
-                    embeds_dir = gr.Textbox(label='Directory to convert', value='')
-                    embeds_one = gr.Textbox(label='Single file to convert (if no Directory set)', value='')
-                    output_dir = gr.Textbox(label='Save results to directory', value='.\models\embeddings')
-                    convert = gr.Button('Convert', variant='primary', scale=0)
+                    embeds_dir = gr.Textbox(label="Directory to convert", value="")
+                    embeds_one = gr.Textbox(label="Single file to convert (if no Directory set)", value="")
+                    output_dir = gr.Textbox(label="Save results to directory", value=".\models\embeddings")
+                    convert = gr.Button("Convert", variant="primary", scale=0)
                 message = gr.Markdown("")
 
                 convert.click(fn=convert_embeds, inputs=[embeds_one, embeds_dir, output_dir], outputs=[message])
 
-            with gr.Accordion(open=False, label="Clybius's fp8-scaled converter"):
+            with gr.Accordion(open=False, label="Model converter (derived from Clybius's fp8-scaled converter)"):
                 with gr.Row():
-                    scaled_input = gr.Textbox(label='Single model file to convert', value='')
-                    scaled_mode = gr.Dropdown(label='Mode', choices=["fp8_scaled", "fp8_e4m3fn", "fp16"], value="fp8_scaled", scale=0)
-                    scaled_verbose = gr.Checkbox(label='Verbose output', value=False, scale=0)
-                    scaled_convert = gr.Button('Convert', variant='primary', scale=0)
-                scaled_avoid = gr.Textbox(label='Do not convert keys with matching names', value='')
-                scaled_remove = gr.Textbox(label='Discard keys with matching names', value='')
+                    scaled_input = gr.Textbox(label="Single model file to convert", value="")
+                    scaled_mode = gr.Dropdown(label="Mode", choices=["fp8_scaled", "fp8_e4m3fn", "fp16", "int8", "mixed8"], value="fp8_scaled", scale=0, filterable=False)
+                    scaled_verbose = gr.Checkbox(label="Verbose output", value=False, scale=0)
+                    scaled_convert = gr.Button("Convert", variant="primary", scale=0)
+                scaled_avoid = gr.Textbox(label="Do not convert keys with matching names", value="")
+                scaled_remove = gr.Textbox(label="Discard keys with matching names", value="")
                 message = gr.Markdown("See console for progress during conversion.")
                 scaled_convert.click(fn=fp8_scaled_conversion, inputs=[scaled_input, scaled_avoid, scaled_remove, scaled_mode, scaled_verbose], outputs=[message])
 
 
             with gr.Row(equal_height=False):
-                with gr.Column(variant='compact'):
+                with gr.Column(variant="compact"):
                     with FormRow():
                         self.interp_method = gr.Dropdown(choices=["None", "Extract Unet", "Extract VAE", "Extract Text encoder(s)", "Weighted sum", "Add difference", "SmoothBlend"], value="None", label="Interpolation method / Function", elem_id="modelmerger_interp_method", info="Allows for format conversion and VAE baking.")
                         self.custom_name = gr.Textbox(label="Custom output name", info="Optional", max_lines=1, elem_id="modelmerger_custom_name")
@@ -204,7 +204,7 @@ class UiCheckpointMerger:
 
                     self.interp_method.change(fn=update_interp_description, inputs=[self.interp_method, self.model_names], outputs=[self.interp_method, self.model_names], show_progress="hidden")
 
-                    self.interp_amount = gr.Slider(minimum=0.0, maximum=1.0, step=0.05, label='Multiplier (M)', value=0.5, elem_id="modelmerger_interp_amount")
+                    self.interp_amount = gr.Slider(minimum=0.0, maximum=1.0, step=0.05, label="Multiplier (M)", value=0.5, elem_id="modelmerger_interp_amount")
 
                     with FormRow():
                         self.bake_in_vae = gr.Dropdown(choices=self.vae_list, value="", label="Bake in VAE", elem_id="modelmerger_bake_in_vae")
@@ -219,9 +219,9 @@ class UiCheckpointMerger:
                     .then(fn=UiCheckpointMerger.refresh_additional, inputs=None, outputs=[self.bake_in_vae, self.bake_in_te], show_progress="hidden")
 
                     with FormRow():
-                        self.save_u = gr.Dropdown(label="Unet precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2", "fp8_scaled"], value="float16")
-                        self.save_v = gr.Dropdown(label="VAE precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2"], value="float16")
-                        self.save_t = gr.Dropdown(label="Text encoder(s) precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2"], value="float16")
+                        self.save_u = gr.Dropdown(label="Unet precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2", "fp8_scaled"], value="float16", filterable=False)
+                        self.save_v = gr.Dropdown(label="VAE precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2"], value="float16", filterable=False)
+                        self.save_t = gr.Dropdown(label="Text encoder(s) precision", choices=["None (remove)", "No change", "float32", "bfloat16", "float16", "fp8e4m3", "fp8e5m2"], value="float16", filterable=False)
                         self.calc_fp32 = gr.Checkbox(value=False, label="Calculate merge in float32")
 
                     self.discard_weights = gr.Textbox(value="", label="Discard weights with matching name; e.g. Use 'model_ema' to discard EMA weights. 'embedding_manager|lora|control_model'", elem_id="modelmerger_discard_weights")
@@ -234,12 +234,12 @@ class UiCheckpointMerger:
                             self.add_merge_recipe = gr.Checkbox(value=False, label="Add merge recipe metadata", elem_id="modelmerger_add_recipe")
                             self.copy_metadata_fields = gr.Checkbox(value=False, label="Copy metadata from merged models", elem_id="modelmerger_copy_metadata")
 
-                        self.metadata_json = gr.TextArea('{}', label="Metadata in JSON format")
+                        self.metadata_json = gr.TextArea("{}", label="Metadata in JSON format")
                         self.read_metadata = gr.Button("Read metadata from selected checkpoints")
 
 
-                with gr.Column(variant='compact', elem_id="modelmerger_results_container"):
-                    self.modelmerger_merge = gr.Button(elem_id="modelmerger_merge", value="Merge", variant='primary')
+                with gr.Column(variant="compact", elem_id="modelmerger_results_container"):
+                    self.modelmerger_merge = gr.Button(elem_id="modelmerger_merge", value="Merge", variant="primary")
                     self.modelmerger_result = gr.HTML(elem_id="modelmerger_result", show_label=False)
 
         self.metadata_editor = metadata_editor
@@ -250,10 +250,10 @@ class UiCheckpointMerger:
     def setup_ui(self, dummy_component, sd_model_checkpoint_component):
         self.read_metadata.click(extras.read_metadata, inputs=[self.model_names], outputs=[self.metadata_json])
 
-        self.modelmerger_merge.click(fn=lambda: '', inputs=None, outputs=[self.modelmerger_result])
+        self.modelmerger_merge.click(fn=lambda: "", inputs=None, outputs=[self.modelmerger_result])
         self.modelmerger_merge.click(
             fn=call_queue.wrap_gradio_gpu_call(modelmerger, extra_outputs=lambda: [gr.skip() for _ in range(4)]),
-            js='modelmerger',
+            js="modelmerger",
             inputs=[
                 dummy_component,
                 self.model_names,
