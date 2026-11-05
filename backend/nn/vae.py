@@ -285,8 +285,6 @@ class IntegratedAutoencoderKL(torch.nn.Module, ConfigMixin):
         self.embed_dim = latent_channels
         self.scaling_factor = scaling_factor
         self.shift_factor = shift_factor
-        self.encoder_EQ_converted = False
-        self.decoder_EQ_converted = False
 
         if not isinstance(self.shift_factor, float):
             self.shift_factor = 0.0
