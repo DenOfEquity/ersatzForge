@@ -1785,7 +1785,14 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
             self.color_corrections = []
         imgs = []
         for img in self.init_images:
-            image = images.flatten(img, opts.img2img_background_color)
+            if self.sd_model.is_qwen21:
+                image = img
+            elif self.sd_model.is_cosmos_predict2 and self.sd_model.forge_objects.vae.first_stage_model.in_channels == 4:
+                image = img
+            elif self.sd_model.is_flux2 and self.sd_model.forge_objects.vae.first_stage_model.in_channels == 4:
+                image = img
+            else:
+                image = images.flatten(img, opts.img2img_background_color)
 
             if crop_region is None and self.resize_mode != 3:
                 image = images.resize_image(self.resize_mode, image, self.width, self.height)

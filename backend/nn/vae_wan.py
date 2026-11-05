@@ -120,7 +120,8 @@ class Encoder3d(nn.Module):
                  dim_mult=[1, 2, 4, 4],
                  num_res_blocks=2,
                  attn_scales=[],
-                 dropout=0.0):
+                 dropout=0.0,
+                 in_channels=3):
         super().__init__()
         self.dim = dim
         self.z_dim = z_dim
@@ -133,7 +134,7 @@ class Encoder3d(nn.Module):
         scale = 1.0
 
         # init block
-        self.conv1 = nn.Conv3d(3, dims[0], 3, padding=1, temporal_pad=True)
+        self.conv1 = nn.Conv3d(in_channels, dims[0], 3, padding=1, temporal_pad=True)
 
         # downsample blocks
         downsamples = []
@@ -185,11 +186,6 @@ class Decoder3d(nn.Module):
                  dropout=0.0,
                  out_channels=3):
         super().__init__()
-        # self.dim = dim
-        # self.z_dim = z_dim
-        # self.dim_mult = dim_mult
-        # self.num_res_blocks = num_res_blocks
-        # self.attn_scales = attn_scales
 
         # dimensions
         dims = [dim * u for u in [dim_mult[-1]] + dim_mult[::-1]]
@@ -245,7 +241,7 @@ class AutoencoderKLWan(nn.Module, ConfigMixin):
 
     @register_to_config
     def __init__(self,
-                 dim=128,
+                 dim=96,
                  z_dim=4,
                  dim_mult=[1, 2, 4, 4],
                  num_res_blocks=2,
@@ -254,16 +250,12 @@ class AutoencoderKLWan(nn.Module, ConfigMixin):
                  dropout=0.0,
                  out_channels=3):
         super().__init__()
-        # self.dim = dim
-        # self.z_dim = z_dim
-        # self.dim_mult = dim_mult
-        # self.num_res_blocks = num_res_blocks
-        # self.attn_scales = attn_scales
         self.out_channels = out_channels
+        self.in_channels = 4 if out_channels == 4 else 3 # RGB(A) input
 
         # modules
         self.encoder = Encoder3d(dim, z_dim * 2, dim_mult, num_res_blocks,
-                                 attn_scales, dropout)
+                                 attn_scales, dropout, self.in_channels)
         self.conv1 = nn.Conv3d(z_dim * 2, z_dim * 2, 1)
         self.conv2 = nn.Conv3d(z_dim, z_dim, 1)
         self.decoder = Decoder3d(dim, z_dim, dim_mult, num_res_blocks,
@@ -290,6 +282,10 @@ class AutoencoderKLWan(nn.Module, ConfigMixin):
         return latent * latents_std / self.scale_factor + latents_mean
 
     def encode(self, x):
+        if self.in_channels == 4 and x.shape[1] == 3: # RGBA vae expects four channels
+            mask = x.new_ones((x.shape[0], 1, x.shape[2], x.shape[3]))
+            x = torch.cat((x, mask), dim=1)
+
         x = x.unsqueeze(2)
         
         out = self.encoder(x)
@@ -481,6 +477,7 @@ class AutoencoderQwen2D(nn.Module, ConfigMixin):
         self.attn_scales = list(attn_scales)
         self.temporal_downsample = list(temporal_downsample)
         self.temporal_upsample = list(self.temporal_downsample[::-1])
+        self.in_channels = 3
 
         self.encoder = QwenImageEncoder2D(
             dim=base_dim,

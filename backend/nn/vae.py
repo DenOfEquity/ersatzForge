@@ -25,7 +25,8 @@ class DiagonalGaussianDistribution:
             self.var = self.std = torch.zeros_like(self.mean).to(device=self.parameters.device)
 
     def sample(self):
-        x = self.mean + self.std * torch.randn(self.mean.shape).to(device=self.parameters.device)
+        #x = self.mean + self.std * torch.randn(self.mean.shape).to(device=self.parameters.device)
+        x = torch.addcmul(self.mean, self.std, torch.randn(self.mean.shape).to(device=self.parameters.device))
         return x
 
     def mode(self):
@@ -284,6 +285,8 @@ class IntegratedAutoencoderKL(torch.nn.Module, ConfigMixin):
         self.embed_dim = latent_channels
         self.scaling_factor = scaling_factor
         self.shift_factor = shift_factor
+        self.encoder_EQ_converted = False
+        self.decoder_EQ_converted = False
 
         if not isinstance(self.shift_factor, float):
             self.shift_factor = 0.0
@@ -328,6 +331,7 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
         self.embed_dim = latent_channels
         self.scaling_factor = scaling_factor
         self.shift_factor = shift_factor
+        self.in_channels = in_channels
 
         if not isinstance(self.shift_factor, float):
             self.shift_factor = 0.0
@@ -344,6 +348,10 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
         self.bn.eval()
 
     def encode(self, x):
+        if self.in_channels == 4 and x.shape[1] == 3: # RGBA vae expects four channels
+            mask = x.new_ones((x.shape[0], 1, x.shape[2], x.shape[3]))
+            x = torch.cat((x, mask), dim=1)
+
         z = self.encoder(x)
 
         if self.quant_conv is not None:
@@ -387,7 +395,8 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
 
             z = rearrange(z, "b c (i pi) (j pj) -> b (c pi pj) i j", pi=2, pj=2)
 
-        z = z * s + m
+        #z = z * s + m
+        z = torch.addcmul(m, z, s)
         z = rearrange(z, "b (c pi pj) i j -> b c (i pi) (j pj)", pi=2, pj=2)
 
         if self.post_quant_conv is not None:

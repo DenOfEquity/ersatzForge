@@ -82,6 +82,11 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             # check for small model
             config["block_out_channels_decoder"] = [96, 192, 384, 384] if state_dict["decoder.conv_in.bias"].shape[0] == 384 else config["block_out_channels"]
 
+            # check for RGBA vae
+            if state_dict["decoder.conv_out.bias"].shape[0] == 4:
+                config["in_channels"] = 4
+                config["out_channels"] = 4
+
             with modeling_utils.no_init_weights():
                 with using_forge_operations(device=memory_management.cpu, computation_dtype=memory_management.vae_dtype(), dtype=memory_management.vae_dtype()):
                     model = AutoencoderKLFlux2.from_config(config)
@@ -99,7 +104,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 out_channels = 3
             else:
                 from backend.nn.vae_wan import AutoencoderKLWan as Wan21VAE
-                out_channels = state_dict["decoder.head.2.bias"].shape[0] # 3 for standard; 12 for spacepxl's x2 upscaling VAE
+                out_channels = state_dict["decoder.head.2.bias"].shape[0] # 3 for standard; 12 for spacepxl's x2 upscaling VAE; 4 for RGBA vae
 
             config = Wan21VAE.load_config(config_path)
             config["out_channels"] = out_channels
