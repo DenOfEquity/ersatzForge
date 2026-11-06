@@ -32,8 +32,8 @@ class ScriptSeed(scripts.ScriptBuiltinUI):
                 reuse_seed = ToolButton("\u267b\ufe0f", elem_id=self.elem_id("reuse_seed"), tooltip="reuse Seed (and Variation) from last generation") # ♻️
 
             with gradio.Row():
-                seed_resize_from_w = gradio.Number(label="Resize from width", value=0, minimum=0, maximum=2048, step=8, precision=0, elem_id=self.elem_id("seed_resize_from_w"))
-                seed_resize_from_h = gradio.Number(label="Resize from height", value=0, minimum=0, maximum=2048, step=8, precision=0, elem_id=self.elem_id("seed_resize_from_h"))
+                seed_resize_from_w = gradio.Number(label="Resize from width", value=0, minimum=0, maximum=8192, step=8, precision=0, elem_id=self.elem_id("seed_resize_from_w"))
+                seed_resize_from_h = gradio.Number(label="Resize from height", value=0, minimum=0, maximum=8192, step=8, precision=0, elem_id=self.elem_id("seed_resize_from_h"))
 
 
         random_seed.click(fn=lambda: (-1, -1), inputs=None, outputs=[self.seed, subseed], show_progress="hidden")
