@@ -17,6 +17,7 @@ stash = {}
 
 def get_weight_and_bias(layer, weight_args=None, bias_args=None, weight_fn=None, bias_fn=None):
     scale_weight = getattr(layer, "scale_weight", None)
+    zero_point = getattr(layer, "weight_zero_point", None)
     patches = getattr(layer, "forge_online_loras", None)
     weight_patches, bias_patches = None, None
 
@@ -35,13 +36,15 @@ def get_weight_and_bias(layer, weight_args=None, bias_args=None, weight_fn=None,
             weight = weight_fn(weight)
         if weight_args is not None:
             weight = weight.to(**weight_args)
+        if zero_point is not None: # subtract, before scaling
+            weight.sub_(zero_point.to(device=weight.device, dtype=weight.dtype))
         if scale_weight is not None:
             try:
                 weight.mul_(scale_weight.to(device=weight.device, dtype=weight.dtype))
             except:
                 weight = weight.to(torch.float32)
                 weight.mul_(scale_weight.to(device=weight.device, dtype=torch.float32))
-                
+
         if weight_patches is not None:
             weight = merge_lora_to_weight(patches=weight_patches, weight=weight, key="online weight lora", computation_dtype=weight.dtype)
 
@@ -149,6 +152,12 @@ class ForgeOperations:
             cls.scale_weight = torch.nn.Parameter(state_dict[prefix + "weight_scale"], requires_grad=False)
             cls.parameters_manual_cast = True
 
+        if prefix + "_weight_zero_point" in state_dict:
+            cls.weight_zero_point = torch.nn.Parameter(state_dict[prefix + "_weight_zero_point"], requires_grad=False)
+            if (cls.weight_zero_point == 0).all():
+                cls.weight_zero_point = None
+            # manual cast will already be set
+
         if cls.__class__.__name__ == "Linear":
             if prefix + "A" in state_dict:
                 cls.A = torch.nn.Parameter(state_dict[prefix + "A"].flatten(start_dim=1), requires_grad=False)
@@ -163,6 +172,7 @@ class ForgeOperations:
             self.current_device = current_device
             self.weight = None
             self.scale_weight = None
+            self.weight_zero_point = None
             self.A = None
             self.bias = None
             self.parameters_manual_cast = False
