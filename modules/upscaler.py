@@ -36,7 +36,7 @@ class Upscaler:
 
         if self.model_path is None and self.name:
             self.model_path = os.path.join(shared.models_path, self.name)   # make unified storage?
-        if self.model_path and not os.path.exists(self.model_path) and create_dirs:
+        if self.model_path and not os.path.isdir(self.model_path) and create_dirs:
             # read-only filesystem can error with os.makedirs even if directory exists
             # (if try to download+save a model, will still error then)
             os.makedirs(self.model_path, exist_ok=True)
@@ -44,18 +44,31 @@ class Upscaler:
     def do_upscale(self, img: Image, selected_model: str):
         return img
 
-    def upscale(self, img: Image, scale, selected_model: str=None):
+    def upscale(self, img: Image, scale, selected_model: str=None, exact=True):
+        # exact set to False when called from modules.images.resize_image (used by hrfix / img2img),
+        # as that function uses target width/height rounded to x8/x16 as required by diffusion model
+        # (avoid potential double application of LANCZOS to reach required size)
+        # I see no reason for Extras to enforce rounding
+
         if shared.state.interrupted:
             return img
 
-        self.scale = scale
-        dest_w = int((img.width * scale) // 8 * 8)
-        dest_h = int((img.height * scale) // 8 * 8)
+        orig_w = img.width
+        orig_h = img.height
+
+        dest_w = int(img.width * scale)
+        dest_h = int(img.height * scale)
 
         img = self.do_upscale(img, selected_model)
+        if img.width == orig_w and img.height == orig_h: # 1x model
+            pass
+        else:
+            while img.width < dest_w or img.height < dest_h:
+                img = self.do_upscale(img, selected_model)
 
-        if img.width != dest_w or img.height != dest_h:
-            img = img.resize((dest_w, dest_h), resample=LANCZOS)
+        if exact:
+            if img.width != dest_w or img.height != dest_h:
+                img = img.resize((dest_w, dest_h), resample=LANCZOS)
 
         return img
 
