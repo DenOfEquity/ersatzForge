@@ -4,9 +4,8 @@ import gradio as gr
 
 from modules import scripts_postprocessing, shared
 from modules.processing import setup_color_correction, apply_color_correction
-
 from modules.ui_components import FormRow, ToolButton, InputAccordion
-from modules.ui import switch_values_symbol
+
 
 upscale_cache = {}
 
@@ -56,7 +55,7 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
                                 upscaling_resize_w = gr.Slider(minimum=64, maximum=8192, step=8, label="Width", value=512, elem_id="extras_upscaling_resize_w")
                                 upscaling_resize_h = gr.Slider(minimum=64, maximum=8192, step=8, label="Height", value=512, elem_id="extras_upscaling_resize_h")
                             with gr.Column(elem_id="upscaling_dimensions_row", scale=1, elem_classes="dimensions-tools"):
-                                upscaling_res_switch_btn = ToolButton(value=switch_values_symbol, elem_id="upscaling_res_switch_btn", tooltip="Switch width/height")
+                                upscaling_res_switch_btn = ToolButton(value="\U000021C5", elem_id="upscaling_res_switch_btn", tooltip="Switch width/height")
                                 upscaling_fit = gr.Dropdown(label="Fit method", value="centre", choices=["left / top", "centre", "right / bottom", "crop"], elem_id="extras_upscaling_crop")
 
         upscaling_res_switch_btn.click(lambda w, h: (h, w), inputs=[upscaling_resize_w, upscaling_resize_h], outputs=[upscaling_resize_w, upscaling_resize_h], show_progress="hidden")
