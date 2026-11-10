@@ -538,9 +538,6 @@ def replace_state_dict(sd, asd, guess):
             "ffn_down":            "mlp.down_proj",
             "ffn_gate":            "mlp.gate_proj",
             "ffn_norm":            "post_attention_layernorm",
-            "token_embd":          "model.embed_tokens",
-            "output_norm":         "model.norm",
-            # "output.weight":       "lm_head.weight",
             "post_attention_norm": "post_attention_layernorm",
 
             "attn_gate":           "linear_attn.in_proj_z",
@@ -552,19 +549,58 @@ def replace_state_dict(sd, asd, guess):
             "ssm_out":             "linear_attn.out_proj",
             "ssm_a":               "linear_attn.A_log",
         }
+
+        # llama.cpp GGUF for qwen3.5 includes several mods/pre-calcs which need undone, one of which is the easy-to-detect conv1d.squeeze(1)
+        # (including extra check for qwen3.5 9b as that's the only size variant used)
+        is_llama_qwen35 = ("blk.0.ssm_conv1d.weight" in asd and asd["blk.0.ssm_conv1d.weight"].ndim == 2 and asd["token_embd.weight"].shape[0] == 248320)
+
         asd_new = {}
         for k, v in asd.items():
-            if "ssm_conv1d" in k and v.ndim == 2:
-                v = v.unsqueeze(1)
             if k == "output.weight":
                 continue
+            elif k == "token_embd.weight":
+                asd_new["model.embed_tokens.weight"] = v
+                continue
+            elif k == "output_norm.weight":
+                if is_llama_qwen35:
+                    asd_new["model.norm.weight"] = v - 1.0 # part 1a
+                else:
+                    asd_new["model.norm.weight"] = v
+                continue
+
+            if is_llama_qwen35: # part 1b
+                if k.endswith(("attn_norm.weight", "attn_q_norm.weight", "attn_k_norm.weight", "post_attention_norm.weight")):
+                    v = v - 1.0
+                elif k.endswith("ssm_conv1d.weight"):
+                    v = v.unsqueeze(1)
+                elif k.endswith("ssm_a"):
+                    v = torch.log(-v)
 
             for s, d in gguf_llm_format.items():
                 k = k.replace(s, d)
             asd_new[k] = v
 
-        # for k in ("model.embed_tokens.weight",):
-            # asd_new[k] = asd_new[k].dequantize_as_pytorch_parameter()
+        if is_llama_qwen35: # part 2 (via https://github.com/city96/ComfyUI-GGUF/pull/490 by billysams21)
+            # V heads were reordered from grouped (by K head) to tiled order, undo it
+            num_k_heads = 16
+            for key in [k for k in asd_new.keys() if k.endswith("linear_attn.A_log")]:
+                prefix = key[:-len("A_log")]
+                num_v_heads = asd_new[key].shape[0]
+                head_v_dim = asd_new[f"{prefix}norm.weight"].shape[0]
+                perm = lambda d: torch.arange(num_v_heads * d).reshape(num_v_heads // num_k_heads, num_k_heads, d).transpose(0, 1).flatten()
+                v_perm = perm(head_v_dim)
+
+                # V is the tail of qkv / conv1d and all of z. Rows can be permuted on quantized data directly
+                for name in ("in_proj_qkv.weight", "conv1d.weight", "in_proj_z.weight"):
+                    t = asd_new[f"{prefix}{name}"]
+                    offset = t.shape[0] - v_perm.shape[0]
+                    t.data = t.data[torch.cat([torch.arange(offset), offset + v_perm])]
+                for name in ("in_proj_a.weight", "in_proj_b.weight", "A_log", "dt_bias"):
+                    t = asd_new[f"{prefix}{name}"]
+                    t.data = t.data[perm(1)]
+                # columns can't be permuted inside quantized blocks
+                asd_new[f"{prefix}out_proj.weight"] = asd_new[f"{prefix}out_proj.weight"].dequantize_as_pytorch_parameter()[:, v_perm]
+
         asd.clear()
         asd = asd_new
 
