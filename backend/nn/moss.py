@@ -13,38 +13,61 @@ def time_embedding(sigma: torch.Tensor, dim: int = 256) -> torch.Tensor:
     return torch.cat((phase.cos(), phase.sin()), dim=-1).to(torch.float32)
 
 
-def rope_table(h: int, w: int, text_len: int, head_dim: int, base: float, device) -> torch.Tensor:
+def rope_table(h: int, w: int, text_len: int, rh: int, rw: int, head_dim: int, base: float, device) -> torch.Tensor:
     """(H*W + T, head_dim): sin then cos of the four axes' phases, image tokens first, in float32."""
     num_bands = head_dim // 8
     bands = 1 / (base ** (torch.arange(num_bands, dtype=torch.float32) / num_bands))
     bands = bands.to(device)
 
-    ids = torch.zeros(h * w + text_len, 4, device=device, dtype=torch.float32)
+    n = h * w + text_len
+    ids = torch.zeros(h * w + rh * rw + text_len, 4, device=device, dtype=torch.float32)
     ids[: h * w, 1] = text_len
     ids[: h * w, 2] = (torch.arange(h, device=device, dtype=torch.float32) - (h - 1) / 2).repeat_interleave(w)
     ids[: h * w, 3] = (torch.arange(w, device=device, dtype=torch.float32) - (w - 1) / 2).repeat(h)
-    ids[h * w :, 1] = torch.arange(text_len, device=device, dtype=torch.float32)
+    ids[h * w :n, 1] = torch.arange(text_len, device=device, dtype=torch.float32)
+
+    if rh > 0 and rw > 0:
+        ref = ids[n:]
+        ref[:, 0] = 1
+        ref[:, 2] = (torch.arange(rh, device=device, dtype=torch.float32) - (rh - 1) / 2).repeat_interleave(rw)
+        ref[:, 3] = (torch.arange(rw, device=device, dtype=torch.float32) - (rw - 1) / 2).repeat(rh)
+
     phase = ids.unsqueeze(-1) * bands
 
     return torch.cat((phase.sin(), phase.cos()), -2).flatten(-2)
 
 
-def rotate(x: torch.Tensor, rope: torch.Tensor) -> torch.Tensor:
-    # x (B, L, H, D), rope (L, D): rotation by halves, in x's dtype (upstream casts the table to the activations')
-    sin, cos = rope.chunk(2, -1)
-    sin = torch.cat((sin, sin), -1)[:, None]
-    cos = torch.cat((cos, cos), -1)[:, None]
-    a, b = x.chunk(2, -1)
-    return x * cos + torch.cat((-b, a), -1) * sin
-
-
-def attention(q, k, v, rope, heads):
+def attention(q, k, v, rope, heads, split=None):
     """q, k, v (B, L, H*D) -> (B, L, H*D), RoPE on q and k, every token attending to every other."""
     shape = (*q.shape[:2], heads, q.shape[-1] // heads)
-    q = rotate(q.reshape(shape), rope).transpose(1, 2)
-    k = rotate(k.reshape(shape), rope).transpose(1, 2)
-    v = v.reshape(shape).transpose(1, 2)
-    return torch.nn.functional.scaled_dot_product_attention(q.to(v.dtype), k.to(v.dtype), v).transpose(1, 2).flatten(2)
+
+    sin, cos = rope.chunk(2, -1)
+
+    q = q.reshape(shape)
+    half = q.shape[-1] // 2
+    _a = q[..., :half].clone()
+    q[..., :half].mul_(cos)
+    q[..., :half].addcmul_(q[..., half:], -sin)
+    q[..., half:].mul_(cos)
+    q[..., half:].addcmul_(_a, sin)
+
+    k = k.reshape(shape)
+    _a = k[..., :half].clone()
+    k[..., :half].mul_(cos)
+    k[..., :half].addcmul_(k[..., half:], -sin)
+    k[..., half:].mul_(cos)
+    k[..., half:].addcmul_(_a, sin)
+    del _a
+
+    v = v.reshape(shape)
+
+    if split:
+        out = torch.empty_like(q)
+        out[:, :split] = torch.nn.functional.scaled_dot_product_attention(q[:, :split].transpose(1, 2).to(v.dtype), k.transpose(1, 2).to(v.dtype), v.transpose(1, 2)).transpose(1, 2)
+        out[:, split:] = torch.nn.functional.scaled_dot_product_attention(q[:, split:].transpose(1, 2).to(v.dtype), k[:, split:].transpose(1, 2).to(v.dtype), v[:, split:].transpose(1, 2)).transpose(1, 2)
+        return out.flatten(2)
+
+    return torch.nn.functional.scaled_dot_product_attention(q.transpose(1, 2).to(v.dtype), k.transpose(1, 2).to(v.dtype), v.transpose(1, 2)).transpose(1, 2).flatten(2)
     #return attention_function(q.to(v.dtype), k.to(v.dtype), v, q.shape[1], skip_reshape=True)
 
 
@@ -74,9 +97,12 @@ class TextBlock(nn.Module):
         q = self.q_norm(q.unflatten(-1, (self.heads, -1))).flatten(2)
         k = self.k_norm(k.unflatten(-1, (self.heads, -1))).flatten(2)
         
-        x = x + self.proj(attention(q, k, v, rope, self.heads))
+        x.add_(self.proj(attention(q, k, v, rope, self.heads)))
+        del q, k, v
+
         y = self.norm2(x)
-        return x + self.ffn_down(situ(self.ffn_up(y), self.ffn_gate(y)))
+        x.add_(self.ffn_down(situ(self.ffn_up(y), self.ffn_gate(y))))
+        return x
 
 
 class TextProjection(nn.Module):
@@ -108,10 +134,19 @@ class Block(nn.Module):
         self.proj["ffn_up_gate"] = nn.Linear(dim, 2 * ffn_dim, bias=False)
         self.proj["ffn_down"] = nn.Linear(ffn_dim, dim, bias=False)
 
-    def forward(self, x, rope, mod, negpip=None):
-        shift_a, scale_a, gate_a, shift_f, scale_f, gate_f = mod
-
-        y = torch.addcmul(shift_a, scale_a, self.norm1(x))
+    def forward(self, x, rope, mod, negpip=None, mod0=None):
+        if mod0 is not None:
+            shift_a, scale_a, gate_a, shift_f, scale_f, gate_f = mod
+            shift_a0, scale_a0, gate_a0, shift_f0, scale_f0, gate_f0, modp = mod0
+            y = self.norm1(x)
+            y[:, :modp] *= scale_a
+            y[:, :modp] += shift_a
+            y[:, modp:] *= scale_a0
+            y[:, modp:] += shift_a0
+        else:
+            shift_a, scale_a, gate_a, shift_f, scale_f, gate_f = mod
+            y = torch.addcmul(shift_a, scale_a, self.norm1(x))
+            modp = None
 
         if self.fused_qkv:
             q, k, v = self.proj["qkv"](y).chunk(3, -1)
@@ -125,15 +160,39 @@ class Block(nn.Module):
 
         if negpip is not None:
             txtlen = len(negpip)
-            v[:, -txtlen:, :] *= negpip[:, None]
+            if modp is not None:
+                v[:, modp-txtlen:modp, :] *= negpip[:, None]
+            else:
+                v[:, -txtlen:, :] *= negpip[:, None]
 
-        out = self.proj["o"](attention(q, k, v, rope, self.heads))
-        x.addcmul_(out, gate_a)
+        out = self.proj["o"](attention(q, k, v, rope, self.heads, modp))
+        del q, k, v
 
-        y = torch.addcmul(shift_f, scale_f, self.norm2(x))
+        if mod0 is not None:
+            out[:, :modp] *= gate_a
+            out[:, modp:] *= gate_a0
+            x.add_(out)
+
+            y = self.norm2(x)
+            y[:, :modp] *= scale_f
+            y[:, :modp] += shift_f
+            y[:, modp:] *= scale_f0
+            y[:, modp:] += shift_f0
+        else:
+            x.addcmul_(out, gate_a)
+            y = torch.addcmul(shift_f, scale_f, self.norm2(x))
 
         hidden, gate = self.proj["ffn_up_gate"](y).chunk(2, -1)
-        x.addcmul_(self.proj["ffn_down"](situ(hidden, gate)), gate_f)
+        del y
+
+        if mod0 is not None:
+            y = self.proj["ffn_down"](situ(hidden, gate))
+            y[:, :modp] *= gate_f
+            y[:, modp:] *= gate_f0
+            x.add_(y)
+        else:
+            x.addcmul_(self.proj["ffn_down"](situ(hidden, gate)), gate_f)
+
         return x
 
 
@@ -165,8 +224,6 @@ class MossImageDiT(nn.Module):
         device = x.device
         dtype = x.dtype
 
-        # context = context.to(device=device, dtype=dtype)
-
         time = self.time_embedding(time_embedding(timestep, self.freq_dim).to(dtype))
         mod = self.shared_block_modulation(time).view(b, 6, -1).to(dtype)
         shift_a, scale_a, gate_a, shift_f, scale_f, gate_f = (m[:, None] for m in mod.unbind(1))
@@ -174,20 +231,42 @@ class MossImageDiT(nn.Module):
         scale_f.add_(1)
         mod = (shift_a, scale_a, gate_a, shift_f, scale_f, gate_f)
 
+        mod0 = None
+        rh = 0
+        rw = 0
+        ref_latents = kwargs.get("ref_latents", None)
+        if ref_latents is not None:
+            rh, rw = ref_latents.shape[-2:]
+            rh //= 2
+            rw //= 2
+            ref = rearrange(ref_latents, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=2, pw=2)
+            ref = self.video_embedder(ref)
+
+            time0 = self.time_embedding(time_embedding(torch.zeros_like(timestep), self.freq_dim).to(dtype))
+            mod0 = self.shared_block_modulation(time0).view(b, 6, -1).to(dtype)
+            shift_a, scale_a, gate_a, shift_f, scale_f, gate_f = (m[:, None] for m in mod0.unbind(1))
+            scale_a.add_(1)
+            scale_f.add_(1)
+            mod0 = (shift_a, scale_a, gate_a, shift_f, scale_f, gate_f, x.shape[1] + context.shape[1])
+
         head = self.video_head_modulation(time).view(b, 2, -1).to(dtype)
 
         image_tokens = h * w
-        rope = rope_table(h, w, context.shape[1], self.dim // self.num_heads, self.rope_base, device).to(dtype)
+        rope = rope_table(h, w, context.shape[1], rh, rw, self.dim // self.num_heads, self.rope_base, device).to(dtype).unsqueeze(1)
         video = self.video_embedder(x)
-        text = self.text_embedder(context, rope[image_tokens:].to(context))
-        tokens = torch.cat((video, text), 1)
+        text = self.text_embedder(context, rope[image_tokens:image_tokens+context.shape[1]].to(context))
+        
+        if ref_latents is not None:
+            tokens = torch.cat((video, text, ref), 1)
+        else:
+            tokens = torch.cat((video, text), 1)
         del video, text
 
         if negpip is not None:
             negpip = negpip[0]
 
         for layer in self.layers:
-            tokens = layer(tokens, rope, mod, negpip)
+            tokens = layer(tokens, rope, mod, negpip, mod0)
 
         out = self.final_norm_video(tokens[:, :image_tokens]) * (1 + head[:, 1, None]) + head[:, 0, None]
         out = self.final_linear_video(out)

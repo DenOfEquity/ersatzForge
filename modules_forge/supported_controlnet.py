@@ -218,6 +218,13 @@ class ReferenceControlLoraPatcher(ControlModelPatcher):
                         prefixes.add(k[:-len(suffix)])
                         break
 
+        elif "diffusion_model.layers.0.proj.ffn_down.lora_A.weight" in controlnet_data: # Moss control lora by thedeoxen
+            for k in controlnet_data.keys():
+                for suffix in [".lora_B.weight", ".lora_up.weight", ".lokr_w1", ".lokr_w1_a"]:
+                    if k.endswith(suffix):
+                        prefixes.add(k[:-len(suffix)])
+                        break
+
         else:
             return None
 
@@ -266,7 +273,33 @@ class ReferenceControlLoraPatcher(ControlModelPatcher):
                 control_info = [[1, 0, 0]]
             control_info = Condition(torch.tensor(control_info, dtype=torch.int8))
 
-        else: # this path never taken at present
+
+            # if not isinstance(cond, list):  # None preprocessor, convert to None (multi-input)
+                # cond = [dict(image=cond, mask=mask)]
+
+            # ref_latents = []
+            # for _c in cond:        
+                # image = _c["image"]
+                # mask = _c["mask"]
+                # print (image.shape)
+
+                # if mask is not None:
+                    # if getattr(process, "inpainting_mask_invert", False):
+                        # mask = 1.0 - mask
+                    # image *= mask
+
+                ## resize
+
+                # ref_latent = images_tensor_to_samples(image.to(devices.device, dtype=devices.dtype_vae), model=process.sd_model)
+            
+                # if process.sd_model.is_cosmos_predict2:
+                    # ref_latent = ref_latent.unsqueeze(2)
+
+                # ref_latents.append(ref_latent)
+
+            # ref_latents = Condition(torch.cat(ref_latents, dim=2))
+
+        else:
             control_info = None
             ref_latent = Condition(ref_latent)
 
