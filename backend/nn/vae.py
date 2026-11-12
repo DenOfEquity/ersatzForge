@@ -295,7 +295,7 @@ class IntegratedAutoencoderKL(torch.nn.Module, ConfigMixin):
         if self.quant_conv is not None:
             z = self.quant_conv(z)
 
-        posterior = DiagonalGaussianDistribution(z)
+        posterior = DiagonalGaussianDistribution(z, deterministic=True)
         return posterior.sample()
 
     def decode(self, z):
@@ -355,7 +355,7 @@ class AutoencoderKLFlux2(torch.nn.Module, ConfigMixin):
         if self.quant_conv is not None:
             z = self.quant_conv(z)
 
-        posterior = DiagonalGaussianDistribution(z)
+        posterior = DiagonalGaussianDistribution(z, deterministic=True)
         z = posterior.sample()
 
         pad_h = z.shape[-2] % 2
