@@ -18,10 +18,17 @@ def append_zero(x):
 
 def get_sigmas_karras(n, sigma_min, sigma_max, rho=7., device='cpu'):
     """Constructs the noise schedule of Karras et al. (2022)."""
+    rho = [rho, 7.0]
     ramp = torch.linspace(0, 1, n)
-    min_inv_rho = sigma_min ** (1 / rho)
-    max_inv_rho = sigma_max ** (1 / rho)
-    sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho)) ** rho
+
+    for r in rho:
+        min_inv_rho = sigma_min ** (1 / r)
+        max_inv_rho = sigma_max ** (1 / r)
+        sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho)) ** r
+        if torch.isfinite(sigmas).all():
+            break
+        print ("[Error - Karras scheduler]: Rho too low - infinite in sigmas, reverting to default.")
+    
     return append_zero(sigmas).to(device)
 
 
@@ -32,9 +39,16 @@ def get_sigmas_exponential(n, sigma_min, sigma_max, device='cpu'):
 
 
 def get_sigmas_polyexponential(n, sigma_min, sigma_max, rho=1., device='cpu'):
-    """Constructs an polynomial in log sigma noise schedule."""
-    ramp = torch.linspace(1, 0, n, device=device) ** rho
-    sigmas = torch.exp(ramp * (math.log(sigma_max) - math.log(sigma_min)) + math.log(sigma_min))
+    """Constructs a polynomial in log sigma noise schedule."""
+    rho = [rho, 1.0]
+    ramp = torch.linspace(1, 0, n, device=device)
+
+    for r in rho:
+        sigmas = torch.exp((ramp ** r) * (math.log(sigma_max) - math.log(sigma_min)) + math.log(sigma_min))
+        if torch.isfinite(sigmas).all():
+            break
+        print ("[Error - polyexponential scheduler]: Rho too low - infinite in sigmas, reverting to default.")
+
     return append_zero(sigmas)
 
 
@@ -131,8 +145,6 @@ class BrownianTreeNoiseSampler:
 
 class TangentialAmplifyingGuidance:
     # https://arxiv.org/abs/2510.04533, https://github.com/hyeon-cho/Tangential-Amplifying-Guidance
-
-    # should be applicable to any sampler
 
     def __init__(self, steps):
         # usage, at start of sampler function: TAG = TangentialAmplifyingGuidance(len(sigmas) - 1)
@@ -674,7 +686,7 @@ def sample_dpmpp_2s_ancestral(model, x, sigmas, extra_args=None, callback=None, 
 
 
 @torch.no_grad()
-def sample_dpmpp_sde(model, x, sigmas, extra_args=None, callback=None, disable=None, eta=1., s_noise=1., noise_sampler=None, r=1 / 2):
+def sample_dpmpp_sde(model, x, sigmas, extra_args=None, callback=None, disable=None, eta=1., s_noise=1., noise_sampler=None, r=0.5):
     """DPM-Solver++ (stochastic)."""
     sigma_min, sigma_max = sigmas[sigmas > 0].min(), sigmas.max()
     noise_sampler = BrownianTreeNoiseSampler(x, sigma_min, sigma_max) if noise_sampler is None else noise_sampler
