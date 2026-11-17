@@ -1,9 +1,11 @@
 from pathlib import Path
-from modules import errors
+from modules import errors, shared
 import csv
+import json
 import os
-import typing
+import re
 import shutil
+import typing
 import modules.processing_scripts.comments as comments
 
 
@@ -17,6 +19,22 @@ class PromptStyle(typing.NamedTuple):
 def apply_styles_to_prompt(prompt, styles):
     prompt = comments.strip_comments(prompt).strip()
 
+    is_json_prompt = False
+    if shared.opts.styles_to_json_caption:
+        match = re.search(r"\{.*\}", prompt, re.DOTALL)
+        if match:
+            json_prompt = match.group(0)
+            
+            index = prompt.find(json_prompt)
+            pre_prompt = prompt[:index]
+            post_prompt = prompt[index+len(json_prompt):]
+            
+            json_prompt = json.loads(json_prompt)
+            if "summary" in json_prompt:
+                if "caption" in json_prompt["summary"]:
+                    is_json_prompt = True
+                    prompt = json_prompt["summary"]["caption"]
+
     for style in styles:
         style = comments.strip_comments(style).strip()
 
@@ -27,7 +45,11 @@ def apply_styles_to_prompt(prompt, styles):
                 prompt += ", "
             prompt += style
 
-    return prompt
+    if is_json_prompt:
+        json_prompt["summary"]["caption"] = prompt
+        return pre_prompt + json.dumps(json_prompt, separators=(",", ":")) + post_prompt
+    else:
+        return prompt
 
 
 def extract_style_text_from_prompt(style_text, prompt):

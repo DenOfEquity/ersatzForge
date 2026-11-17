@@ -212,7 +212,7 @@ options_templates.update(options_section(("optimizations", "Optimizations", "sd"
     "token_merging_ratio_hr": OptionInfo(0.0, "Token merging ratio for high-res pass", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}, infotext="Token merging ratio hr").info("only applies if non-zero and overrides above"),
     "persistent_cond_cache": OptionInfo(True, "Persistent cond cache").info("do not recalculate conds from prompts if prompts have not changed since previous calculation"),
 
-    "qwen2.1_kv_cache": OptionInfo("No cache", "QwenImage2.1 KV Cache location and dtype", gr.Radio, {"choices": ["No cache", "computation dtype", "fp16", "fp8", "computation dtype (CPU)", "fp16 (CPU)", "fp8 (CPU)"]})
+    "qwen2.1_kv_cache": OptionInfo("No cache", "QwenImage2.1 KV Cache location and dtype", gr.Radio, {"choices": ["No cache", "computation dtype", "fp16", "fp8", "computation dtype (CPU)", "fp16 (CPU)", "fp8 (CPU)"]}).info("caution: can use lots of memory"),
 }))
 
 options_templates.update(options_section(("compatibility", "Compatibility", "sd"), {
@@ -242,6 +242,9 @@ options_templates.update(options_section(("extra_networks", "Extra Networks", "s
     "extra_networks_tree_view_default_enabled": OptionInfo(True, "Show the Extra Networks directory view by default").needs_reload_ui(),
     "extra_networks_tree_view_default_width": OptionInfo(180, "Default width for the Extra Networks directory tree view", gr.Number).needs_reload_ui(),
     "textual_inversion_print_at_load": OptionInfo(False, "Print a list of Textual Inversion embeddings when loading model"),
+
+    "styles_to_json_caption": OptionInfo(False, "Apply Styles to summary caption in JSON prompts. Irrelevant to standard prompts."),
+
 }))
 
 options_templates.update(options_section(("ui_prompt_editing", "Prompt editing", "ui"), {
