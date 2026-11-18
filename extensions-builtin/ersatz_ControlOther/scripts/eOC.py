@@ -235,42 +235,61 @@ class ersatzOtherControl(scripts.Script):
                         k2_image.background.change(fn=get_dims, inputs=[k2_image.background, selected_tab], outputs=[k2_image_info, k2_image_send, k2_image_dims], show_progress="hidden")
                         k2_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, k2_image_dims], outputs=None)
 
+                with gradio.Tab("Inject") as inject:
+                    gradio.Markdown("**mask out** unwanted areas of the image (e.g. background, watermark)")
+                    with gradio.Row():
+                        with gradio.Column():
+                            inject_image = ForgeCanvas(height=300, contrast_scribbles=True, scribble_alpha=50)
+                            with gradio.Row():
+                                inject_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
+                                inject_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
+                                inject_image_dims = gradio.Textbox(visible=False, value="0", interactive=False)
+                        with gradio.Column():
+                            inject_blend = gradio.Dropdown(choices=["basic", "phase"], value="phase", label="Blend type")
+                            inject_str = gradio.Slider(value=0.5, minimum=0.0, maximum=1.0, step=0.01, label="Inject strength")
+
+                        inject_image.background.change(fn=get_dims, inputs=[inject_image.background, selected_tab], outputs=[inject_image_info, inject_image_send, inject_image_dims], show_progress="hidden")
+                        inject_image_send.click(fn=None, js="eOC_set_dimensions", inputs=[tab_id, inject_image_dims], outputs=None)
+
 
             fkon.select( fn=lambda: 0, inputs=None, outputs=selected_tab, show_progress="hidden")
             klein.select(fn=lambda: 1, inputs=None, outputs=selected_tab, show_progress="hidden")
             zitc.select( fn=lambda: 2, inputs=None, outputs=selected_tab, show_progress="hidden")
             krea2.select(fn=lambda: 3, inputs=None, outputs=selected_tab, show_progress="hidden")
+            inject.select(fn=lambda: 4, inputs=None, outputs=selected_tab, show_progress="hidden")
 
         self.infotext_fields = [
             (enabled,  lambda d: d.get("eOC_enabled", False)),
-            (z_version,  "z_version"),
-            (z_mask_mode,  "zitc_mask_mode"),
-            (z_strength,  "zitc_strength"),
-            (z_stop, "zitc_stop"),
+            (z_version,      "z_version"),
+            (z_mask_mode,    "zitc_mask_mode"),
+            (z_strength,     "zitc_strength"),
+            (z_stop,         "zitc_stop"),
             (kontext_sizing, "kontext_sizing"),
             (kontext_reduce, "kontext_reduce"),
             (klein_1_resize, "klein_1_resize"),
             (klein_2_resize, "klein_2_resize"),
             (klein_3_resize, "klein_3_resize"),
             (klein_4_resize, "klein_4_resize"),
-            (klein_1_str, "klein_1_str"),
-            (klein_2_str, "klein_2_str"),
-            (klein_3_str, "klein_3_str"),
-            (klein_4_str, "klein_4_str"),
-            (k2_strength,  "k2_strength"),
-            (k2_start,     "k2_start"),
-            (k2_stop,      "k2_stop"),
-            (k2_resize,    "k2_resize"),
-            (k2_mask_mode, "k2_mask_mode"),
-            (k2_fidelity,  "k2_fidelity"),
-            (k2_edit_type, "k2_edit_type")
+            (klein_1_str,    "klein_1_str"),
+            (klein_2_str,    "klein_2_str"),
+            (klein_3_str,    "klein_3_str"),
+            (klein_4_str,    "klein_4_str"),
+            (k2_strength,    "k2_strength"),
+            (k2_start,       "k2_start"),
+            (k2_stop,        "k2_stop"),
+            (k2_resize,      "k2_resize"),
+            (k2_mask_mode,   "k2_mask_mode"),
+            (k2_fidelity,    "k2_fidelity"),
+            (k2_edit_type,   "k2_edit_type"),
+            (inject_blend,   "inject_blend"),
+            (inject_str,     "inject_str")
         ]
 
-        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image.background, k2_image.foreground, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity, k2_edit_type
+        return enabled, selected_tab, z_image.background, z_image.foreground, z_version, z_mask_mode, z_strength, z_stop, k_image1, k_image2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image.background, k2_image.foreground, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity, k2_edit_type, inject_image.background, inject_image.foreground, inject_blend, inject_str
 
 
     def process(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity, k2_edit_type = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity, k2_edit_type, inject_image, inject_mask, inject_blend, inject_str = script_args
         if enabled:
             if selected_tab == 0 and (kontext_1 is not None or kontext_2 is not None) and params.sd_model.is_flux:
                 params.extra_generation_params.update(dict(
@@ -329,6 +348,12 @@ class ersatzOtherControl(scripts.Script):
                         params.extra_generation_params.update(dict(
                             k2_fidelity = k2_fidelity,
                         ))
+            elif selected_tab == 4 and inject_image is not None and inject_str > 0.0:
+                params.extra_generation_params.update(dict(
+                    eOC_enabled   = enabled,
+                    inject_blend  = inject_blend,
+                    inject_str    = inject_str,
+                ))
         else:
             IntegratedFluxTransformer2DModel.forward = ersatzOtherControl.original_kontext_forward
             shared.klein_image_hash = 0
@@ -338,11 +363,11 @@ class ersatzOtherControl(scripts.Script):
 
 
     def process_before_every_sampling(self, params, *script_args, **kwargs):
-        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity, k2_edit_type = script_args
+        enabled, selected_tab, z_image, z_mask, z_version, z_mask_mode, z_strength, z_stop, kontext_1, kontext_2, kontext_sizing, kontext_reduce, klein_1, klein_2, klein_3, klein_4, klein_1_resize, klein_2_resize, klein_3_resize, klein_4_resize, klein_1_str, klein_2_str, klein_3_str, klein_4_str, k2_image, k2_mask, k2_resize, k2_mask_mode, k2_strength, k2_start, k2_stop, k2_fidelity, k2_edit_type, inject_image, inject_mask, inject_blend, inject_str = script_args
 
         if not enabled:
             return
-        if params.iteration > 0:    # batch count
+        if params.iteration > 0 and selected_tab != 4:    # batch count
             # setup done on iteration 0
             return
 
@@ -687,6 +712,51 @@ class ersatzOtherControl(scripts.Script):
             setattr(global_variables, "krea2_control_lora_start_sigma", k2_start)
             setattr(global_variables, "krea2_control_lora_stop_sigma", k2_stop)
             setattr(global_variables, "krea2_control_lora_type", k2_edit_type)
+
+        elif selected_tab == 4 and inject_image is not None and inject_str > 0.0:
+            k_width = params.width
+            k_height = params.height
+
+            if isinstance (inject_mask, str):
+                inject_mask = decode_base64_to_image(inject_mask)
+            inject_mask = inject_mask.getchannel("A").convert("L")
+            inject_mask = inject_mask.point(lambda v: 0 if v > 128 else 1) # mask out
+            inject_mask = torch.tensor(numpy.array(inject_mask)).unsqueeze(0).unsqueeze(0)
+            inject_mask = adaptive_resize(inject_mask.to(torch.float32), w, h, "adaptive_avgpool", "center")
+
+            source_latent = pil_to_latent(inject_image, k_width, k_height, 1, "Image Inject", mask=None).to(torch.float32)
+            noise_latent = x.to(torch.float32)
+
+            match inject_blend:
+                case "phase":
+                    src_fft = torch.fft.fft2(source_latent, dim=(-2, -1))
+                    noise_fft = torch.fft.fft2(noise_latent, dim=(-2, -1))
+
+                    src_phase = torch.angle(src_fft)
+                    noise_phase = torch.angle(noise_fft)
+
+                    src_phase = torch.atan2(torch.sin(src_phase), torch.cos(src_phase))
+                    noise_phase = torch.atan2(torch.sin(noise_phase), torch.cos(noise_phase))
+
+                    # blended_phase = noise_phase + inject_str * (src_phase - noise_phase)
+
+                    phase_diff = src_phase - noise_phase
+                    phase_diff = torch.atan2(torch.sin(phase_diff), torch.cos(phase_diff))
+                    blended_phase = noise_phase + inject_str * phase_diff
+
+                    blended_phase = torch.atan2(torch.sin(blended_phase), torch.cos(blended_phase))
+
+                    noise_amp = torch.abs(noise_fft)
+                    blended_fft = noise_amp * torch.exp(1j * blended_phase)
+
+                    blended_latent = torch.fft.ifft2(blended_fft, dim=(-2, -1)).real.to(x)
+                    blended_latent = x + inject_mask.to(x) * (blended_latent.to(x) - x)
+                case _:
+                    blended_latent = torch.lerp(noise_latent, source_latent, inject_str)
+                    blended_latent = x + inject_mask.to(x) * (blended_latent.to(x) - x)
+
+
+            kwargs["x"].copy_(blended_latent)
 
         return
 
