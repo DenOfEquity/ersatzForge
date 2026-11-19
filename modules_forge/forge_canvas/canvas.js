@@ -266,7 +266,7 @@ class ForgeCanvas {
                     const rect = drawingCanvas.getBoundingClientRect();
                     this.drawing = true;
                     drawingCanvas.style.cursor = "crosshair";
-                    this.temp_draw_points = [[(e.clientX - rect.left) / this.imgScale, (e.clientY - rect.top) / this.imgScale]];
+                    this.temp_draw_points = [];
                     this.temp_draw_bg = drawContext.getImageData(0, 0, drawingCanvas.width, drawingCanvas.height);
                     this.handleDraw(e);
                 }
@@ -476,8 +476,13 @@ class ForgeCanvas {
         ctx.beginPath();
         ctx.moveTo(this.temp_draw_points[0][0], this.temp_draw_points[0][1]);
 
-        for (let i = 1; i < this.temp_draw_points.length; i++) {
-            ctx.lineTo(this.temp_draw_points[i][0], this.temp_draw_points[i][1]);
+        if (this.temp_draw_points.length === 1) {
+            ctx.arc(x, y, 1, 0, Math.PI * 2);
+        }
+        else {
+            for (let i = 1; i < this.temp_draw_points.length; i++) {
+                ctx.lineTo(this.temp_draw_points[i][0], this.temp_draw_points[i][1]);
+            }
         }
 
         ctx.lineCap = "round";
