@@ -144,6 +144,10 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
 
         if discard_next_to_last_sigma:
             sigmas = torch.cat([sigmas[:-2], sigmas[-1:]])
+        
+        if opts.sigma_scaling != 1.0:
+            sigmas *= opts.sigma_scaling
+            p.extra_generation_params["Sigma scaling"] = opts.sigma_scaling
 
         return sigmas.cpu()
 
