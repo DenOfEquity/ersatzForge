@@ -799,6 +799,8 @@ class ForgeCanvas {
             this.maxButton.innerText = "➖";
             this.maximized = true;
         }
+        this.adjustInitialPositionAndScale();
+        this.drawImage();
     }
     
     toggleEraser() {
