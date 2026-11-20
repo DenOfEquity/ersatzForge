@@ -239,7 +239,7 @@ class ersatzOtherControl(scripts.Script):
                     gradio.Markdown("**mask out** unwanted areas of the image (e.g. background, watermark)")
                     with gradio.Row():
                         with gradio.Column():
-                            inject_image = ForgeCanvas(height=300, contrast_scribbles=True, scribble_alpha=50)
+                            inject_image = ForgeCanvas(height=300, scribble_color="#ff00ff", scribble_color_fixed=True, scribble_alpha=100, scribble_softness_fixed=True)
                             with gradio.Row():
                                 inject_image_info = gradio.Textbox(value="", show_label=False, interactive=False, max_lines=1)
                                 inject_image_send = ToolButton(value="\U0001F4D0", interactive=False, variant="tertiary")
@@ -720,9 +720,10 @@ class ersatzOtherControl(scripts.Script):
             if isinstance (inject_mask, str):
                 inject_mask = decode_base64_to_image(inject_mask)
             inject_mask = inject_mask.getchannel("A").convert("L")
-            inject_mask = inject_mask.point(lambda v: 0 if v > 128 else 1) # mask out
-            inject_mask = torch.tensor(numpy.array(inject_mask)).unsqueeze(0).unsqueeze(0)
-            inject_mask = adaptive_resize(inject_mask.to(torch.float32), w, h, "adaptive_avgpool", "center")
+            # inject_mask = inject_mask.point(lambda v: 0 if v > 128 else 1) # mask out
+            inject_mask = torch.tensor(numpy.array(inject_mask)).unsqueeze(0).unsqueeze(0).to(torch.float32)
+            inject_mask = 1.0 - (inject_mask / 255.0)
+            inject_mask = adaptive_resize(inject_mask, w, h, "adaptive_avgpool", "center")
 
             source_latent = pil_to_latent(inject_image, k_width, k_height, 1, "Image Inject", mask=None).to(torch.float32)
             noise_latent = x.to(torch.float32)
