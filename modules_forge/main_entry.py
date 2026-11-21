@@ -436,10 +436,10 @@ def on_preset_change(preset=None):
                 gr.update(visible=False) if codes[0] == "None" else gr.update(visible=True, value=int(codes[0])),   # ui_clip_skip
                 gr.skip(),  #storage type
                 gr.update(visible=False, value=0) if codes[1] == "None" else gr.update(visible=True, value=int(codes[1])),   # mem
-                gr.skip() if codes[2] == "0" else gr.update(value=int(codes[2]), step=step),
-                gr.skip() if codes[2] == "0" else gr.update(value=int(codes[2]), step=step),
-                gr.skip() if codes[3] == "0" else gr.update(value=int(codes[3]), step=step),
-                gr.skip() if codes[3] == "0" else gr.update(value=int(codes[3]), step=step),
+                gr.update(step=step) if codes[2] == "0" else gr.update(value=int(codes[2]), step=step),
+                gr.update(step=step) if codes[2] == "0" else gr.update(value=int(codes[2]), step=step),
+                gr.update(step=step) if codes[3] == "0" else gr.update(value=int(codes[3]), step=step),
+                gr.update(step=step) if codes[3] == "0" else gr.update(value=int(codes[3]), step=step),
                 gr.update(visible=False, value=1.0) if codes[4] == "None" else gr.update(visible=True, value=float(codes[4])), #cfg t2i
                 gr.update(visible=False, value=1.0) if codes[4] == "None" else gr.update(visible=True, value=float(codes[4])), #cfg i2i
                 gr.update(visible=False, value=0.0) if codes[5] == "None" else gr.update(visible=True, value=float(codes[5])), #dcfg t2i
@@ -522,10 +522,10 @@ shared.options_templates.update(shared.options_section(("ui_sd", "UI defaults 's
     "sd_i2i_width":  shared.OptionInfo(512,  "img2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd_i2i_height": shared.OptionInfo(512,  "img2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "sd_i2i_cfg":    shared.OptionInfo(7,    "img2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
+    "sd_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
     "sd_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
     "sd_vae_te":     shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": module_display}),
     "sd_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
-    "sd_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
 shared.options_templates.update(shared.options_section(("ui_xl", "UI defaults 'xl'", "ui"), {
     "xl_t2i_width":  shared.OptionInfo(896,  "txt2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
@@ -535,10 +535,10 @@ shared.options_templates.update(shared.options_section(("ui_xl", "UI defaults 'x
     "xl_i2i_width":  shared.OptionInfo(1024, "img2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "xl_i2i_height": shared.OptionInfo(1024, "img2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 8}),
     "xl_i2i_cfg":    shared.OptionInfo(5,    "img2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
+    "xl_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
     "xl_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
     "xl_vae_te":     shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": module_display}),
     "xl_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
-    "xl_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
 shared.options_templates.update(shared.options_section(("ui_sd3", "UI defaults 'sd3'", "ui"), {
     "sd3_t2i_width":  shared.OptionInfo(896,  "txt2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 16}),
@@ -548,10 +548,10 @@ shared.options_templates.update(shared.options_section(("ui_sd3", "UI defaults '
     "sd3_i2i_width":  shared.OptionInfo(1024, "img2img width",      gr.Slider, {"minimum": 256, "maximum": 4096, "step": 16}),
     "sd3_i2i_height": shared.OptionInfo(1024, "img2img height",     gr.Slider, {"minimum": 256, "maximum": 4096, "step": 16}),
     "sd3_i2i_cfg":    shared.OptionInfo(5,    "img2img CFG",        gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
+    "sd3_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
     "sd3_GPU_MB":     shared.OptionInfo(0,    "Reserve VRAM (MB)",  gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
     "sd3_vae_te":     shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": module_display}),
     "sd3_unet_dtype": shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
-    "sd3_steps":      shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
 shared.options_templates.update(shared.options_section(("ui_flux", "UI defaults 'flux'", "ui"), {
     "flux_t2i_width":    shared.OptionInfo(896,  "txt2img width",                gr.Slider, {"minimum": 256, "maximum": 4096, "step": 16}),
@@ -564,8 +564,8 @@ shared.options_templates.update(shared.options_section(("ui_flux", "UI defaults 
     "flux_i2i_height":   shared.OptionInfo(1024, "img2img height",               gr.Slider, {"minimum": 256, "maximum": 4096, "step": 16}),
     "flux_i2i_cfg":      shared.OptionInfo(1,    "img2img CFG",                  gr.Slider, {"minimum": 1,   "maximum": 30,   "step": 0.1}),
     "flux_i2i_d_cfg":    shared.OptionInfo(3.5,  "img2img Distilled CFG",        gr.Slider, {"minimum": 0,   "maximum": 30,   "step": 0.1}),
+    "flux_steps":        shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
     "flux_GPU_MB":       shared.OptionInfo(0,    "Reserve VRAM (MB)",            gr.Slider, {"minimum": 0,   "maximum": total_vram,   "step": 1}),
     "flux_vae_te":       shared.OptionInfo([""], "Additional modules", gr.Dropdown,{"multiselect": True, "choices": module_display}),
     "flux_unet_dtype":   shared.OptionInfo("Automatic", "Diffusion in Low Bits", gr.Dropdown, {"choices": list(forge_unet_storage_dtype_options.keys())}),
-    "flux_steps":        shared.OptionInfo(20,   "Sampling steps",     gr.Slider, {"minimum": 1,   "maximum": 100,   "step": 1}),
 }))
