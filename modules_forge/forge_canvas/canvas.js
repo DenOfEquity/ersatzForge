@@ -101,7 +101,7 @@ class ForgeCanvas {
         this.container = document.getElementById(`container_${this.uuid}`);
 
         const imageContainer = document.getElementById(`imageContainer_${this.uuid}`);
-        const drawingCanvas = document.getElementById(`drawingCanvas_${this.uuid}`);
+        this.drawingCanvas = document.getElementById(`drawingCanvas_${this.uuid}`);
         const toolbar = document.getElementById(`toolbar_${this.uuid}`);
 
         this.maxButton = document.getElementById(`maxButton_${this.uuid}`);
@@ -137,11 +137,11 @@ class ForgeCanvas {
         this.scribbleIndicator.style.height = `${indicatorSize}px`;
 
         this.container.style.height = `${this.initial_height}px`;
-        drawingCanvas.width = imageContainer.clientWidth;
-        drawingCanvas.height = imageContainer.clientHeight;
+        this.drawingCanvas.width = imageContainer.clientWidth;
+        this.drawingCanvas.height = imageContainer.clientHeight;
 
-        const drawContext = drawingCanvas.getContext("2d", { willReadFrequently: true });
-        drawingCanvas.style.cursor = "crosshair";
+        this.drawContext = this.drawingCanvas.getContext("2d", { willReadFrequently: true });
+        this.drawingCanvas.style.cursor = "crosshair";
 
         this.has_focus = false;
 
@@ -174,8 +174,8 @@ class ForgeCanvas {
             tempCtx.fillStyle = "#000000";
             tempCtx.fillRect(size, 0, size, size);
             tempCtx.fillRect(0, size, size, size);
-            this.contrast_pattern = drawContext.createPattern(tempCanvas, "repeat");
-            drawingCanvas.style.opacity = "0.5";
+            this.contrast_pattern = this.drawContext.createPattern(tempCanvas, "repeat");
+            this.drawingCanvas.style.opacity = "0.5";
         }
 
         this.maxButton.addEventListener("click", () => {
@@ -250,7 +250,7 @@ class ForgeCanvas {
                 this.dragging = true;
                 this.offsetX = x - this.imgX;
                 this.offsetY = y - this.imgY;
-                drawingCanvas.style.cursor = "grabbing";
+                this.drawingCanvas.style.cursor = "grabbing";
                 this.scribbleIndicator.style.display = "none";
             }
             else if (e.button === 1 && this.img) { // middle-click: center 
@@ -263,11 +263,11 @@ class ForgeCanvas {
                     document.getElementById(`imageInput_${this.uuid}`).click();
                 }
                 else if (this.img && !this.no_scribbles) {
-                    const rect = drawingCanvas.getBoundingClientRect();
+                    const rect = this.drawingCanvas.getBoundingClientRect();
                     this.drawing = true;
-                    drawingCanvas.style.cursor = "crosshair";
+                    this.drawingCanvas.style.cursor = "crosshair";
                     this.temp_draw_points = [];
-                    this.temp_draw_bg = drawContext.getImageData(0, 0, drawingCanvas.width, drawingCanvas.height);
+                    this.temp_draw_bg = this.drawContext.getImageData(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
                     this.handleDraw(e);
                 }
             }
@@ -299,7 +299,7 @@ class ForgeCanvas {
             if (this.dragging) {
                 this.dragging = false;
             }
-            drawingCanvas.style.cursor = (this.no_scribbles) ? "" : "crosshair";
+            this.drawingCanvas.style.cursor = (this.no_scribbles) ? "" : "crosshair";
             if (this.img && !this.no_scribbles) this.scribbleIndicator.style.display = "inline-block";
         });
 
@@ -385,7 +385,7 @@ class ForgeCanvas {
                 e.preventDefault();
                 e.stopPropagation();
                 imageContainer.style.cursor = "pointer";
-                drawingCanvas.style.cursor = "crosshair";
+                this.drawingCanvas.style.cursor = "crosshair";
                 const dt = e.dataTransfer;
                 const files = dt.files;
                 if (files.length > 0) {
@@ -465,62 +465,61 @@ class ForgeCanvas {
     }
 
     handleDraw(e) {
-        const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-        const ctx = canvas.getContext("2d");
-        const rect = canvas.getBoundingClientRect();
+        const drawContext = this.drawContext;
+        const rect = this.drawingCanvas.getBoundingClientRect();
         const x = (e.clientX - rect.left) / this.imgScale;
         const y = (e.clientY - rect.top) / this.imgScale;
 
         this.temp_draw_points.push([x, y]);
-        ctx.putImageData(this.temp_draw_bg, 0, 0);
-        ctx.beginPath();
-        ctx.moveTo(this.temp_draw_points[0][0], this.temp_draw_points[0][1]);
+        drawContext.putImageData(this.temp_draw_bg, 0, 0);
+        drawContext.beginPath();
+        drawContext.moveTo(this.temp_draw_points[0][0], this.temp_draw_points[0][1]);
 
         if (this.temp_draw_points.length === 1) {
-            ctx.arc(x, y, 1, 0, Math.PI * 2);
+            drawContext.arc(x, y, 1, 0, Math.PI * 2);
         }
         else {
             for (let i = 1; i < this.temp_draw_points.length; i++) {
-                ctx.lineTo(this.temp_draw_points[i][0], this.temp_draw_points[i][1]);
+                drawContext.lineTo(this.temp_draw_points[i][0], this.temp_draw_points[i][1]);
             }
         }
 
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.lineWidth = Math.max(1, (this.scribbleWidth / this.imgScale) * 20);
+        drawContext.lineCap = "round";
+        drawContext.lineJoin = "round";
+        drawContext.lineWidth = Math.max(1, (this.scribbleWidth / this.imgScale) * 20);
 
         if (this.erasing) {
-            ctx.globalCompositeOperation = "destination-out";
+            drawContext.globalCompositeOperation = "destination-out";
         }
         else {
-            ctx.globalCompositeOperation = "source-over";
+            drawContext.globalCompositeOperation = "source-over";
         }
 
         if (this.contrast_scribbles) {
-            ctx.strokeStyle = this.contrast_pattern;
-            ctx.stroke();
+            drawContext.strokeStyle = this.contrast_pattern;
+            drawContext.stroke();
             return;
         }
 
-        ctx.strokeStyle = this.scribbleColor;
+        drawContext.strokeStyle = this.scribbleColor;
 
         if (this.scribbleSoftness <= 0) {
-            ctx.globalAlpha = this.scribbleAlpha / 100;
-            ctx.stroke();
+            drawContext.globalAlpha = this.scribbleAlpha / 100;
+            drawContext.stroke();
             return;
         }
 
-        const outerWidth = ctx.lineWidth;
-        ctx.lineWidth *= (1 - this.scribbleSoftness / 100);
-        const innerWidth = ctx.lineWidth * (1 - this.scribbleSoftness / 100);
+        const outerWidth = drawContext.lineWidth;
+        drawContext.lineWidth *= (1 - this.scribbleSoftness / 100);
+        const innerWidth = drawContext.lineWidth * (1 - this.scribbleSoftness / 100);
         const stepWidth = Math.max(1, (outerWidth - innerWidth) / 24);
         const steps = (outerWidth - innerWidth) / stepWidth;
 
-        ctx.globalAlpha = 1.0 - Math.pow(1.0 - Math.min(this.scribbleAlpha / 100, 0.95), 1 / steps);
+       drawContext.globalAlpha = 1.0 - Math.pow(1.0 - Math.min(this.scribbleAlpha / 100, 0.95), 1 / steps);
 
         for (let i = 0; i < steps; i++) {
-            ctx.lineWidth = innerWidth + stepWidth * i;
-            ctx.stroke();
+            drawContext.lineWidth = innerWidth + stepWidth * i;
+            drawContext.stroke();
         }
     }
 
@@ -558,9 +557,8 @@ class ForgeCanvas {
             this.img = base64;
             this.orgWidth = image.width;
             this.orgHeight = image.height;
-            const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-            canvas.width = image.width;
-            canvas.height = image.height;
+            this.drawingCanvas.width = image.width;
+            this.drawingCanvas.height = image.height;
             this.adjustInitialPositionAndScale();
             this.drawImage();
             this.updateBackgroundImageData();
@@ -575,30 +573,27 @@ class ForgeCanvas {
         }
         else {
             this.img = null;
-            const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-            canvas.width = 1;
-            canvas.height = 1;
+            this.drawingCanvas.width = 1;
+            this.drawingCanvas.height = 1;
             this.adjustInitialPositionAndScale();
             this.drawImage();
             this.updateUndoRedoButtons();
         }
+        this.history = [];
+        this.historyIndex = -1;
     }
 
     loadDrawing(base64) {
         const image = new Image();
         image.onload = () => {
-            const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-            const ctx = canvas.getContext("2d");
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(image, 0, 0);
+            this.drawContext.clearRect(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
+            this.drawContext.drawImage(image, 0, 0);
             this.saveState();
         };
         if (base64) {
             image.src = base64;
         } else {
-            const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-            const ctx = canvas.getContext("2d");
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            this.drawContext.clearRect(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
             this.updateUndoRedoButtons();
         }
     }
@@ -611,7 +606,6 @@ class ForgeCanvas {
 
     drawImage() {
         const image = document.getElementById(`image_${this.uuid}`);
-        const drawingCanvas = document.getElementById(`drawingCanvas_${this.uuid}`);
         if (this.img) {
             const scaledWidth = this.orgWidth * this.imgScale;
             const scaledHeight = this.orgHeight * this.imgScale;
@@ -621,10 +615,10 @@ class ForgeCanvas {
             image.style.left = `${this.imgX}px`;
             image.style.top = `${this.imgY}px`;
             image.style.display = "block";
-            drawingCanvas.style.width = `${scaledWidth}px`;
-            drawingCanvas.style.height = `${scaledHeight}px`;
-            drawingCanvas.style.left = `${this.imgX}px`;
-            drawingCanvas.style.top = `${this.imgY}px`;
+            this.drawingCanvas.style.width = `${scaledWidth}px`;
+            this.drawingCanvas.style.height = `${scaledHeight}px`;
+            this.drawingCanvas.style.left = `${this.imgX}px`;
+            this.drawingCanvas.style.top = `${this.imgY}px`;
         } else {
             image.src = "";
             image.style.display = "none";
@@ -645,9 +639,7 @@ class ForgeCanvas {
 
     resetImage() {
         if (this.img) {
-            const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-            const ctx = canvas.getContext("2d");
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            this.drawContext.clearRect(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
             this.adjustInitialPositionAndScale();
             this.drawImage();
             this.saveState();
@@ -657,14 +649,10 @@ class ForgeCanvas {
     removeImage() {
         this.img = null;
         const image = document.getElementById(`image_${this.uuid}`);
-        const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-        const ctx = canvas.getContext("2d");
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        this.drawContext.clearRect(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
         image.src = "";
         image.style.width = "0";
         image.style.height = "0";
-        this.history = [];
-        this.historyIndex = -1;
         if (!this.no_upload) {
             document.getElementById(`uploadHint_${this.uuid}`).style.display = "inline-block";
         }
@@ -673,9 +661,7 @@ class ForgeCanvas {
     }
 
     saveState() {
-        const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-        const ctx = canvas.getContext("2d");
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const imageData = this.drawContext.getImageData(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
         const currentImageData = this.history[this.historyIndex];
 
         let save = false;
@@ -713,10 +699,8 @@ class ForgeCanvas {
     }
 
     restoreState() {
-        const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-        const ctx = canvas.getContext("2d");
         const imageData = this.history[this.historyIndex];
-        ctx.putImageData(imageData, 0, 0);
+        this.drawContext.putImageData(imageData, 0, 0);
         this.updateDrawingData();
         this.updateUndoRedoButtons();
     }
@@ -764,8 +748,7 @@ class ForgeCanvas {
             this.foreground_gradio_bind.set_value("");
             return;
         }
-        const canvas = document.getElementById(`drawingCanvas_${this.uuid}`);
-        const dataUrl = canvas.toDataURL("image/png");
+        const dataUrl = this.drawingCanvas.toDataURL("image/png");
         this.foreground_gradio_bind.set_value(dataUrl);
     }
 
