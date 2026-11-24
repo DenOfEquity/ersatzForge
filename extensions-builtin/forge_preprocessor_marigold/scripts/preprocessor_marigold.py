@@ -1,9 +1,9 @@
 from modules_forge.supported_preprocessor import Preprocessor, PreprocessorParameter
-from modules_forge.shared import add_supported_preprocessor
+from modules_forge.shared import add_supported_preprocessor, diffusers_dir
 from backend.memory_management import get_torch_device, should_use_fp16
 
 import torch
-import numpy as np
+import numpy
 
 from diffusers import MarigoldDepthPipeline, MarigoldNormalsPipeline
 
@@ -32,8 +32,7 @@ class PreprocessorMarigoldDepth(Preprocessor):
         device = get_torch_device()
         if self.pipeline is None:
             dtype = torch.float16 if should_use_fp16(device=device, prioritize_performance=False, manual_cast=True) else torch.float32
-            self.pipeline = MarigoldDepthPipeline.from_pretrained("prs-eth/marigold-depth-v1-1", variant="fp16", torch_dtype=torch.float16)
-            self.pipeline.unet.enable_layerwise_casting(storage_dtype=torch.float16, compute_dtype=dtype)
+            self.pipeline = MarigoldDepthPipeline.from_pretrained("prs-eth/marigold-depth-v1-1", variant="fp16", dtype=dtype, local_files_only=True, cache_dir=diffusers_dir)
             self.pipeline.enable_model_cpu_offload()
 
         return
@@ -58,7 +57,7 @@ class PreprocessorMarigoldDepth(Preprocessor):
             self.pipeline = None
         torch.cuda.empty_cache()
 
-        return np.array(depth_image[0])
+        return numpy.array(depth_image[0])
 
 
 class PreprocessorMarigoldNormal(Preprocessor):
@@ -85,7 +84,7 @@ class PreprocessorMarigoldNormal(Preprocessor):
         device = get_torch_device()
         if self.pipeline is None:
             dtype = torch.float16 if should_use_fp16(device=device, prioritize_performance=False, manual_cast=True) else torch.float32
-            self.pipeline = MarigoldNormalsPipeline.from_pretrained("prs-eth/marigold-normals-v1-1", variant="fp16", torch_dtype=dtype)
+            self.pipeline = MarigoldNormalsPipeline.from_pretrained("prs-eth/marigold-normals-v1-1", variant="fp16", dtype=dtype, local_files_only=True, cache_dir=diffusers_dir)
             self.pipeline.enable_model_cpu_offload()
 
         return
@@ -109,7 +108,7 @@ class PreprocessorMarigoldNormal(Preprocessor):
             self.pipeline = None
         torch.cuda.empty_cache()
 
-        return np.array(normal_image[0])
+        return numpy.array(normal_image[0])
 
 
 add_supported_preprocessor(PreprocessorMarigoldDepth())
