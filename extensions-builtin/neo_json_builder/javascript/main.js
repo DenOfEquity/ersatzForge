@@ -93,6 +93,7 @@ onUiLoaded(() => {
     const resolutionSection = h("div", { class: "jb-row" }, [getHWBtn, h("label", {}, ["Width"]), widthInput, switchHWBtn, h("label", {}, ["Height"]), heightInput]);
 
     const sumCaption = h("textarea", { class: "jb-sum-caption scroll-hide", placeholder: "global caption", rows: "1" });
+    const sumMeta = h("textarea", { class: "jb-sum-caption scroll-hide", placeholder: "style, genre", rows: "1" });
     const canvasRadioInputs = [];
     const canvasRadios = CANVAS_TYPES.map((t) => {
         const id = `jb-canvas-${t}`;
@@ -107,7 +108,7 @@ onUiLoaded(() => {
     const summarySection = h("div", { class: "jb-section" }, [
         h("div", { class: "jb-row" }, canvasRadios),
         h("label", { class: "jb-fld-label", for: "jb-sum-caption" }, ["Caption"]),
-        sumCaption,
+        sumCaption, sumMeta
     ]);
     sumCaption.id = "jb-sum-caption";
 
@@ -159,8 +160,10 @@ onUiLoaded(() => {
         widthInput.value = state.width;
         heightInput.value = state.height;
         sumCaption.value = state.summary.caption;
+        sumMeta.value = state.summary.meta;
 
         autoGrow(sumCaption);
+        autoGrow(sumMeta);
         canvasRadioInputs.forEach((radio) => {
             radio.checked = radio.value === state.summary.canvas;
         });
@@ -663,6 +666,10 @@ onUiLoaded(() => {
     sumCaption.addEventListener("input", () => {
         state.summary.caption = sumCaption.value;
         autoGrow(sumCaption);
+    });
+    sumMeta.addEventListener("input", () => {
+        state.summary.meta = sumMeta.value;
+        autoGrow(sumMeta);
     });
 
     addBtn.addEventListener("click", addItem);
